@@ -1,0 +1,7 @@
+pnpm-lock.yaml
+.next
+.turbo
+node_modules
+**/*.py
+packages/api-types/src/schema.ts
+packages/api-types/openapi.json

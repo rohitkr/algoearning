@@ -1,0 +1,10 @@
+packages:
+  - "apps/web"
+  - "packages/ui"
+  - "packages/shared"
+  - "packages/config"
+  - "packages/api-types"
+
+# Dependency install scripts are opt-in (pnpm 12). None of ours need one: unrs-resolver ships prebuilt binaries.
+allowBuilds:
+  unrs-resolver: false
