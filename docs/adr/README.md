@@ -14,3 +14,4 @@ supersedes the old one, never by editing history.
 | 0007 | [Brokers: multi-account, BrokerAdapter, encrypted secrets](0007-brokers.md) | Accepted |
 | 0008 | [Payments: Razorpay Subscriptions](0008-payments.md)                        | Accepted |
 | 0009 | [Hosting: portable Docker, provider decided later](0009-hosting.md)         | Accepted |
+| 0010 | [Strategy configs: one typed, versioned schema](0010-strategy-configs.md)   | Accepted |
