@@ -115,6 +115,7 @@ class Instrument(UUIDPk, Timestamps, Base):
     )  # where the index itself trades
     feed_code: Mapped[str | None] = mapped_column(String(20))  # the market-data feed's code (Breeze stock_code)
     expiries: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")  # listed option expiries
+    freeze_qty: Mapped[int] = mapped_column(Integer, default=1800, server_default="1800")  # max units per order
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     source: Mapped[str] = mapped_column(String(20), default="seed")  # seed | kite | admin: who set the facts last
     refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -139,6 +140,7 @@ class UserOverride(UUIDPk, Timestamps, Base):
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), unique=True)
     features: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     note: Mapped[str | None] = mapped_column(Text)  # why (shown to admins only)
+    live_unlocked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # may send real orders
     updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"))
 
 
@@ -286,6 +288,7 @@ class StrategyRun(UUIDPk, Timestamps, Base):
     unrealized_pnl: Mapped[Decimal] = mapped_column(AMOUNT, default=Decimal(0), server_default="0")
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     stop_reason: Mapped[str | None] = mapped_column(Text)
+    dry_run: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # live: log, never send
 
 
 class UserRiskSettings(UUIDPk, Timestamps, Base):
