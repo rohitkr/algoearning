@@ -1,0 +1,346 @@
+{
+  "instruments": [
+    {
+      "code": "NIFTY",
+      "name": "Nifty 50",
+      "exchange": "NFO",
+      "lot_size": 65,
+      "strike_step": 50,
+      "weekly_expiry": true
+    },
+    {
+      "code": "BANKNIFTY",
+      "name": "Nifty Bank",
+      "exchange": "NFO",
+      "lot_size": 30,
+      "strike_step": 100,
+      "weekly_expiry": false
+    },
+    {
+      "code": "FINNIFTY",
+      "name": "Nifty Financial Services",
+      "exchange": "NFO",
+      "lot_size": 60,
+      "strike_step": 50,
+      "weekly_expiry": false
+    },
+    {
+      "code": "MIDCPNIFTY",
+      "name": "Nifty Midcap Select",
+      "exchange": "NFO",
+      "lot_size": 120,
+      "strike_step": 25,
+      "weekly_expiry": false
+    },
+    {
+      "code": "SENSEX",
+      "name": "BSE Sensex",
+      "exchange": "BFO",
+      "lot_size": 20,
+      "strike_step": 100,
+      "weekly_expiry": true
+    }
+  ],
+  "presets": [
+    {
+      "id": "blank",
+      "name": "Start from scratch",
+      "description": "One leg to build on: buy the ATM call at 09:20, exit at 15:15.",
+      "config": {
+        "kind": "time_based",
+        "underlying": "NIFTY",
+        "timing": {
+          "entry": "09:20",
+          "exit": "15:15",
+          "days": ["MON", "TUE", "WED", "THU", "FRI"]
+        },
+        "legs": [
+          {
+            "id": "L1",
+            "action": "BUY",
+            "option_type": "CE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null
+            },
+            "stop_loss": null,
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null
+          }
+        ],
+        "risk": {
+          "mtm_stop_loss": null,
+          "mtm_target": null,
+          "exit_all_on_leg_sl": false
+        }
+      }
+    },
+    {
+      "id": "short_straddle",
+      "name": "Short straddle",
+      "description": "Sell the ATM call and put at 09:20 with a 30% stop-loss on each, exit at 15:15.",
+      "config": {
+        "kind": "time_based",
+        "underlying": "NIFTY",
+        "timing": {
+          "entry": "09:20",
+          "exit": "15:15",
+          "days": ["MON", "TUE", "WED", "THU", "FRI"]
+        },
+        "legs": [
+          {
+            "id": "L1",
+            "action": "SELL",
+            "option_type": "CE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 30.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null
+          },
+          {
+            "id": "L2",
+            "action": "SELL",
+            "option_type": "PE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 30.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null
+          }
+        ],
+        "risk": {
+          "mtm_stop_loss": null,
+          "mtm_target": null,
+          "exit_all_on_leg_sl": false
+        }
+      }
+    },
+    {
+      "id": "short_strangle",
+      "name": "Short strangle",
+      "description": "Sell a call and a put two strikes out of the money with a 40% stop-loss on each.",
+      "config": {
+        "kind": "time_based",
+        "underlying": "NIFTY",
+        "timing": {
+          "entry": "09:20",
+          "exit": "15:15",
+          "days": ["MON", "TUE", "WED", "THU", "FRI"]
+        },
+        "legs": [
+          {
+            "id": "L1",
+            "action": "SELL",
+            "option_type": "CE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 2,
+              "premium": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 40.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null
+          },
+          {
+            "id": "L2",
+            "action": "SELL",
+            "option_type": "PE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 2,
+              "premium": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 40.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null
+          }
+        ],
+        "risk": {
+          "mtm_stop_loss": null,
+          "mtm_target": null,
+          "exit_all_on_leg_sl": false
+        }
+      }
+    },
+    {
+      "id": "iron_condor",
+      "name": "Iron condor",
+      "description": "Sell two strikes out of the money and buy protection six strikes out, on both sides.",
+      "config": {
+        "kind": "time_based",
+        "underlying": "NIFTY",
+        "timing": {
+          "entry": "09:20",
+          "exit": "15:15",
+          "days": ["MON", "TUE", "WED", "THU", "FRI"]
+        },
+        "legs": [
+          {
+            "id": "L1",
+            "action": "SELL",
+            "option_type": "CE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 2,
+              "premium": null
+            },
+            "stop_loss": null,
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null
+          },
+          {
+            "id": "L2",
+            "action": "SELL",
+            "option_type": "PE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 2,
+              "premium": null
+            },
+            "stop_loss": null,
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null
+          },
+          {
+            "id": "L3",
+            "action": "BUY",
+            "option_type": "CE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 6,
+              "premium": null
+            },
+            "stop_loss": null,
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null
+          },
+          {
+            "id": "L4",
+            "action": "BUY",
+            "option_type": "PE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 6,
+              "premium": null
+            },
+            "stop_loss": null,
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null
+          }
+        ],
+        "risk": {
+          "mtm_stop_loss": 3000.0,
+          "mtm_target": null,
+          "exit_all_on_leg_sl": false
+        }
+      }
+    },
+    {
+      "id": "range_breakout",
+      "name": "2h range breakout",
+      "description": "Proven positional seller: trade the first breakout of the 09:15-11:15 range, hedged, held to expiry.",
+      "config": {
+        "kind": "range_breakout",
+        "underlying": "NIFTY",
+        "range_start": "09:15",
+        "range_end": "11:15",
+        "last_entry": "15:00",
+        "exit_time": "15:15",
+        "itm_points": 100,
+        "stop_loss_pct": 0.5,
+        "reentry": true,
+        "lots": 1,
+        "expiry_offset": 0,
+        "intraday_only": false,
+        "hedge_width": 300
+      }
+    },
+    {
+      "id": "zero_dte",
+      "name": "Expiry-day ITM straddle",
+      "description": "Proven 0DTE seller: sell ITM call and put on expiry day at the best recent entry time.",
+      "config": {
+        "kind": "zero_dte",
+        "underlying": "NIFTY",
+        "first_entry": "09:20",
+        "last_entry": "14:30",
+        "step_minutes": 10,
+        "exit_time": "15:15",
+        "stop_loss_pct": 30.0,
+        "reentry": true,
+        "lookback": 8,
+        "lots": 1,
+        "itm_points": 100,
+        "hedge_width": null
+      }
+    }
+  ],
+  "limits": {
+    "max_legs": 6,
+    "max_strike_offset": 20,
+    "max_lots": 100,
+    "max_lots_per_order": 10,
+    "market_open": "09:15",
+    "market_close": "15:30"
+  }
+}
