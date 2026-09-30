@@ -6,3 +6,5 @@ export { Pnl } from "./components/pnl";
 export { StatusPill, type StatusTone } from "./components/status-pill";
 export { Switch } from "./components/switch";
 export { ThemeToggle } from "./components/theme-toggle";
+export { Tooltip } from "./components/tooltip";
+export { ConfirmProvider, useConfirm, type ConfirmOptions } from "./components/confirm";

@@ -1,5 +1,7 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+
+afterEach(cleanup);
 
 import { Button } from "./button";
 import { Meter } from "./meter";
@@ -40,5 +42,24 @@ describe("ui components", () => {
     expect(screen.getByText("5 / 5")).toBeInTheDocument();
     expect(screen.getByText("1 / Unlimited")).toBeInTheDocument();
     expect(container.querySelector(".bg-loss")).not.toBeNull();
+  });
+});
+
+describe("icon buttons", () => {
+  it("show their label as a tooltip on keyboard focus", async () => {
+    render(
+      <Button size="icon" aria-label="Delete strategy">
+        x
+      </Button>,
+    );
+    screen.getByRole("button", { name: "Delete strategy" }).focus();
+    expect((await screen.findAllByText("Delete strategy")).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Delete strategy");
+  });
+
+  it("plain buttons get no tooltip", () => {
+    render(<Button aria-label="Save">Save</Button>);
+    screen.getByRole("button").focus();
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 });

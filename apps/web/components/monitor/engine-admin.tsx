@@ -1,7 +1,7 @@
 "use client";
 
 import type { EngineStatus } from "@algoearning/api-types";
-import { Button, Card, CardTitle, StatusPill, cn } from "@algoearning/ui";
+import { Button, Card, CardTitle, StatusPill, cn, useConfirm } from "@algoearning/ui";
 import { useState } from "react";
 
 import { inputClass } from "@/components/builder/fields";
@@ -12,6 +12,7 @@ import { useAdminAction } from "./use-admin-action";
 /** The platform kill switch: squares off every user's running strategies and blocks new entries until lifted. */
 export function EngineControl({ status }: { status: EngineStatus }) {
   const { run, busy, note } = useAdminAction();
+  const confirm = useConfirm();
   const [reason, setReason] = useState("");
   return (
     <Card className="flex flex-col gap-3">
@@ -40,14 +41,16 @@ export function EngineControl({ status }: { status: EngineStatus }) {
       ) : (
         <form
           className="flex flex-wrap gap-2"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            if (
-              !confirm(
-                "Halt all trading? Every user's open positions are squared off and new entries are blocked.",
-              )
-            )
-              return;
+            const ok = await confirm({
+              title: "Halt all trading?",
+              message:
+                "Every user's open positions are squared off and new entries are blocked until you allow trading again.",
+              confirmLabel: "Halt all trading",
+              tone: "danger",
+            });
+            if (!ok) return;
             void run(
               "halt",
               "PUT",

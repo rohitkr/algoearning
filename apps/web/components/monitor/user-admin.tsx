@@ -1,7 +1,7 @@
 "use client";
 
 import type { AdminUserDetail, PlanAdmin } from "@algoearning/api-types";
-import { Button, Card, CardTitle, Meter, StatusPill, Switch, cn } from "@algoearning/ui";
+import { Button, Card, CardTitle, Meter, StatusPill, Switch, cn, useConfirm } from "@algoearning/ui";
 import { useState } from "react";
 
 import { inputClass } from "@/components/builder/fields";
@@ -28,6 +28,7 @@ function Note({ note, k }: { note: { key: string; ok: boolean; text: string } | 
 /** Account actions: status and role. */
 export function AccountActions({ detail, isSelf }: { detail: AdminUserDetail; isSelf: boolean }) {
   const { run, busy, note } = useAdminAction();
+  const confirm = useConfirm();
   const u = detail.user;
   const path = `/v1/admin/users/${u.id}`;
   if (u.status === "deleted") return <StatusPill>Deleted by the user</StatusPill>;
@@ -39,10 +40,16 @@ export function AccountActions({ detail, isSelf }: { detail: AdminUserDetail; is
             size="sm"
             variant="danger"
             disabled={isSelf || busy !== null}
-            onClick={() =>
-              confirm(`Suspend ${u.email}? They are signed out of the app and API at once.`) &&
-              run("account", "PATCH", path, { status: "suspended" }, "Suspended.")
-            }
+            onClick={async () => {
+              const ok = await confirm({
+                title: `Suspend ${u.email}?`,
+                message:
+                  "They are signed out of the app and API at once. Their running strategies keep being managed until they are stopped.",
+                confirmLabel: "Suspend user",
+                tone: "danger",
+              });
+              if (ok) await run("account", "PATCH", path, { status: "suspended" }, "Suspended.");
+            }}
           >
             Suspend
           </Button>
@@ -59,15 +66,18 @@ export function AccountActions({ detail, isSelf }: { detail: AdminUserDetail; is
           size="sm"
           variant="secondary"
           disabled={isSelf || busy !== null}
-          onClick={() => {
+          onClick={async () => {
             const role = u.role === "admin" ? "user" : "admin";
-            if (
-              confirm(
+            const ok = await confirm({
+              title: role === "admin" ? `Make ${u.email} an admin?` : `Remove admin access from ${u.email}?`,
+              message:
                 role === "admin"
-                  ? `Make ${u.email} an admin? They get full access to Monitor.`
-                  : `Remove admin access from ${u.email}?`,
-              )
-            )
+                  ? "They get full access to Monitor, including other users' accounts."
+                  : undefined,
+              confirmLabel: role === "admin" ? "Make admin" : "Remove admin",
+              tone: role === "admin" ? "danger" : "primary",
+            });
+            if (ok)
               void run(
                 "account",
                 "PATCH",
@@ -233,16 +243,22 @@ export function PlanAndLimits({ detail, plans }: { detail: AdminUserDetail; plan
 
 export function EndGrantButton({ userId, subscriptionId }: { userId: string; subscriptionId: string }) {
   const { run, busy, note } = useAdminAction();
+  const confirm = useConfirm();
   return (
     <span className="inline-flex items-center gap-2">
       <Button
         size="sm"
         variant="ghost"
         disabled={busy !== null}
-        onClick={() =>
-          confirm("End this granted plan now?") &&
-          run("end", "DELETE", `/v1/admin/users/${userId}/grants/${subscriptionId}`)
-        }
+        onClick={async () => {
+          const ok = await confirm({
+            title: "End this granted plan now?",
+            message: "The user drops back to their other plan, or the free plan.",
+            confirmLabel: "End plan",
+            tone: "danger",
+          });
+          if (ok) await run("end", "DELETE", `/v1/admin/users/${userId}/grants/${subscriptionId}`);
+        }}
       >
         End now
       </Button>
@@ -254,6 +270,7 @@ export function EndGrantButton({ userId, subscriptionId }: { userId: string; sub
 /** Real orders for this user: off until an admin turns it on (their plan must include live trading too). */
 export function LiveUnlock({ detail }: { detail: AdminUserDetail }) {
   const { run, busy, note } = useAdminAction();
+  const confirm = useConfirm();
   const planAllows = !!detail.entitlements.features.live_trading;
   return (
     <Card className="flex flex-wrap items-center justify-between gap-3">
@@ -271,8 +288,17 @@ export function LiveUnlock({ detail }: { detail: AdminUserDetail }) {
         checked={detail.live_unlocked}
         disabled={busy !== null}
         aria-label="Allow real orders"
-        onCheckedChange={(on) => {
-          if (on && !confirm(`Allow ${detail.user.email} to place real orders?`)) return;
+        onCheckedChange={async (on) => {
+          if (
+            on &&
+            !(await confirm({
+              title: `Allow ${detail.user.email} to place real orders?`,
+              message: "They can deploy strategies that send orders to their broker account with real money.",
+              confirmLabel: "Allow real orders",
+              tone: "danger",
+            }))
+          )
+            return;
           void run(
             "live",
             "PUT",

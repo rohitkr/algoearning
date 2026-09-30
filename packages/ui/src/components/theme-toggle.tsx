@@ -25,7 +25,6 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       aria-label={`${LABEL[current]} (switch to ${next})`}
-      title={`${LABEL[current]}: click for ${next}`}
       onClick={() => setTheme(next)}
     >
       <Icon className="size-[18px]" aria-hidden />

@@ -1,7 +1,7 @@
 "use client";
 
 import type { BrokerAccount, BrokerInfo } from "@algoearning/api-types";
-import { Button, Card, StatusPill, Switch, cn } from "@algoearning/ui";
+import { Button, Card, StatusPill, Switch, cn, useConfirm } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
 import { LogIn, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -33,6 +33,7 @@ function StatusLine({ a }: { a: BrokerAccount }) {
 export function BrokerAccounts({ accounts, catalog }: { accounts: BrokerAccount[]; catalog: BrokerInfo[] }) {
   const { getToken } = useAuth();
   const router = useRouter();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ id: string; tone: "success" | "danger"; text: string } | null>(null);
   const [adding, setAdding] = useState(false);
@@ -76,8 +77,15 @@ export function BrokerAccounts({ accounts, catalog }: { accounts: BrokerAccount[
         text: r.ok ? `Connection OK: ${r.name ?? ""} (${r.client_id})` : (r.message ?? "Not connected"),
       });
     });
-  const remove = (a: BrokerAccount) => {
-    if (!confirm(`Remove ${a.broker_name} ${a.client_id}? Its stored API keys are deleted.`)) return;
+  const remove = async (a: BrokerAccount) => {
+    const ok = await confirm({
+      title: `Remove ${a.broker_name} ${a.client_id}?`,
+      message:
+        "Its stored API keys are deleted. Strategies running on it are not stopped for you: stop them first.",
+      confirmLabel: "Remove broker",
+      tone: "danger",
+    });
+    if (!ok) return;
     return run(a.id, () => apiRequest("DELETE", `/v1/broker-accounts/${a.id}`, undefined, getToken));
   };
 

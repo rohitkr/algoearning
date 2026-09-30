@@ -1,6 +1,6 @@
 import type { Me, Run } from "@algoearning/api-types";
 import { UserButton } from "@clerk/nextjs";
-import { ThemeToggle } from "@algoearning/ui";
+import { ThemeToggle, Tooltip } from "@algoearning/ui";
 import { Bell } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -34,13 +34,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             <ApiStatus />
           </span>
           <ThemeToggle />
-          <Link
-            href="/notifications"
-            aria-label="Notifications"
-            className="rounded-lg p-2 text-muted hover:bg-surface-2"
-          >
-            <Bell className="size-[18px]" aria-hidden />
-          </Link>
+          <Tooltip label="Notifications">
+            <Link
+              href="/notifications"
+              aria-label="Notifications"
+              className="rounded-lg p-2 text-muted hover:bg-surface-2"
+            >
+              <Bell className="size-[18px]" aria-hidden />
+            </Link>
+          </Tooltip>
           <UserButton />
         </header>
         <MobileNav isAdmin={isAdmin} />

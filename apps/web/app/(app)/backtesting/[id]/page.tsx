@@ -106,8 +106,8 @@ export default async function BacktestPage({ params }: { params: Promise<{ id: s
         <>
           {res.warnings.length > 0 && (
             <Card className="flex flex-col gap-1 border-warning/40 bg-warning/10">
-              {res.warnings.map((w) => (
-                <p key={w} className="flex items-start gap-2 text-sm text-warning">
+              {res.warnings.map((w, i) => (
+                <p key={`${i}-${w}`} className="flex items-start gap-2 text-sm text-warning">
                   <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden /> {w}
                 </p>
               ))}

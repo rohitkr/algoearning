@@ -1,7 +1,7 @@
 "use client";
 
 import type { RiskSettings } from "@algoearning/api-types";
-import { Button, Card, CardTitle, Switch, cn } from "@algoearning/ui";
+import { Button, Card, CardTitle, Switch, cn, useConfirm } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
 import { OctagonX, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -33,16 +33,22 @@ function useCall() {
 
 export function StopRunButton({ runId, name }: { runId: string; name: string }) {
   const { call, busy, note } = useCall();
+  const confirm = useConfirm();
   return (
     <span className="inline-flex items-center gap-2">
       <Button
         size="sm"
         variant="danger"
         disabled={busy}
-        onClick={() =>
-          confirm(`Stop ${name}? Its open positions are squared off now.`) &&
-          call("POST", `/v1/runs/${runId}/stop`)
-        }
+        onClick={async () => {
+          const ok = await confirm({
+            title: `Stop ${name}?`,
+            message: "Its open positions are squared off now (on live runs, orders go to your broker).",
+            confirmLabel: "Stop strategy",
+            tone: "danger",
+          });
+          if (ok) await call("POST", `/v1/runs/${runId}/stop`);
+        }}
       >
         <Square className="size-3.5" aria-hidden /> Stop
       </Button>
@@ -53,15 +59,21 @@ export function StopRunButton({ runId, name }: { runId: string; name: string }) 
 
 export function StopAllButton({ count }: { count: number }) {
   const { call, busy } = useCall();
+  const confirm = useConfirm();
   if (count === 0) return null;
   return (
     <Button
       variant="danger"
       disabled={busy}
-      onClick={() =>
-        confirm(`Stop all ${count} running strategies and square off every open position?`) &&
-        call("POST", "/v1/runs/stop-all")
-      }
+      onClick={async () => {
+        const ok = await confirm({
+          title: `Stop all ${count} running ${count === 1 ? "strategy" : "strategies"}?`,
+          message: "Every open position is squared off now (on live runs, orders go to your broker).",
+          confirmLabel: "Stop all",
+          tone: "danger",
+        });
+        if (ok) await call("POST", "/v1/runs/stop-all");
+      }}
     >
       <OctagonX className="size-4" aria-hidden /> Stop all
     </Button>
@@ -71,6 +83,7 @@ export function StopAllButton({ count }: { count: number }) {
 /** The user's own limits across all their runs; the engine checks them before every entry. */
 export function RiskSettingsCard({ initial }: { initial: RiskSettings }) {
   const { call, busy, note } = useCall();
+  const confirm = useConfirm();
   const [v, setV] = useState<RiskSettings>(initial);
   const set = <K extends keyof RiskSettings>(k: K, x: RiskSettings[K]) => setV((o) => ({ ...o, [k]: x }));
   return (
@@ -87,12 +100,16 @@ export function RiskSettingsCard({ initial }: { initial: RiskSettings }) {
           <Switch
             checked={!!v.kill_switch}
             aria-label="Kill switch: square off everything and stop new entries"
-            onCheckedChange={(on) => {
+            onCheckedChange={async (on) => {
               if (
                 on &&
-                !confirm(
-                  "Turn on the kill switch? Every open position is squared off and no new entries are made.",
-                )
+                !(await confirm({
+                  title: "Turn on the kill switch?",
+                  message:
+                    "Every open position is squared off and no new entries are made until you turn it off.",
+                  confirmLabel: "Turn on kill switch",
+                  tone: "danger",
+                }))
               )
                 return;
               set("kill_switch", on);

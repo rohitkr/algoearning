@@ -1,7 +1,7 @@
 "use client";
 
 import type { Strategy } from "@algoearning/api-types";
-import { Button, StatusPill, cn } from "@algoearning/ui";
+import { Button, StatusPill, cn, useConfirm } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
 import {
   Archive,
@@ -32,6 +32,7 @@ const updated = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyl
 export function StrategyRow({ strategy: s }: { strategy: Strategy }) {
   const { getToken } = useAuth();
   const router = useRouter();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; upgrade?: boolean } | null>(null);
   const [deploying, setDeploying] = useState(false);
@@ -52,8 +53,14 @@ export function StrategyRow({ strategy: s }: { strategy: Strategy }) {
   const setStatus = (status: Strategy["status"]) =>
     run(() => apiRequest("PATCH", `/v1/strategies/${s.id}`, { status }, getToken));
   const duplicate = () => run(() => apiRequest("POST", `/v1/strategies/${s.id}/duplicate`, {}, getToken));
-  const remove = () => {
-    if (!confirm(`Delete "${s.name}"? This cannot be undone.`)) return;
+  const remove = async () => {
+    const ok = await confirm({
+      title: `Delete ${s.name}?`,
+      message: "This cannot be undone. A running deployment of it is stopped and squared off.",
+      confirmLabel: "Delete strategy",
+      tone: "danger",
+    });
+    if (!ok) return;
     return run(() => apiRequest("DELETE", `/v1/strategies/${s.id}`, undefined, getToken));
   };
   const st = STATUS[s.status];

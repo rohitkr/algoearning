@@ -1,5 +1,6 @@
 "use client";
 
+import { ConfirmProvider } from "@algoearning/ui";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 
@@ -7,7 +8,7 @@ import type { ReactNode } from "react";
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      {children}
+      <ConfirmProvider>{children}</ConfirmProvider>
     </ThemeProvider>
   );
 }

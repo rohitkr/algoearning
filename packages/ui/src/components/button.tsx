@@ -3,6 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type { ButtonHTMLAttributes } from "react";
 
 import { cn } from "../cn";
+import { Tooltip } from "./tooltip";
 
 export const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50",
@@ -31,13 +32,16 @@ export interface ButtonProps
   asChild?: boolean;
 }
 
+/** An icon-only button (size="icon") shows its aria-label as a tooltip, so nobody has to guess what an icon does. */
 export function Button({ className, variant, size, asChild = false, type, ...props }: ButtonProps) {
   const Comp = asChild ? Slot : "button";
-  return (
+  const button = (
     <Comp
       className={cn(buttonVariants({ variant, size }), className)}
       {...(asChild ? {} : { type: type ?? "button" })}
       {...props}
     />
   );
+  const label = props["aria-label"];
+  return size === "icon" && label ? <Tooltip label={label}>{button}</Tooltip> : button;
 }
