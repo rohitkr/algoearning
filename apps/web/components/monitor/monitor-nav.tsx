@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@algoearning/ui";
-import { Activity, CandlestickChart, Gauge, Layers, Users } from "lucide-react";
+import { Activity, CandlestickChart, Gauge, Layers, RadioTower, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -10,6 +10,7 @@ const ITEMS = [
   { href: "/monitor/users", label: "Users", icon: Users },
   { href: "/monitor/plans", label: "Plans", icon: Layers },
   { href: "/monitor/instruments", label: "Instruments", icon: CandlestickChart },
+  { href: "/monitor/market-data", label: "Market data", icon: RadioTower },
   { href: "/monitor/audit", label: "Audit log", icon: Activity },
 ];
 

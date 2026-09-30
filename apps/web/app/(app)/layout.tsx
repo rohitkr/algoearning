@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 
 import { ApiStatus } from "@/components/api-status";
 import { Logo } from "@/components/logo";
+import { MarketTicker } from "@/components/market-ticker";
 import { MobileNav } from "@/components/mobile-nav";
 import { Sidebar } from "@/components/sidebar";
 import { apiGet } from "@/lib/api";
@@ -23,6 +24,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         <header className="flex h-14 items-center justify-end gap-2 border-b border-border bg-surface px-4">
           <span className="mr-auto md:hidden">
             <Logo />
+          </span>
+          <span className="mr-auto hidden md:inline-flex">
+            <MarketTicker />
           </span>
           <span className="hidden sm:inline-flex">
             <ApiStatus />
