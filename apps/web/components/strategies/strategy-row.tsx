@@ -3,13 +3,24 @@
 import type { Strategy } from "@algoearning/api-types";
 import { Button, StatusPill, cn } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
-import { Archive, ArchiveRestore, CheckCircle2, CircleDashed, Copy, Pencil, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  CheckCircle2,
+  CircleDashed,
+  Copy,
+  Pencil,
+  Rocket,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
 import { KIND_LABEL, configSummary } from "@/lib/strategy";
+
+import { DeployDialog } from "../runs/deploy-dialog";
 
 const STATUS = {
   draft: { tone: "neutral", label: "Draft" },
@@ -23,6 +34,7 @@ export function StrategyRow({ strategy: s }: { strategy: Strategy }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; upgrade?: boolean } | null>(null);
+  const [deploying, setDeploying] = useState(false);
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true);
@@ -74,6 +86,11 @@ export function StrategyRow({ strategy: s }: { strategy: Strategy }) {
             </Button>
           )}
           {s.status === "ready" && (
+            <Button size="sm" disabled={busy} onClick={() => setDeploying(true)}>
+              <Rocket className="size-4" aria-hidden /> Deploy
+            </Button>
+          )}
+          {s.status === "ready" && (
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setStatus("draft")}>
               <CircleDashed className="size-4" aria-hidden /> Back to draft
             </Button>
@@ -119,6 +136,7 @@ export function StrategyRow({ strategy: s }: { strategy: Strategy }) {
           </Button>
         </div>
       </div>
+      {deploying && <DeployDialog strategy={s} open onClose={() => setDeploying(false)} />}
       {error && (
         <p role="status" className={cn("mt-2 text-sm text-loss")}>
           {error.text}{" "}

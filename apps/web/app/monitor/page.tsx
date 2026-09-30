@@ -1,4 +1,4 @@
-import type { Overview } from "@algoearning/api-types";
+import type { EngineStatus, Overview } from "@algoearning/api-types";
 import { Card, CardTitle } from "@algoearning/ui";
 import Link from "next/link";
 
@@ -18,7 +18,10 @@ import { apiGet } from "@/lib/api";
 export const metadata = { title: "Overview" };
 
 export default async function MonitorOverview() {
-  const r = await apiGet<Overview>("/v1/admin/overview");
+  const [r, engine] = await Promise.all([
+    apiGet<Overview>("/v1/admin/overview"),
+    apiGet<EngineStatus>("/v1/admin/engine"),
+  ]);
   if (!r.ok) return <LoadError what="the overview" message={r.error.message} />;
   const o = r.data;
   return (
@@ -44,7 +47,15 @@ export default async function MonitorOverview() {
             </Link>
           }
         />
-        <Stat label="Engine" value={<span className="text-base text-muted">Arrives in P9</span>} />
+        <Stat
+          label="Running strategies"
+          value={engine.ok ? engine.data.active_runs : "–"}
+          sub={
+            <Link href="/monitor/engine" className="underline">
+              {engine.ok && engine.data.trading_halted ? "Trading halted" : "Engine"}
+            </Link>
+          }
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
