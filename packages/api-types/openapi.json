@@ -79,6 +79,11 @@
             "title": "Created At",
             "type": "string"
           },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
           "engine_stale": {
             "title": "Engine Stale",
             "type": "boolean"
@@ -313,6 +318,10 @@
           "entitlements": {
             "$ref": "#/components/schemas/EntitlementsOut"
           },
+          "live_unlocked": {
+            "title": "Live Unlocked",
+            "type": "boolean"
+          },
           "override_note": {
             "anyOf": [
               {
@@ -346,6 +355,7 @@
           "user",
           "entitlements",
           "override_note",
+          "live_unlocked",
           "subscriptions",
           "broker_accounts",
           "recent_activity"
@@ -1108,6 +1118,23 @@
             ],
             "title": "Broker Account Id"
           },
+          "confirm": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
           "mode": {
             "default": "paper",
             "enum": [
@@ -1458,6 +1485,10 @@
             "title": "Exchange",
             "type": "string"
           },
+          "freeze_qty": {
+            "title": "Freeze Qty",
+            "type": "integer"
+          },
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
@@ -1519,6 +1550,7 @@
           "session_close",
           "refreshed_at",
           "is_active",
+          "freeze_qty",
           "source",
           "updated_at"
         ],
@@ -1589,6 +1621,19 @@
       "InstrumentPatch": {
         "additionalProperties": false,
         "properties": {
+          "freeze_qty": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freeze Qty"
+          },
           "is_active": {
             "anyOf": [
               {
@@ -1766,6 +1811,106 @@
           "option_type"
         ],
         "title": "Leg",
+        "type": "object"
+      },
+      "LiveBroker": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "engine_enabled": {
+            "title": "Engine Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "label",
+          "connected",
+          "engine_enabled"
+        ],
+        "title": "LiveBroker",
+        "type": "object"
+      },
+      "LiveStatus": {
+        "description": "Whether the signed-in user can trade live, and if not, why (shown in the deploy dialog).",
+        "properties": {
+          "brokers": {
+            "items": {
+              "$ref": "#/components/schemas/LiveBroker"
+            },
+            "title": "Brokers",
+            "type": "array"
+          },
+          "can_dry_run": {
+            "title": "Can Dry Run",
+            "type": "boolean"
+          },
+          "can_go_live": {
+            "title": "Can Go Live",
+            "type": "boolean"
+          },
+          "plan_allows": {
+            "title": "Plan Allows",
+            "type": "boolean"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "unlocked": {
+            "title": "Unlocked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "plan_allows",
+          "unlocked",
+          "brokers",
+          "can_dry_run",
+          "can_go_live",
+          "reasons"
+        ],
+        "title": "LiveStatus",
+        "type": "object"
+      },
+      "LiveUnlockIn": {
+        "additionalProperties": false,
+        "properties": {
+          "unlocked": {
+            "title": "Unlocked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "unlocked"
+        ],
+        "title": "LiveUnlockIn",
         "type": "object"
       },
       "MarketDataAdmin": {
@@ -3545,6 +3690,11 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
           },
           "engine_stale": {
             "title": "Engine Stale",
@@ -6467,6 +6617,110 @@
         ]
       }
     },
+    "/v1/admin/users/{user_id}/live": {
+      "put": {
+        "description": "Allow (or stop) real orders for one user. Their plan must include live trading too.",
+        "operationId": "set_live_unlock_v1_admin_users__user_id__live_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveUnlockIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Set Live Unlock",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/v1/admin/users/{user_id}/overrides": {
       "put": {
         "operationId": "set_overrides_v1_admin_users__user_id__overrides_put",
@@ -7733,6 +7987,87 @@
         "summary": "My Entitlements",
         "tags": [
           "account"
+        ]
+      }
+    },
+    "/v1/me/live": {
+      "get": {
+        "operationId": "live_status_v1_me_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Live Status",
+        "tags": [
+          "runs"
         ]
       }
     },

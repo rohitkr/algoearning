@@ -72,22 +72,50 @@ def test_deploy_checks_and_run_lifecycle(api: TestClient) -> None:
     assert [x["status"] for x in api.get("/v1/runs?active=false", headers=A).json()] == ["stopped"]
 
 
-def test_live_is_not_available_yet_even_when_the_plan_allows_it(api: TestClient, clean_db: str) -> None:
-    e = create_engine(clean_db)
-    with e.begin() as conn:
-        conn.execute(text("UPDATE plans SET features = features || '{\"live_trading\": true}' WHERE code = 'free'"))
-    e.dispose()
-    try:
-        sid = ready_strategy(api)
-        r = api.post(f"/v1/strategies/{sid}/deploy", json={"mode": "live"}, headers=A)
-        assert r.json()["error"]["details"]["reason"] == "live_not_available"
-    finally:
+def test_live_gates(api: TestClient, clean_db: str) -> None:
+    def sql(stmt: str) -> None:
         e = create_engine(clean_db)
         with e.begin() as conn:
-            conn.execute(
-                text("UPDATE plans SET features = features || '{\"live_trading\": false}' WHERE code = 'free'")
-            )
+            conn.execute(text(stmt))
         e.dispose()
+
+    sql("UPDATE plans SET features = features || '{\"live_trading\": true}' WHERE code = 'free'")
+    try:
+        sid = ready_strategy(api)
+        status = api.get("/v1/me/live", headers=A).json()
+        assert status["plan_allows"] and not status["unlocked"] and not status["can_go_live"]
+        assert status["can_dry_run"] and any("unlocked" in r for r in status["reasons"])
+
+        def deploy(**body: Any) -> dict[str, Any]:
+            return api.post(f"/v1/strategies/{sid}/deploy", json={"mode": "live", **body}, headers=A).json()  # type: ignore[no-any-return]
+
+        assert deploy()["error"]["details"]["reason"] == "live_locked"
+        me = api.get("/v1/me", headers=A).json()["id"]
+        assert api.put(f"/v1/admin/users/{me}/live", json={"unlocked": True}, headers=A).status_code == 403
+        r = api.put(f"/v1/admin/users/{me}/live", json={"unlocked": True}, headers=ADMIN)
+        assert r.status_code == 200 and r.json()["live_unlocked"] is True
+        assert deploy()["error"]["details"]["reason"] == "no_broker"
+        sql(
+            "INSERT INTO broker_accounts (user_id, broker, client_id, status, engine_enabled, terminal_enabled, "
+            "key_version) SELECT id, 'zerodha', 'AB1234', 'connected', false, true, 1 FROM users "
+            "WHERE email = 'alice@example.com'"
+        )
+        (b,) = api.get("/v1/me/live", headers=A).json()["brokers"]
+        sql(
+            "INSERT INTO broker_sessions (user_id, broker_account_id, access_token_enc, expires_at, key_version) "
+            f"SELECT user_id, id, 'x', now() + interval '1 day', 1 FROM broker_accounts WHERE id = '{b['id']}'"
+        )
+        assert deploy(broker_account_id=b["id"])["error"]["details"]["reason"] == "engine_off"
+        sql("UPDATE broker_accounts SET engine_enabled = true")
+        assert api.get("/v1/me/live", headers=A).json()["can_go_live"] is True
+        assert deploy(broker_account_id=b["id"], confirm="wrong")["error"]["details"]["reason"] == "confirm"
+        run = deploy(broker_account_id=b["id"], confirm="S")
+        assert (run["mode"], run["dry_run"], run["status"]) == ("live", False, "pending")
+        api.post(f"/v1/runs/{run['id']}/stop", headers=A)
+        dry = deploy(dry_run=True)  # a dry run needs no unlock, broker or confirmation
+        assert dry["dry_run"] is True and dry["mode"] == "live"
+    finally:
+        sql("UPDATE plans SET features = features || '{\"live_trading\": false}' WHERE code = 'free'")
 
 
 def test_stop_all_and_risk_settings(api: TestClient) -> None:

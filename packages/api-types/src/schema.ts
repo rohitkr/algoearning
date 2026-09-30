@@ -324,6 +324,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/users/{user_id}/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Live Unlock
+         * @description Allow (or stop) real orders for one user. Their plan must include live trading too.
+         */
+        put: operations["set_live_unlock_v1_admin_users__user_id__live_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/users/{user_id}/overrides": {
         parameters: {
             query?: never;
@@ -522,6 +542,23 @@ export interface paths {
         };
         /** My Entitlements */
         get: operations["my_entitlements_v1_me_entitlements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live Status */
+        get: operations["live_status_v1_me_live_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -923,6 +960,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
             /** Engine Stale */
             engine_stale: boolean;
             /** Error */
@@ -1007,6 +1049,8 @@ export interface components {
             /** Broker Accounts */
             broker_accounts: components["schemas"]["AdminBrokerAccount"][];
             entitlements: components["schemas"]["EntitlementsOut"];
+            /** Live Unlocked */
+            live_unlocked: boolean;
             /** Override Note */
             override_note: string | null;
             /** Recent Activity */
@@ -1264,6 +1308,13 @@ export interface components {
         DeployIn: {
             /** Broker Account Id */
             broker_account_id?: string | null;
+            /** Confirm */
+            confirm?: string | null;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
             /**
              * Mode
              * @default paper
@@ -1383,6 +1434,8 @@ export interface components {
             code: string;
             /** Exchange */
             exchange: string;
+            /** Freeze Qty */
+            freeze_qty: number;
             /** Is Active */
             is_active: boolean;
             /** Lot Size */
@@ -1430,6 +1483,8 @@ export interface components {
         };
         /** InstrumentPatch */
         InstrumentPatch: {
+            /** Freeze Qty */
+            freeze_qty?: number | null;
             /** Is Active */
             is_active?: boolean | null;
             /** Session Close */
@@ -1481,6 +1536,45 @@ export interface components {
             strike?: components["schemas"]["Strike"];
             target?: components["schemas"]["Threshold"] | null;
             trailing?: components["schemas"]["Trailing"] | null;
+        };
+        /** LiveBroker */
+        LiveBroker: {
+            /** Client Id */
+            client_id: string;
+            /** Connected */
+            connected: boolean;
+            /** Engine Enabled */
+            engine_enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string | null;
+        };
+        /**
+         * LiveStatus
+         * @description Whether the signed-in user can trade live, and if not, why (shown in the deploy dialog).
+         */
+        LiveStatus: {
+            /** Brokers */
+            brokers: components["schemas"]["LiveBroker"][];
+            /** Can Dry Run */
+            can_dry_run: boolean;
+            /** Can Go Live */
+            can_go_live: boolean;
+            /** Plan Allows */
+            plan_allows: boolean;
+            /** Reasons */
+            reasons: string[];
+            /** Unlocked */
+            unlocked: boolean;
+        };
+        /** LiveUnlockIn */
+        LiveUnlockIn: {
+            /** Unlocked */
+            unlocked: boolean;
         };
         /** MarketDataAdmin */
         MarketDataAdmin: {
@@ -2113,6 +2207,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
             /** Engine Stale */
             engine_stale: boolean;
             /** Error */
@@ -3960,6 +4059,86 @@ export interface operations {
             };
         };
     };
+    set_live_unlock_v1_admin_users__user_id__live_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LiveUnlockIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDetail"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     set_overrides_v1_admin_users__user_id__overrides_put: {
         parameters: {
             query?: never;
@@ -4969,6 +5148,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntitlementsOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_status_v1_me_live_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveStatus"];
                 };
             };
             /** @description Bad request */

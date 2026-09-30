@@ -61,3 +61,4 @@ export type StrategyPerformance = Schemas["StrategyPerformance"];
 export type TradeRow = Schemas["TradeRow"];
 export type TradePage = Schemas["Page_TradeRow_"];
 export type OpenPosition = Schemas["OpenPosition"];
+export type LiveStatus = Schemas["LiveStatus"];

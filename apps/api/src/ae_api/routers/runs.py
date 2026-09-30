@@ -7,8 +7,17 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from ae_core.strategy import AnyConfig, TimeBasedConfig, check, parse
-from ae_db.enums import RunStatus, StrategyStatus, TradingMode
-from ae_db.models import Order, StrategyRun, Trade, TradeEvent, UserRiskSettings
+from ae_db.enums import BrokerAccountStatus, RunStatus, StrategyStatus, TradingMode
+from ae_db.models import (
+    BrokerAccount,
+    BrokerSession,
+    Order,
+    StrategyRun,
+    Trade,
+    TradeEvent,
+    UserOverride,
+    UserRiskSettings,
+)
 from ae_db.repositories import BrokerAccountRepo, StrategyRepo
 from fastapi import APIRouter, Query, Request, status
 from sqlalchemy import func, select
@@ -21,6 +30,8 @@ from ..errors import Conflict, NotFound, PlanLimitReached
 from ..schemas import (
     ERROR_RESPONSES,
     DeployIn,
+    LiveBroker,
+    LiveStatus,
     OrderOut,
     PositionOut,
     RiskSettingsIO,
@@ -52,6 +63,7 @@ async def _open_counts(s: AsyncSession, run_ids: list[uuid.UUID]) -> dict[uuid.U
 
 def run_out(r: StrategyRun, open_positions: int = 0) -> RunOut:
     return RunOut(
+        dry_run=r.dry_run,
         id=r.id,
         strategy_id=r.strategy_id,
         strategy_name=r.strategy_name,
@@ -106,7 +118,19 @@ async def deploy(
         require_feature(ent, "paper_trading")
     else:
         require_feature(ent, "live_trading")
-        raise Conflict("live trading is not available yet: deploy on paper", {"reason": "live_not_available"})
+        if not body.dry_run:
+            status = await live_status(user, s, settings)
+            if not status.unlocked:
+                raise Conflict("real orders are not unlocked for your account yet", {"reason": "live_locked"})
+            broker = next((b for b in status.brokers if b.id == body.broker_account_id), None)
+            if broker is None:
+                raise Conflict("choose the broker account to trade on", {"reason": "no_broker"})
+            if not broker.connected:
+                raise Conflict("log in to your broker for today first", {"reason": "broker_not_connected"})
+            if not broker.engine_enabled:
+                raise Conflict("switch on the Trading Engine for this broker account", {"reason": "engine_off"})
+            if (body.confirm or "").strip() != strat.name.strip():
+                raise Conflict("type the strategy's name to confirm real orders", {"reason": "confirm"})
     require_within(ent, "max_running_strategies", ent.usage["max_running_strategies"])
     lots, cap = _max_lots(config) * body.multiplier, ent.limit("max_lots_per_order")
     if cap is not None and lots > cap:
@@ -130,12 +154,13 @@ async def deploy(
         kind=strat.kind,
         schema_version=strat.schema_version,
         multiplier=body.multiplier,
+        dry_run=body.mode == "live" and body.dry_run,
     )
     s.add(run)
     await s.flush()
     await s.refresh(run)
     await audit(s, request, "run.deploy", user.user_id, "strategy_run", run.id, strategy=str(strat.id), mode=body.mode,
-                multiplier=body.multiplier)  # fmt: skip
+                multiplier=body.multiplier, dry_run=run.dry_run)  # fmt: skip
     return run_out(run)
 
 
@@ -275,3 +300,41 @@ async def put_risk(body: RiskSettingsIO, user: CurrentUser, s: UserSession, requ
     await s.flush()
     await audit(s, request, "risk.update", user.user_id, "user_risk_settings", user.user_id, **body.model_dump())
     return body
+
+
+@router.get("/v1/me/live", response_model=LiveStatus)
+async def live_status(user: CurrentUser, s: UserSession, settings: SettingsDep) -> LiveStatus:
+    ent = await load_entitlements(s, user.user_id, timedelta(days=settings.subscription_grace_days))
+    unlocked = bool((await s.execute(select(UserOverride.live_unlocked))).scalar_one_or_none())
+    now = datetime.now(UTC)
+    sessions = {
+        b: e for b, e in (await s.execute(select(BrokerSession.broker_account_id, BrokerSession.expires_at))).all()
+    }
+    brokers = [
+        LiveBroker(
+            id=a.id,
+            client_id=a.client_id,
+            label=a.label,
+            connected=a.status == BrokerAccountStatus.CONNECTED and sessions.get(a.id, now) > now,
+            engine_enabled=a.engine_enabled,
+        )
+        for a in (await s.execute(select(BrokerAccount).order_by(BrokerAccount.created_at))).scalars()
+    ]
+    plan = ent.allows("live_trading")
+    reasons = []
+    if not plan:
+        reasons.append(f"your {ent.plan_name} plan does not include live trading")
+    if not unlocked:
+        reasons.append("real orders are not unlocked for your account yet (ask support)")
+    if not brokers:
+        reasons.append("add your broker account")
+    elif not any(b.connected and b.engine_enabled for b in brokers):
+        reasons.append("log in to your broker today and switch on its Trading Engine")
+    return LiveStatus(
+        plan_allows=plan,
+        unlocked=unlocked,
+        brokers=brokers,
+        can_dry_run=plan,
+        can_go_live=plan and unlocked and any(b.connected and b.engine_enabled for b in brokers),
+        reasons=reasons,
+    )

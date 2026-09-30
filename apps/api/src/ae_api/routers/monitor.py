@@ -59,6 +59,7 @@ from ..schemas import (
     InstrumentAdminOut,
     InstrumentPatch,
     InstrumentRefreshOut,
+    LiveUnlockIn,
     OverridesIn,
     Overview,
     Page,
@@ -271,6 +272,7 @@ async def _detail(s: AsyncSession, user: User, grace: timedelta) -> AdminUserDet
             catalog=[FeatureInfo(key=f.key, kind=f.kind, label=f.label) for f in FEATURES.values()],
         ),
         override_note=ov.note if ov else None,
+        live_unlocked=bool(ov and ov.live_unlocked),
         subscriptions=[
             AdminSubscription(
                 id=x.id,
@@ -356,6 +358,25 @@ async def set_overrides(
             actor="admin",
             before=before,
             after=features,
+        )
+        return await _detail(s, user, _grace(settings))
+
+
+@router.put("/users/{user_id}/live", response_model=AdminUserDetail)
+async def set_live_unlock(
+    user_id: uuid.UUID, body: LiveUnlockIn, admin: Admin, db: DbDep, request: Request, settings: SettingsDep
+) -> AdminUserDetail:
+    """Allow (or stop) real orders for one user. Their plan must include live trading too."""
+    async with db.system_session() as s:
+        user = await _user(s, user_id)
+        ov = (await s.execute(select(UserOverride).where(UserOverride.user_id == user.id))).scalar_one_or_none()
+        if ov is None:
+            ov = UserOverride(user_id=user.id, features={})
+            s.add(ov)
+        ov.live_unlocked, ov.updated_by = body.unlocked, admin.user_id
+        await s.flush()
+        await audit(
+            s, request, "admin.user.live", admin.user_id, "user", user.id, actor="admin", unlocked=body.unlocked
         )
         return await _detail(s, user, _grace(settings))
 

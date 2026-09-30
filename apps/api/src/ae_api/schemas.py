@@ -363,6 +363,7 @@ class AdminUserDetail(BaseModel):
     user: AdminUserRow
     entitlements: EntitlementsOut
     override_note: str | None
+    live_unlocked: bool
     subscriptions: list[AdminSubscription]
     broker_accounts: list[AdminBrokerAccount]
     recent_activity: list[AuditEntry]
@@ -388,6 +389,7 @@ class GrantIn(BaseModel):
 
 class InstrumentAdminOut(InstrumentOut):
     is_active: bool
+    freeze_qty: int  # the exchange's max units per order (orders are sliced to it)
     source: str
     updated_at: datetime
 
@@ -397,6 +399,7 @@ class InstrumentPatch(BaseModel):
     session_open: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     session_close: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     is_active: bool | None = None
+    freeze_qty: int | None = Field(default=None, ge=1, le=100_000)
 
 
 class InstrumentRefreshOut(BaseModel):
@@ -478,9 +481,31 @@ class DeployIn(BaseModel):
     mode: Literal["paper", "live"] = "paper"
     broker_account_id: uuid.UUID | None = None  # required for live; optional on paper (for the record)
     multiplier: int = Field(default=1, ge=1, le=100)  # every leg's lots x this
+    dry_run: bool = False  # live only: log every order, send nothing
+    confirm: str | None = Field(default=None, max_length=120)  # live (not dry run): the strategy's name, typed
+
+
+class LiveBroker(BaseModel):
+    id: uuid.UUID
+    client_id: str
+    label: str | None
+    connected: bool  # logged in today
+    engine_enabled: bool  # the account's Trading Engine switch
+
+
+class LiveStatus(BaseModel):
+    """Whether the signed-in user can trade live, and if not, why (shown in the deploy dialog)."""
+
+    plan_allows: bool
+    unlocked: bool  # an admin allowed real orders for this user
+    brokers: list[LiveBroker]
+    can_dry_run: bool
+    can_go_live: bool
+    reasons: list[str]
 
 
 class RunOut(BaseModel):
+    dry_run: bool = False
     id: uuid.UUID
     strategy_id: uuid.UUID
     strategy_name: str
@@ -636,3 +661,8 @@ class OpenPosition(TradeRow):
     last_ltp: float | None
     current_sl: float | None
     target: float | None
+
+
+class LiveUnlockIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    unlocked: bool
