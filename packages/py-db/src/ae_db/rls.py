@@ -59,6 +59,11 @@ def user_read_only_sql(table: str, col: str = "user_id") -> list[str]:
     ]
 
 
+def system_only_sql(table: str) -> list[str]:
+    """No user privileges at all (platform secrets, webhook payloads): only trusted server paths."""
+    return [f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO {SYSTEM_ROLE}"]
+
+
 def public_read_sql(table: str) -> list[str]:
     """Privileges for a platform table users may read but only the system writes (used by later migrations)."""
     return [

@@ -110,9 +110,24 @@ class Instrument(UUIDPk, Timestamps, Base):
     weekly_expiry: Mapped[bool] = mapped_column(Boolean)
     session_open: Mapped[str] = mapped_column(String(5), default="09:15")  # HH:MM IST
     session_close: Mapped[str] = mapped_column(String(5), default="15:40")
+    spot_exchange: Mapped[str] = mapped_column(
+        String(10), default="NSE", server_default="NSE"
+    )  # where the index itself trades
+    feed_code: Mapped[str | None] = mapped_column(String(20))  # the market-data feed's code (Breeze stock_code)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     source: Mapped[str] = mapped_column(String(20), default="seed")  # seed | kite | admin: who set the facts last
     refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PlatformSecret(UUIDPk, Timestamps, Base):
+    """A platform credential set at runtime by an admin, envelope-encrypted (ae_core.secrets), e.g. the day's Breeze
+    market-data session. System only: users have no privileges on this table."""
+
+    __tablename__ = "platform_secrets"
+    name: Mapped[str] = mapped_column(String(60), unique=True)
+    value_enc: Mapped[bytes] = mapped_column(LargeBinary)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"))
 
 
 class UserOverride(UUIDPk, Timestamps, Base):
