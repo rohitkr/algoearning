@@ -42,7 +42,8 @@ export function AddBrokerDialog({
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const f = new FormData(e.currentTarget);
+    const form = e.currentTarget; // React clears e.currentTarget once the handler awaits: keep the element
+    const f = new FormData(form);
     setSaving(true);
     setError(null);
     try {
@@ -57,7 +58,7 @@ export function AddBrokerDialog({
         },
         getToken,
       );
-      e.currentTarget.reset();
+      form.reset();
       onClose();
       router.refresh();
     } catch (err) {
