@@ -304,6 +304,36 @@ class UserRiskSettings(UUIDPk, Timestamps, Base):
     kill_switch: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class NotificationSettings(UUIDPk, Timestamps, Base):
+    """How and about what a user wants to be told. events None = the defaults (ae_core.notifications)."""
+
+    __tablename__ = "notification_settings"
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    email_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_address: Mapped[str | None] = mapped_column(String(320))  # None: the account's email
+    telegram_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    telegram_chat_id: Mapped[str | None] = mapped_column(String(40))
+    telegram_link_code: Mapped[str | None] = mapped_column(String(40))  # sent to the bot as /start <code> to link
+    events: Mapped[list[str] | None] = mapped_column(JSONB)
+
+
+class Notification(UUIDPk, Base):
+    """The outbox: queued by the engine, sent by the worker, kept as the user's history."""
+
+    __tablename__ = "notifications"
+    user_id: Mapped[uuid.UUID] = owner()
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    event: Mapped[str] = mapped_column(String(40))
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    run_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | sent | failed | skipped
+    sent_via: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    error: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    __table_args__ = (Index("ix_notifications_pending", "status", "created_at"),)
+
+
 class PlatformSetting(UUIDPk, Timestamps, Base):
     """Small platform switches set by admins (e.g. trading_halted). System only."""
 

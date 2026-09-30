@@ -42,6 +42,8 @@ TABLES = (
     "webhook_events",
     "user_overrides",
     "user_risk_settings",
+    "notification_settings",
+    "notifications",
     "platform_settings",
     "users",
 )
