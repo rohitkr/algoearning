@@ -3,8 +3,8 @@
     python -m ae_engine           run: one step for every active run every second
     python -m ae_engine --once    start, report ready, exit (smoke test)
 
-Needs DATABASE_URL and REDIS_URL. Only one engine steps runs at a time (a Redis lease), so a second copy started by
-mistake waits instead of placing duplicate orders."""
+Needs DATABASE_URL and REDIS_URL (and APP_ENCRYPTION_KEY for live runs). Only one engine steps runs at a time
+(a Redis lease), so a second copy started by mistake waits instead of placing duplicate orders."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import signal
 import uuid
 
 import structlog
+from ae_core.secrets import SecretBox, load_master_key
 from ae_db.session import Database
 from ae_marketdata.hub import Hub
 from redis.asyncio import Redis
@@ -32,7 +33,11 @@ async def _run() -> int:
         log.error("DATABASE_URL and REDIS_URL are required")
         return 2
     db, redis = Database(db_url, pool_size=4), Redis.from_url(redis_url)
-    engine, me = Engine(db, Hub(redis)), uuid.uuid4().hex
+    enc = os.environ.get("APP_ENCRYPTION_KEY")
+    box = SecretBox({1: load_master_key(enc)}, 1) if enc else None  # decrypts users' broker sessions (live)
+    if box is None:
+        log.warning("APP_ENCRYPTION_KEY is not set: live runs cannot reach Zerodha (paper and dry runs work)")
+    engine, me = Engine(db, Hub(redis), box=box), uuid.uuid4().hex
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):

@@ -160,13 +160,127 @@ async def test_kill_switches_block_entries_and_square_off(env: Any) -> None:
     assert run.status == RunStatus.STOPPED and run.stop_reason == "trading halted by the platform"
 
 
-async def test_live_runs_are_refused_and_other_runs_keep_going(env: Any) -> None:
+async def live_setup(db: Database, ids: dict[str, Any], box: Any, engine_enabled: bool = True) -> Any:
+    from datetime import timedelta
+
+    from ae_db.models import BrokerAccount, BrokerSession
+
+    async with db.system_session() as s:
+        acc = BrokerAccount(user_id=ids["user"], broker="zerodha", client_id="AB1234", status="connected",
+                            engine_enabled=engine_enabled)  # fmt: skip
+        s.add(acc)
+        await s.flush()
+        acc.api_key_enc = box.encrypt("api-key", f"broker_account:{acc.id}:api_key")
+        token = box.encrypt("access-token", f"broker_session:{acc.id}:access_token")
+        until = at("09:00") + timedelta(days=1)
+        s.add(BrokerSession(user_id=ids["user"], broker_account_id=acc.id, expires_at=until, access_token_enc=token))
+        return acc.id
+
+
+def live_engine(db: Database, hub: Hub, clock: list[datetime], box: Any, kite: Any) -> Engine:
+    from ae_brokers.fake_kite import book
+    from ae_engine.live import LiveConfig
+
+    async def no_sleep(_: float) -> None:
+        return None
+
+    return Engine(
+        db, hub, now=lambda: clock[0], box=box, live=LiveConfig(fill_timeout_s=0),
+        book=book(("NIFTY", DAY, 25000, "CE", "NIFTY2610625000CE")), kite_transport=kite.transport(), sleep=no_sleep,
+    )  # fmt: skip
+
+
+def a_box() -> Any:
+    import base64
+
+    from ae_core.secrets import SecretBox, new_master_key
+
+    return SecretBox({1: base64.b64decode(new_master_key())}, 1)
+
+
+async def settle() -> None:
+    import asyncio
+
+    for _ in range(20):
+        await asyncio.sleep(0)
+
+
+async def test_live_run_trades_on_zerodha_and_reconciles(env: Any) -> None:
+    from ae_brokers.fake_kite import FakeKite
+
     db, hub, ids = env
-    live = await add_run(db, ids, mode="live")
-    paper = await add_run(db, ids)
-    eng = Engine(db, hub, now=lambda: at("09:20"))
+    box = a_box()
+    acc_id = await live_setup(db, ids, box)
+    rid = await add_run(db, ids, mode="live", broker_account_id=acc_id)
+    kite = FakeKite(prices={"NIFTY2610625000CE": 100.0})
+    clock = [at("09:20")]
+    eng = live_engine(db, hub, clock, box, kite)
+    await prices(hub, clock[0], 25010, 100.0)
+    await eng.tick()  # entry intent handed to the account
+    await settle()
+    assert [x[:3] for x in kite.log] == [("place", "SELL", "NIFTY2610625000CE")]
+    assert (await run_row(db, rid)).state["_inflight"]
+    await eng.tick()  # the fill is applied
+    async with db.system_session() as s:
+        t = (await s.execute(select(Trade).where(Trade.run_id == rid))).scalar_one()
+        assert (t.mode.value, t.tradingsymbol, float(t.entry_price), t.status) == (
+            "live",
+            "NIFTY2610625000CE",
+            100.0,
+            "open",
+        )
+    assert (await run_row(db, rid)).state["_inflight"] == []
+    assert kite.net == {"NIFTY2610625000CE": -130}
+
+    # someone squares the position off in Kite: after two checks a minute apart it is closed here too
+    kite.net = {}
+    from datetime import timedelta
+
+    for step in range(3):
+        clock[0] = at("09:22") + timedelta(minutes=step)
+        await prices(hub, clock[0], 25010, 99.0)
+        await eng.tick()
+    async with db.system_session() as s:
+        t = (await s.execute(select(Trade).where(Trade.run_id == rid))).scalar_one()
+        assert t.status == "closed" and t.exit_reason == "closed outside AlgoEarning"
+    assert "position_closed_outside" in await events(db, rid)
+
+
+async def test_live_entries_need_the_engine_switch_and_a_session(env: Any) -> None:
+    from ae_brokers.fake_kite import FakeKite
+
+    db, hub, ids = env
+    box = a_box()
+    acc_id = await live_setup(db, ids, box, engine_enabled=False)
+    rid = await add_run(db, ids, mode="live", broker_account_id=acc_id)
+    kite = FakeKite(prices={"NIFTY2610625000CE": 100.0})
+    eng = live_engine(db, hub, [at("09:20")], box, kite)
     await prices(hub, at("09:20"), 25010, 100.0)
     await eng.tick()
-    assert (await run_row(db, live)).status == RunStatus.ERROR
-    assert "live trading is not available" in ((await run_row(db, live)).error or "")
-    assert (await run_row(db, paper)).status == RunStatus.RUNNING
+    assert "order_not_placed" in await events(db, rid) and kite.log == []
+
+    eng2 = live_engine(db, hub, [at("09:20")], None, kite)  # no key: cannot open the session
+    async with db.system_session() as s:
+        await s.execute(text("UPDATE broker_accounts SET engine_enabled = true"))
+        await s.execute(text("UPDATE strategy_runs SET state = '{}'"))
+    await eng2.tick()
+    await settle()
+    await eng2.tick()
+    assert "order_failed" in await events(db, rid) and kite.log == []
+
+
+async def test_dry_run_logs_orders_and_records_paper_trades(env: Any) -> None:
+    from ae_brokers.fake_kite import FakeKite
+
+    db, hub, ids = env
+    rid = await add_run(db, ids, mode="live", dry_run=True)
+    kite = FakeKite()
+    eng = live_engine(db, hub, [at("09:20")], None, kite)
+    await prices(hub, at("09:20"), 25010, 100.0)
+    await eng.tick()
+    await settle()
+    await eng.tick()
+    async with db.system_session() as s:
+        t = (await s.execute(select(Trade).where(Trade.run_id == rid))).scalar_one()
+        assert t.mode.value == "paper" and t.rules["dry_run"] is True
+    assert "dry_run_order" in await events(db, rid) and kite.log == []
