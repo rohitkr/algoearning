@@ -25,7 +25,7 @@ export const NAV: NavItem[] = [
   { href: "/builder", label: "Strategy Builder", icon: Workflow, phase: 8 },
   { href: "/strategies", label: "Strategies", icon: BarChart3, phase: 8 },
   { href: "/runs", label: "Running", icon: PlayCircle, phase: 9 },
-  { href: "/backtesting", label: "Backtesting", icon: FlaskConical, phase: 16 },
+  { href: "/backtesting", label: "Backtesting", icon: FlaskConical, phase: 13 },
   { href: "/reports", label: "Reports", icon: FileText, phase: 11 },
   { href: "/subscription", label: "Subscription", icon: CreditCard, phase: 6 },
 ];
