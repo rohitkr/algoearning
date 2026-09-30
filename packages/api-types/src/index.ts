@@ -66,3 +66,6 @@ export type NotificationSettings = Schemas["NotificationSettingsOut"];
 export type NotificationItem = Schemas["NotificationOut"];
 export type TelegramLink = Schemas["TelegramLink"];
 export type Preflight = Schemas["PreflightOut"];
+export type Backtest = Schemas["BacktestOut"];
+export type BacktestDetail = Schemas["BacktestDetail"];
+export type HistoryCoverage = Schemas["HistoryCoverage"];

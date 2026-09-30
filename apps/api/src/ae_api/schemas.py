@@ -723,3 +723,46 @@ class PreflightCheck(BaseModel):
 class PreflightOut(BaseModel):
     ok: bool
     checks: list[PreflightCheck]
+
+
+# -- backtesting -----------------------------------------------------------------------------------------------
+class BacktestIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    strategy_id: uuid.UUID
+    start_date: date
+    end_date: date
+    multiplier: int = Field(default=1, ge=1, le=100)
+    slippage_pct: float = Field(default=0.05, ge=0, le=5)
+
+
+class BacktestOut(BaseModel):
+    id: uuid.UUID
+    strategy_id: uuid.UUID | None
+    strategy_name: str
+    kind: str
+    underlying: str
+    start_date: date
+    end_date: date
+    multiplier: int
+    slippage_pct: float
+    status: Literal["pending", "running", "done", "error"]
+    error: str | None
+    created_at: datetime
+    finished_at: datetime | None
+    net_pnl: float | None  # from the result, for the list
+    trades: int | None
+
+
+class BacktestDetail(BacktestOut):
+    result: dict[str, Any] | None  # summary, daily, trades, warnings (see ae_core.backtest.summarize_result)
+
+
+class HistoryCoverage(BaseModel):
+    underlying: str
+    index_from: date | None
+    index_to: date | None
+    index_days: int
+    option_from: date | None
+    option_to: date | None
+    option_days: int
+    expiries: int

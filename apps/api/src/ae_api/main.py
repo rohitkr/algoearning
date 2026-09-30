@@ -22,6 +22,7 @@ from .login_state import LoginStateSigner
 from .middleware import RequestContextMiddleware
 from .routers import (
     admin,
+    backtests,
     billing,
     brokers,
     entitlements,
@@ -104,6 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         monitor.router,
         market.router,
         runs.router,
+        backtests.router,
         notifications.router,
         reports.router,
         billing.router,
