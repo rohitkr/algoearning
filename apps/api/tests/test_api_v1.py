@@ -54,6 +54,16 @@ def test_me_creates_the_user_once(api: TestClient) -> None:
     assert r1.json()["id"] == r2.json()["id"] and r1.json()["role"] == "user"
 
 
+def test_a_new_login_with_a_taken_email_is_refused_not_linked(api: TestClient, clean_db: str) -> None:
+    api.get("/v1/me", headers=A)
+    e = create_engine(clean_db)
+    with e.begin() as c:  # alice first signed up through another login (e.g. Clerk)
+        c.execute(text("UPDATE users SET auth_subject = 'clerk|user_1' WHERE email = 'alice@example.com'"))
+    e.dispose()
+    r = api.get("/v1/me", headers=A)  # a new subject (dev|alice@...) with the same email
+    assert r.status_code == 409 and r.json()["error"]["details"] == {"reason": "email_in_use"}
+
+
 def test_plans_are_public(api: TestClient) -> None:
     r = api.get("/v1/plans")
     assert r.status_code == 200 and [p["code"] for p in r.json()] == ["free", "pro", "pro_plus"]

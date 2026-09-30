@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import Authenticator, AuthError, Identity
 from .auth.clerk import ProfileFetcher
-from .errors import Forbidden, Unauthorized, Unavailable
+from .errors import Conflict, Forbidden, Unauthorized, Unavailable
 
 
 @dataclass(frozen=True)
@@ -66,6 +66,12 @@ async def current_user(request: Request, db: DbDep) -> Principal:
                     raise Unauthorized(str(exc)) from exc
             if not identity.email:
                 raise Forbidden("your sign-in has no email address; add one to your account")
+            if await users.by_email(identity.email) is not None:
+                # never link accounts by email alone (whoever controls a new login would take the old account over)
+                raise Conflict(
+                    "an account with this email already exists: sign in the way you first signed up",
+                    {"reason": "email_in_use"},
+                )
             user = await users.upsert_from_auth(identity.subject, identity.email, identity.name, identity.avatar_url)
         if not UserRepo.is_active(user):
             raise Forbidden("account is not active")
