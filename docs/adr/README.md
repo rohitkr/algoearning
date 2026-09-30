@@ -21,3 +21,4 @@ supersedes the old one, never by editing history.
 | 0014 | [The trading engine: one process, isolated runs, paper first](0014-trading-engine.md)  | Accepted                     |
 | 0015 | [Live execution on Zerodha](0015-live-execution.md)                                    | Accepted                     |
 | 0016 | [Notifications: an outbox, email and Telegram, chosen per user](0016-notifications.md) | Accepted                     |
+| 0017 | [Backtesting: the live runners, replayed over stored history](0017-backtesting.md)     | Accepted                     |
