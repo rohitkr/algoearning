@@ -576,3 +576,63 @@ class EngineStatus(BaseModel):
     halt_reason: str | None
     active_runs: int
     last_heartbeat: datetime | None  # the most recent step of any run
+
+
+# -- reports ---------------------------------------------------------------------------------------------------
+class ReportDay(BaseModel):
+    day: date
+    pnl: float
+    trades: int
+    cumulative: float
+
+
+class ReportSummary(BaseModel):
+    from_date: date
+    to_date: date
+    total_pnl: float
+    trades: int
+    wins: int
+    losses: int
+    win_rate: float | None  # 0..1
+    avg_win: float | None
+    avg_loss: float | None
+    profit_factor: float | None
+    max_drawdown: float
+    best_day: ReportDay | None
+    worst_day: ReportDay | None
+    trading_days: int
+
+
+class StrategyPerformance(BaseModel):
+    strategy_id: uuid.UUID | None
+    strategy_name: str
+    runs: int
+    trades: int
+    pnl: float
+    win_rate: float | None
+
+
+class TradeRow(BaseModel):
+    id: uuid.UUID
+    run_id: uuid.UUID | None
+    strategy_name: str
+    mode: Literal["paper", "live"]
+    underlying: str
+    tradingsymbol: str
+    expiry: date
+    strike: float
+    option_type: str
+    side: Literal["BUY", "SELL"]
+    quantity: int
+    entry_time: datetime | None
+    entry_price: float
+    exit_time: datetime | None
+    exit_price: float | None
+    exit_reason: str | None
+    pnl: float
+
+
+class OpenPosition(TradeRow):
+    last_ltp: float | None
+    current_sl: float | None
+    target: float | None

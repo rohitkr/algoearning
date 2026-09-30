@@ -568,6 +568,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/positions/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open Positions */
+        get: operations["open_positions_v1_positions_open_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reports/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Daily Pnl */
+        get: operations["daily_pnl_v1_reports_daily_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reports/strategies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** By Strategy */
+        get: operations["by_strategy_v1_reports_strategies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reports/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Summary */
+        get: operations["summary_v1_reports_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reports/trades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trades */
+        get: operations["trades_v1_reports_trades_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reports/trades.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trades Csv
+         * @description Every closed trade in the range (oldest first), for spreadsheets and tax records.
+         */
+        get: operations["trades_csv_v1_reports_trades_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs": {
         parameters: {
             query?: never;
@@ -1438,6 +1543,61 @@ export interface components {
              */
             role: "user" | "admin";
         };
+        /** OpenPosition */
+        OpenPosition: {
+            /** Current Sl */
+            current_sl: number | null;
+            /** Entry Price */
+            entry_price: number;
+            /** Entry Time */
+            entry_time: string | null;
+            /** Exit Price */
+            exit_price: number | null;
+            /** Exit Reason */
+            exit_reason: string | null;
+            /** Exit Time */
+            exit_time: string | null;
+            /**
+             * Expiry
+             * Format: date
+             */
+            expiry: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Ltp */
+            last_ltp: number | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "paper" | "live";
+            /** Option Type */
+            option_type: string;
+            /** Pnl */
+            pnl: number;
+            /** Quantity */
+            quantity: number;
+            /** Run Id */
+            run_id: string | null;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "BUY" | "SELL";
+            /** Strategy Name */
+            strategy_name: string;
+            /** Strike */
+            strike: number;
+            /** Target */
+            target: number | null;
+            /** Tradingsymbol */
+            tradingsymbol: string;
+            /** Underlying */
+            underlying: string;
+        };
         /** OrderOut */
         OrderOut: {
             /** Avg Price */
@@ -1525,6 +1685,13 @@ export interface components {
         Page_StrategyOut_: {
             /** Items */
             items: components["schemas"]["StrategyOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** Page[TradeRow] */
+        Page_TradeRow_: {
+            /** Items */
+            items: components["schemas"]["TradeRow"][];
             /** Next Cursor */
             next_cursor?: string | null;
         };
@@ -1844,6 +2011,55 @@ export interface components {
             /** User Email */
             user_email: string;
         };
+        /** ReportDay */
+        ReportDay: {
+            /** Cumulative */
+            cumulative: number;
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Pnl */
+            pnl: number;
+            /** Trades */
+            trades: number;
+        };
+        /** ReportSummary */
+        ReportSummary: {
+            /** Avg Loss */
+            avg_loss: number | null;
+            /** Avg Win */
+            avg_win: number | null;
+            best_day: components["schemas"]["ReportDay"] | null;
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /** Losses */
+            losses: number;
+            /** Max Drawdown */
+            max_drawdown: number;
+            /** Profit Factor */
+            profit_factor: number | null;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /** Total Pnl */
+            total_pnl: number;
+            /** Trades */
+            trades: number;
+            /** Trading Days */
+            trading_days: number;
+            /** Win Rate */
+            win_rate: number | null;
+            /** Wins */
+            wins: number;
+            worst_day: components["schemas"]["ReportDay"] | null;
+        };
         /** RiskSettingsIO */
         RiskSettingsIO: {
             /**
@@ -2024,6 +2240,21 @@ export interface components {
             /** Status */
             status?: ("draft" | "ready" | "archived") | null;
         };
+        /** StrategyPerformance */
+        StrategyPerformance: {
+            /** Pnl */
+            pnl: number;
+            /** Runs */
+            runs: number;
+            /** Strategy Id */
+            strategy_id: string | null;
+            /** Strategy Name */
+            strategy_name: string;
+            /** Trades */
+            trades: number;
+            /** Win Rate */
+            win_rate: number | null;
+        };
         /**
          * StrategyRisk
          * @description Limits on the whole strategy's running profit or loss (MTM), in rupees.
@@ -2111,6 +2342,55 @@ export interface components {
              * @default 15:15
              */
             exit: string;
+        };
+        /** TradeRow */
+        TradeRow: {
+            /** Entry Price */
+            entry_price: number;
+            /** Entry Time */
+            entry_time: string | null;
+            /** Exit Price */
+            exit_price: number | null;
+            /** Exit Reason */
+            exit_reason: string | null;
+            /** Exit Time */
+            exit_time: string | null;
+            /**
+             * Expiry
+             * Format: date
+             */
+            expiry: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "paper" | "live";
+            /** Option Type */
+            option_type: string;
+            /** Pnl */
+            pnl: number;
+            /** Quantity */
+            quantity: number;
+            /** Run Id */
+            run_id: string | null;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "BUY" | "SELL";
+            /** Strategy Name */
+            strategy_name: string;
+            /** Strike */
+            strike: number;
+            /** Tradingsymbol */
+            tradingsymbol: string;
+            /** Underlying */
+            underlying: string;
         };
         /** TradingHaltIn */
         TradingHaltIn: {
@@ -4915,6 +5195,491 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanOut"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    open_positions_v1_positions_open_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenPosition"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    daily_pnl_v1_reports_daily_get: {
+        parameters: {
+            query?: {
+                /** @description First day (IST); default 30 days ago */
+                from?: string | null;
+                /** @description Last day (IST); default today */
+                to?: string | null;
+                /** @description Only paper or only live trades */
+                mode?: ("paper" | "live") | null;
+                strategy_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDay"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    by_strategy_v1_reports_strategies_get: {
+        parameters: {
+            query?: {
+                /** @description First day (IST); default 30 days ago */
+                from?: string | null;
+                /** @description Last day (IST); default today */
+                to?: string | null;
+                /** @description Only paper or only live trades */
+                mode?: ("paper" | "live") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyPerformance"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    summary_v1_reports_summary_get: {
+        parameters: {
+            query?: {
+                /** @description First day (IST); default 30 days ago */
+                from?: string | null;
+                /** @description Last day (IST); default today */
+                to?: string | null;
+                /** @description Only paper or only live trades */
+                mode?: ("paper" | "live") | null;
+                strategy_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportSummary"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    trades_v1_reports_trades_get: {
+        parameters: {
+            query?: {
+                /** @description First day (IST); default 30 days ago */
+                from?: string | null;
+                /** @description Last day (IST); default today */
+                to?: string | null;
+                /** @description Only paper or only live trades */
+                mode?: ("paper" | "live") | null;
+                strategy_id?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_TradeRow_"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    trades_csv_v1_reports_trades_csv_get: {
+        parameters: {
+            query?: {
+                /** @description First day (IST); default 30 days ago */
+                from?: string | null;
+                /** @description Last day (IST); default today */
+                to?: string | null;
+                /** @description Only paper or only live trades */
+                mode?: ("paper" | "live") | null;
+                strategy_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
                 };
             };
             /** @description Bad request */
