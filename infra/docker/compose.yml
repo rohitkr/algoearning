@@ -53,6 +53,20 @@ services:
     build: { context: ../.., dockerfile: infra/docker/api.Dockerfile }
     command: ["python", "-m", "ae_engine"]
     depends_on: [api]
+  feed:
+    build: { context: ../.., dockerfile: infra/docker/api.Dockerfile }
+    command: ["python", "-m", "ae_marketdata"]
+    environment:
+      DATABASE_URL: postgresql://algoearning:algoearning@postgres:5432/algoearning
+      REDIS_URL: redis://redis:6379/0
+      MARKET_DATA_SOURCE: ${MARKET_DATA_SOURCE:-simulated}
+      BREEZE_API_KEY: ${BREEZE_API_KEY:-}
+      BREEZE_API_SECRET: ${BREEZE_API_SECRET:-}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-}
+    restart: unless-stopped
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
   worker:
     build: { context: ../.., dockerfile: infra/docker/api.Dockerfile }
     command: ["python", "-m", "ae_worker"]

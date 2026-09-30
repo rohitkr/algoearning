@@ -27,3 +27,6 @@ __pycache__/
 .vscode/*
 !.vscode/extensions.json
 .data/
+
+# the Breeze SDK writes its own logs to ./logs (may contain session details)
+logs/

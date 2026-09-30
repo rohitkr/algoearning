@@ -157,6 +157,9 @@ prefix() { # prefix every line of a process's output, unbuffered
 pids+=($!)
 ( pnpm --filter @algoearning/web exec next dev --port "$WEB_PORT" 2>&1 | prefix "${blue}web ${reset}│ " ) &
 pids+=($!)
+# the platform price feed: Breeze when BREEZE_API_KEY/SECRET are set in .env, simulated prices otherwise
+( uv run --env-file .env python -m ae_marketdata 2>&1 | prefix "${yellow}feed${reset}│ " ) &
+pids+=($!)
 
 wait_for() { # url name seconds
   for _ in $(seq 1 "$3"); do
@@ -174,7 +177,8 @@ ${bold}${green}AlgoEarning is running${reset}
   Web app     ${bold}http://localhost:$WEB_PORT${reset}
   API docs    http://localhost:$API_PORT/docs
   API health  http://localhost:$API_PORT/health/ready
-  ${dim}Code changes reload automatically. Ctrl-C stops the API and web$( [ "$STOP_DB" = 1 ] && echo ", Postgres and Redis").${reset}
+  Monitor     http://localhost:$WEB_PORT/monitor (admins; market data under Market data)
+  ${dim}Code changes reload automatically (restart for feed changes). Ctrl-C stops the API, web and feed$( [ "$STOP_DB" = 1 ] && echo ", Postgres and Redis").${reset}
 
 EOF
 wait
