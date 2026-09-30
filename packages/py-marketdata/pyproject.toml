@@ -3,7 +3,7 @@ name = "ae-marketdata"
 version = "0.1.0"
 description = "Platform market-data feed (Breeze first) and tick fan-out"
 requires-python = ">=3.13"
-dependencies = ["ae-core", "ae-db", "ae-brokers", "httpx>=0.28", "structlog>=26.1"]
+dependencies = ["ae-core", "ae-db", "ae-brokers", "httpx>=0.28", "structlog>=26.1", "redis>=8.1", "breeze-connect>=1.0.60"]
 
 [build-system]
 requires = ["hatchling"]
