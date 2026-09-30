@@ -283,6 +283,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/strategies/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Strategy Catalog */
+        get: operations["strategy_catalog_v1_strategies_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/strategies/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Config
+         * @description Check a config without saving it: field-level errors (block saving) and plan warnings (block deploying).
+         */
+        post: operations["validate_config_v1_strategies_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/strategies/{strategy_id}": {
         parameters: {
             query?: never;
@@ -516,6 +553,15 @@ export interface components {
              */
             provider: "razorpay";
         };
+        /** ConfigIssue */
+        ConfigIssue: {
+            /** Loc */
+            loc: (string | number)[];
+            /** Msg */
+            msg: string;
+            /** Type */
+            type: string;
+        };
         /** DuplicateIn */
         DuplicateIn: {
             /** Name */
@@ -583,6 +629,53 @@ export interface components {
             status: "ok";
             /** Version */
             version: string;
+        };
+        /** InstrumentOut */
+        InstrumentOut: {
+            /** Code */
+            code: string;
+            /** Exchange */
+            exchange: string;
+            /** Lot Size */
+            lot_size: number;
+            /** Name */
+            name: string;
+            /** Strike Step */
+            strike_step: number;
+            /** Weekly Expiry */
+            weekly_expiry: boolean;
+        };
+        /** Leg */
+        Leg: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "BUY" | "SELL";
+            /**
+             * Expiry
+             * @default current_week
+             * @enum {string}
+             */
+            expiry: "current_week" | "next_week" | "current_month" | "next_month";
+            /** Id */
+            id: string;
+            /**
+             * Lots
+             * @default 1
+             */
+            lots: number;
+            /**
+             * Option Type
+             * @enum {string}
+             */
+            option_type: "CE" | "PE";
+            reentry_on_sl?: components["schemas"]["ReEntry"] | null;
+            reentry_on_target?: components["schemas"]["ReEntry"] | null;
+            stop_loss?: components["schemas"]["Threshold"] | null;
+            strike?: components["schemas"]["Strike"];
+            target?: components["schemas"]["Threshold"] | null;
+            trailing?: components["schemas"]["Trailing"] | null;
         };
         /** Me */
         Me: {
@@ -730,6 +823,17 @@ export interface components {
             /** Price Paise */
             price_paise: number;
         };
+        /** PresetOut */
+        PresetOut: {
+            /** Config */
+            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"];
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** PurchaseOut */
         PurchaseOut: {
             /**
@@ -742,6 +846,95 @@ export interface components {
             /** Plan Code */
             plan_code: string;
         };
+        /**
+         * RangeBreakoutConfig
+         * @description Positional 2h range breakout seller: the first close outside the range_start..range_end high/low sells an
+         *     ITM option (upside breakout sells a PUT, downside a CALL) on the weekly expiry after the entry day. Stop-loss
+         *     is on the index (stop_loss_pct against the entry); one re-entry at cost; exit at exit_time on expiry day, or
+         *     on the entry day when intraday_only. hedge_width buys a wing that many points further out (None = naked).
+         */
+        RangeBreakoutConfig: {
+            /**
+             * Exit Time
+             * @default 15:15
+             */
+            exit_time: string;
+            /**
+             * Expiry Offset
+             * @default 0
+             */
+            expiry_offset: number;
+            /**
+             * Hedge Width
+             * @default 300
+             */
+            hedge_width: number | null;
+            /**
+             * Intraday Only
+             * @default false
+             */
+            intraday_only: boolean;
+            /**
+             * Itm Points
+             * @default 100
+             */
+            itm_points: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "range_breakout";
+            /**
+             * Last Entry
+             * @default 15:00
+             */
+            last_entry: string;
+            /**
+             * Lots
+             * @default 1
+             */
+            lots: number;
+            /**
+             * Range End
+             * @default 11:15
+             */
+            range_end: string;
+            /**
+             * Range Start
+             * @default 09:15
+             */
+            range_start: string;
+            /**
+             * Reentry
+             * @default true
+             */
+            reentry: boolean;
+            /**
+             * Stop Loss Pct
+             * @default 0.5
+             */
+            stop_loss_pct: number;
+            /**
+             * Underlying
+             * @default NIFTY
+             * @enum {string}
+             */
+            underlying: "NIFTY" | "BANKNIFTY" | "FINNIFTY" | "MIDCPNIFTY" | "SENSEX";
+        };
+        /** ReEntry */
+        ReEntry: {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /**
+             * Mode
+             * @default at_cost
+             * @enum {string}
+             */
+            mode: "at_cost" | "immediate";
+        };
         /** Readiness */
         Readiness: {
             /** Checks */
@@ -752,23 +945,45 @@ export interface components {
              */
             status: "ready" | "not_ready";
         };
+        /**
+         * StrategyCatalogOut
+         * @description Everything the builder needs: instruments, starting points and limits.
+         */
+        StrategyCatalogOut: {
+            /** Instruments */
+            instruments: components["schemas"]["InstrumentOut"][];
+            limits: components["schemas"]["StrategyLimits"];
+            /** Presets */
+            presets: components["schemas"]["PresetOut"][];
+        };
         /** StrategyIn */
         StrategyIn: {
             /** Config */
-            config?: {
-                [key: string]: unknown;
-            };
+            config?: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"];
             /** Description */
             description?: string | null;
             /** Name */
             name: string;
         };
+        /** StrategyLimits */
+        StrategyLimits: {
+            /** Market Close */
+            market_close: string;
+            /** Market Open */
+            market_open: string;
+            /** Max Legs */
+            max_legs: number;
+            /** Max Lots */
+            max_lots: number;
+            /** Max Lots Per Order */
+            max_lots_per_order: number | null;
+            /** Max Strike Offset */
+            max_strike_offset: number;
+        };
         /** StrategyOut */
         StrategyOut: {
             /** Config */
-            config: {
-                [key: string]: unknown;
-            };
+            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"];
             /**
              * Created At
              * Format: date-time
@@ -781,10 +996,15 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Kind */
-            kind: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "time_based" | "range_breakout" | "zero_dte";
             /** Name */
             name: string;
+            /** Schema Version */
+            schema_version: number;
             /**
              * Status
              * @enum {string}
@@ -801,9 +1021,7 @@ export interface components {
         /** StrategyPatch */
         StrategyPatch: {
             /** Config */
-            config?: {
-                [key: string]: unknown;
-            } | null;
+            config?: (components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"]) | null;
             /** Description */
             description?: string | null;
             /** Name */
@@ -811,12 +1029,132 @@ export interface components {
             /** Status */
             status?: ("draft" | "ready" | "archived") | null;
         };
+        /**
+         * StrategyRisk
+         * @description Limits on the whole strategy's running profit or loss (MTM), in rupees.
+         */
+        StrategyRisk: {
+            /**
+             * Exit All On Leg Sl
+             * @default false
+             */
+            exit_all_on_leg_sl: boolean;
+            /** Mtm Stop Loss */
+            mtm_stop_loss?: number | null;
+            /** Mtm Target */
+            mtm_target?: number | null;
+        };
+        /**
+         * Strike
+         * @description atm: ATM +/- `offset` strikes (positive = out of the money, negative = in the money).
+         *     premium: the strike whose premium is closest to `premium` at entry.
+         */
+        Strike: {
+            /**
+             * Mode
+             * @default atm
+             * @enum {string}
+             */
+            mode: "atm" | "premium";
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /** Premium */
+            premium?: number | null;
+        };
+        /**
+         * Threshold
+         * @description A distance from the entry price: stop-loss or target.
+         */
+        Threshold: {
+            /**
+             * Basis
+             * @default premium
+             * @enum {string}
+             */
+            basis: "premium" | "underlying";
+            /**
+             * Unit
+             * @default percent
+             * @enum {string}
+             */
+            unit: "points" | "percent";
+            /** Value */
+            value: number;
+        };
+        /** TimeBasedConfig */
+        TimeBasedConfig: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "time_based";
+            /** Legs */
+            legs: components["schemas"]["Leg"][];
+            risk?: components["schemas"]["StrategyRisk"];
+            timing?: components["schemas"]["Timing"];
+            /**
+             * Underlying
+             * @default NIFTY
+             * @enum {string}
+             */
+            underlying: "NIFTY" | "BANKNIFTY" | "FINNIFTY" | "MIDCPNIFTY" | "SENSEX";
+        };
+        /** Timing */
+        Timing: {
+            /** Days */
+            days?: ("MON" | "TUE" | "WED" | "THU" | "FRI")[];
+            /**
+             * Entry
+             * @default 09:20
+             */
+            entry: string;
+            /**
+             * Exit
+             * @default 15:15
+             */
+            exit: string;
+        };
+        /**
+         * Trailing
+         * @description Each time the price moves `trigger` in the leg's favour, move the stop-loss `step` the same way.
+         */
+        Trailing: {
+            /** Step */
+            step: number;
+            /** Trigger */
+            trigger: number;
+            /**
+             * Unit
+             * @default points
+             * @enum {string}
+             */
+            unit: "points" | "percent";
+        };
         /** UsageItem */
         UsageItem: {
             /** Limit */
             limit: number | null;
             /** Used */
             used: number;
+        };
+        /** ValidateIn */
+        ValidateIn: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+        };
+        /** ValidateOut */
+        ValidateOut: {
+            /** Errors */
+            errors: components["schemas"]["ConfigIssue"][];
+            /** Valid */
+            valid: boolean;
+            /** Warnings */
+            warnings: components["schemas"]["ConfigIssue"][];
         };
         /** VerifyIn */
         VerifyIn: {
@@ -826,6 +1164,73 @@ export interface components {
             payment_id: string;
             /** Signature */
             signature: string;
+        };
+        /**
+         * ZeroDteConfig
+         * @description Expiry-day ITM straddle seller: on each expiry day, sells a CALL at ATM - itm_points and a PUT at
+         *     ATM + itm_points at the entry time that did best over the last `lookback` expiry days (candidates every
+         *     step_minutes from first_entry to last_entry). Stop-loss stop_loss_pct on each leg's premium, one re-entry,
+         *     exit at exit_time.
+         */
+        ZeroDteConfig: {
+            /**
+             * Exit Time
+             * @default 15:15
+             */
+            exit_time: string;
+            /**
+             * First Entry
+             * @default 09:20
+             */
+            first_entry: string;
+            /** Hedge Width */
+            hedge_width?: number | null;
+            /**
+             * Itm Points
+             * @default 100
+             */
+            itm_points: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "zero_dte";
+            /**
+             * Last Entry
+             * @default 14:30
+             */
+            last_entry: string;
+            /**
+             * Lookback
+             * @default 8
+             */
+            lookback: number;
+            /**
+             * Lots
+             * @default 1
+             */
+            lots: number;
+            /**
+             * Reentry
+             * @default true
+             */
+            reentry: boolean;
+            /**
+             * Step Minutes
+             * @default 10
+             */
+            step_minutes: number;
+            /**
+             * Stop Loss Pct
+             * @default 30
+             */
+            stop_loss_pct: number;
+            /**
+             * Underlying
+             * @default NIFTY
+             * @enum {string}
+             */
+            underlying: "NIFTY" | "BANKNIFTY" | "FINNIFTY" | "MIDCPNIFTY" | "SENSEX";
         };
     };
     responses: never;
@@ -2097,6 +2502,10 @@ export interface operations {
             query?: {
                 cursor?: string | null;
                 limit?: number;
+                /** @description Only these statuses (repeat it) */
+                status?: ("draft" | "ready" | "archived")[] | null;
+                /** @description Name contains (case-insensitive) */
+                q?: string | null;
             };
             header?: never;
             path?: never;
@@ -2189,6 +2598,158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StrategyOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    strategy_catalog_v1_strategies_catalog_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StrategyCatalogOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    validate_config_v1_strategies_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidateOut"];
                 };
             };
             /** @description Bad request */

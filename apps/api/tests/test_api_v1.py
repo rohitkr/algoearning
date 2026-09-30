@@ -61,7 +61,8 @@ def test_plans_are_public(api: TestClient) -> None:
 
 
 def test_strategy_crud_and_isolation(api: TestClient, clean_db: str) -> None:
-    r = api.post("/v1/strategies", json={"name": "Short straddle", "config": {"legs": [{"strike": 25000}]}}, headers=A)
+    straddle = {"kind": "time_based", "legs": [{"id": "L1", "action": "SELL", "option_type": "CE"}]}
+    r = api.post("/v1/strategies", json={"name": "Short straddle", "config": straddle}, headers=A)
     assert r.status_code == 201, r.text
     sid = r.json()["id"]
     assert r.json()["version"] == 1 and r.json()["status"] == "draft"
@@ -77,7 +78,8 @@ def test_strategy_crud_and_isolation(api: TestClient, clean_db: str) -> None:
         assert resp.status_code == 404 and resp.json()["error"]["code"] == "not_found", (method, resp.text)
     assert api.get("/v1/strategies", headers=B).json()["items"] == []
 
-    r = api.patch(f"/v1/strategies/{sid}", json={"config": {"legs": []}, "status": "ready"}, headers=A)
+    straddle["legs"].append({"id": "L2", "action": "SELL", "option_type": "PE"})
+    r = api.patch(f"/v1/strategies/{sid}", json={"config": straddle, "status": "ready"}, headers=A)
     assert r.status_code == 200 and r.json()["version"] == 2 and r.json()["status"] == "ready"
     dup = api.post(f"/v1/strategies/{sid}/duplicate", json={}, headers=A)
     assert dup.status_code == 201 and dup.json()["name"] == "Short straddle (copy)"

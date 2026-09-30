@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Generic, Literal, TypeVar
 
+from ae_core.strategy import StrategyConfig, StrategyKind, default_config
 from pydantic import BaseModel, ConfigDict, Field
 
 T = TypeVar("T")
@@ -115,14 +116,14 @@ class StrategyIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=5000)
-    config: dict[str, Any] = Field(default_factory=dict)
+    config: StrategyConfig = Field(default_factory=default_config)
 
 
 class StrategyPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=5000)
-    config: dict[str, Any] | None = None
+    config: StrategyConfig | None = None
     status: Literal["draft", "ready", "archived"] | None = None
 
 
@@ -131,12 +132,63 @@ class StrategyOut(BaseModel):
     id: uuid.UUID
     name: str
     description: str | None
-    kind: str
-    config: dict[str, Any]
+    kind: StrategyKind
+    config: StrategyConfig
+    schema_version: int
     version: int
     status: Literal["draft", "ready", "archived"]
     created_at: datetime
     updated_at: datetime
+
+
+class InstrumentOut(BaseModel):
+    code: str
+    name: str
+    exchange: str
+    lot_size: int
+    strike_step: int
+    weekly_expiry: bool
+
+
+class PresetOut(BaseModel):
+    id: str
+    name: str
+    description: str
+    config: StrategyConfig
+
+
+class StrategyLimits(BaseModel):
+    max_legs: int
+    max_strike_offset: int
+    max_lots: int
+    max_lots_per_order: int | None  # the user's plan (null = unlimited)
+    market_open: str
+    market_close: str
+
+
+class StrategyCatalogOut(BaseModel):
+    """Everything the builder needs: instruments, starting points and limits."""
+
+    instruments: list[InstrumentOut]
+    presets: list[PresetOut]
+    limits: StrategyLimits
+
+
+class ValidateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    config: dict[str, Any]  # raw on purpose: half-typed builder state must still get field-level errors
+
+
+class ConfigIssue(BaseModel):
+    loc: list[str | int]  # path inside the config, e.g. ["legs", 0, "stop_loss", "value"]
+    msg: str
+    type: str
+
+
+class ValidateOut(BaseModel):
+    valid: bool  # true: the config can be saved (warnings do not block saving)
+    errors: list[ConfigIssue]
+    warnings: list[ConfigIssue]
 
 
 class DuplicateIn(BaseModel):

@@ -51,6 +51,12 @@ class NotFound(AppError):
     status, code = 404, "not_found"
 
 
+class Invalid(AppError):
+    """Well-formed but breaks a rule. details: [{loc, msg, type}], like request validation errors."""
+
+    status, code = 422, "validation_error"
+
+
 class Conflict(AppError):
     status, code = 409, "conflict"
 

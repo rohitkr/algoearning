@@ -454,6 +454,39 @@
         "title": "CheckoutOut",
         "type": "object"
       },
+      "ConfigIssue": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Loc",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Msg",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ConfigIssue",
+        "type": "object"
+      },
       "DuplicateIn": {
         "additionalProperties": false,
         "properties": {
@@ -645,6 +678,148 @@
           "env"
         ],
         "title": "Health",
+        "type": "object"
+      },
+      "InstrumentOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "exchange": {
+            "title": "Exchange",
+            "type": "string"
+          },
+          "lot_size": {
+            "title": "Lot Size",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "strike_step": {
+            "title": "Strike Step",
+            "type": "integer"
+          },
+          "weekly_expiry": {
+            "title": "Weekly Expiry",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "exchange",
+          "lot_size",
+          "strike_step",
+          "weekly_expiry"
+        ],
+        "title": "InstrumentOut",
+        "type": "object"
+      },
+      "Leg": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "BUY",
+              "SELL"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "expiry": {
+            "default": "current_week",
+            "enum": [
+              "current_week",
+              "next_week",
+              "current_month",
+              "next_month"
+            ],
+            "title": "Expiry",
+            "type": "string"
+          },
+          "id": {
+            "pattern": "^[A-Za-z0-9_-]{1,12}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "lots": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Lots",
+            "type": "integer"
+          },
+          "option_type": {
+            "enum": [
+              "CE",
+              "PE"
+            ],
+            "title": "Option Type",
+            "type": "string"
+          },
+          "reentry_on_sl": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reentry_on_target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stop_loss": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Threshold"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "strike": {
+            "$ref": "#/components/schemas/Strike"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Threshold"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trailing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Trailing"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "option_type"
+        ],
+        "title": "Leg",
         "type": "object"
       },
       "Me": {
@@ -1047,6 +1222,52 @@
         "title": "PlanOut",
         "type": "object"
       },
+      "PresetOut": {
+        "properties": {
+          "config": {
+            "discriminator": {
+              "mapping": {
+                "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "time_based": "#/components/schemas/TimeBasedConfig",
+                "zero_dte": "#/components/schemas/ZeroDteConfig"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TimeBasedConfig"
+              },
+              {
+                "$ref": "#/components/schemas/RangeBreakoutConfig"
+              },
+              {
+                "$ref": "#/components/schemas/ZeroDteConfig"
+              }
+            ],
+            "title": "Config"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "config"
+        ],
+        "title": "PresetOut",
+        "type": "object"
+      },
       "PurchaseOut": {
         "properties": {
           "outcome": {
@@ -1082,6 +1303,131 @@
         "title": "PurchaseOut",
         "type": "object"
       },
+      "RangeBreakoutConfig": {
+        "additionalProperties": false,
+        "description": "Positional 2h range breakout seller: the first close outside the range_start..range_end high/low sells an\nITM option (upside breakout sells a PUT, downside a CALL) on the weekly expiry after the entry day. Stop-loss\nis on the index (stop_loss_pct against the entry); one re-entry at cost; exit at exit_time on expiry day, or\non the entry day when intraday_only. hedge_width buys a wing that many points further out (None = naked).",
+        "properties": {
+          "exit_time": {
+            "default": "15:15",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Exit Time",
+            "type": "string"
+          },
+          "expiry_offset": {
+            "default": 0,
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Expiry Offset",
+            "type": "integer"
+          },
+          "hedge_width": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 5000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 300,
+            "title": "Hedge Width"
+          },
+          "intraday_only": {
+            "default": false,
+            "title": "Intraday Only",
+            "type": "boolean"
+          },
+          "itm_points": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 0.0,
+            "title": "Itm Points",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "range_breakout",
+            "default": "range_breakout",
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_entry": {
+            "default": "15:00",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Last Entry",
+            "type": "string"
+          },
+          "lots": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Lots",
+            "type": "integer"
+          },
+          "range_end": {
+            "default": "11:15",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Range End",
+            "type": "string"
+          },
+          "range_start": {
+            "default": "09:15",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Range Start",
+            "type": "string"
+          },
+          "reentry": {
+            "default": true,
+            "title": "Reentry",
+            "type": "boolean"
+          },
+          "stop_loss_pct": {
+            "default": 0.5,
+            "exclusiveMinimum": 0.0,
+            "maximum": 10.0,
+            "title": "Stop Loss Pct",
+            "type": "number"
+          },
+          "underlying": {
+            "default": "NIFTY",
+            "enum": [
+              "NIFTY",
+              "BANKNIFTY",
+              "FINNIFTY",
+              "MIDCPNIFTY",
+              "SENSEX"
+            ],
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "title": "RangeBreakoutConfig",
+        "type": "object"
+      },
+      "ReEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "default": 1,
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "mode": {
+            "default": "at_cost",
+            "enum": [
+              "at_cost",
+              "immediate"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "ReEntry",
+        "type": "object"
+      },
       "Readiness": {
         "properties": {
           "checks": {
@@ -1107,13 +1453,59 @@
         "title": "Readiness",
         "type": "object"
       },
+      "StrategyCatalogOut": {
+        "description": "Everything the builder needs: instruments, starting points and limits.",
+        "properties": {
+          "instruments": {
+            "items": {
+              "$ref": "#/components/schemas/InstrumentOut"
+            },
+            "title": "Instruments",
+            "type": "array"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/StrategyLimits"
+          },
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/PresetOut"
+            },
+            "title": "Presets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "instruments",
+          "presets",
+          "limits"
+        ],
+        "title": "StrategyCatalogOut",
+        "type": "object"
+      },
       "StrategyIn": {
         "additionalProperties": false,
         "properties": {
           "config": {
-            "additionalProperties": true,
-            "title": "Config",
-            "type": "object"
+            "discriminator": {
+              "mapping": {
+                "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "time_based": "#/components/schemas/TimeBasedConfig",
+                "zero_dte": "#/components/schemas/ZeroDteConfig"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TimeBasedConfig"
+              },
+              {
+                "$ref": "#/components/schemas/RangeBreakoutConfig"
+              },
+              {
+                "$ref": "#/components/schemas/ZeroDteConfig"
+              }
+            ],
+            "title": "Config"
           },
           "description": {
             "anyOf": [
@@ -1140,12 +1532,74 @@
         "title": "StrategyIn",
         "type": "object"
       },
+      "StrategyLimits": {
+        "properties": {
+          "market_close": {
+            "title": "Market Close",
+            "type": "string"
+          },
+          "market_open": {
+            "title": "Market Open",
+            "type": "string"
+          },
+          "max_legs": {
+            "title": "Max Legs",
+            "type": "integer"
+          },
+          "max_lots": {
+            "title": "Max Lots",
+            "type": "integer"
+          },
+          "max_lots_per_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Lots Per Order"
+          },
+          "max_strike_offset": {
+            "title": "Max Strike Offset",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_legs",
+          "max_strike_offset",
+          "max_lots",
+          "max_lots_per_order",
+          "market_open",
+          "market_close"
+        ],
+        "title": "StrategyLimits",
+        "type": "object"
+      },
       "StrategyOut": {
         "properties": {
           "config": {
-            "additionalProperties": true,
-            "title": "Config",
-            "type": "object"
+            "discriminator": {
+              "mapping": {
+                "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "time_based": "#/components/schemas/TimeBasedConfig",
+                "zero_dte": "#/components/schemas/ZeroDteConfig"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TimeBasedConfig"
+              },
+              {
+                "$ref": "#/components/schemas/RangeBreakoutConfig"
+              },
+              {
+                "$ref": "#/components/schemas/ZeroDteConfig"
+              }
+            ],
+            "title": "Config"
           },
           "created_at": {
             "format": "date-time",
@@ -1169,12 +1623,21 @@
             "type": "string"
           },
           "kind": {
+            "enum": [
+              "time_based",
+              "range_breakout",
+              "zero_dte"
+            ],
             "title": "Kind",
             "type": "string"
           },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "integer"
           },
           "status": {
             "enum": [
@@ -1201,6 +1664,7 @@
           "description",
           "kind",
           "config",
+          "schema_version",
           "version",
           "status",
           "created_at",
@@ -1215,8 +1679,25 @@
           "config": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "discriminator": {
+                  "mapping": {
+                    "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                    "time_based": "#/components/schemas/TimeBasedConfig",
+                    "zero_dte": "#/components/schemas/ZeroDteConfig"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/TimeBasedConfig"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RangeBreakoutConfig"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ZeroDteConfig"
+                  }
+                ]
               },
               {
                 "type": "null"
@@ -1269,6 +1750,228 @@
         "title": "StrategyPatch",
         "type": "object"
       },
+      "StrategyRisk": {
+        "additionalProperties": false,
+        "description": "Limits on the whole strategy's running profit or loss (MTM), in rupees.",
+        "properties": {
+          "exit_all_on_leg_sl": {
+            "default": false,
+            "title": "Exit All On Leg Sl",
+            "type": "boolean"
+          },
+          "mtm_stop_loss": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mtm Stop Loss"
+          },
+          "mtm_target": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mtm Target"
+          }
+        },
+        "title": "StrategyRisk",
+        "type": "object"
+      },
+      "Strike": {
+        "additionalProperties": false,
+        "description": "atm: ATM +/- `offset` strikes (positive = out of the money, negative = in the money).\npremium: the strike whose premium is closest to `premium` at entry.",
+        "properties": {
+          "mode": {
+            "default": "atm",
+            "enum": [
+              "atm",
+              "premium"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "offset": {
+            "default": 0,
+            "maximum": 20.0,
+            "minimum": -20.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "premium": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium"
+          }
+        },
+        "title": "Strike",
+        "type": "object"
+      },
+      "Threshold": {
+        "additionalProperties": false,
+        "description": "A distance from the entry price: stop-loss or target.",
+        "properties": {
+          "basis": {
+            "default": "premium",
+            "enum": [
+              "premium",
+              "underlying"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "unit": {
+            "default": "percent",
+            "enum": [
+              "points",
+              "percent"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000.0,
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "Threshold",
+        "type": "object"
+      },
+      "TimeBasedConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "time_based",
+            "default": "time_based",
+            "title": "Kind",
+            "type": "string"
+          },
+          "legs": {
+            "items": {
+              "$ref": "#/components/schemas/Leg"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Legs",
+            "type": "array"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/StrategyRisk"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/Timing"
+          },
+          "underlying": {
+            "default": "NIFTY",
+            "enum": [
+              "NIFTY",
+              "BANKNIFTY",
+              "FINNIFTY",
+              "MIDCPNIFTY",
+              "SENSEX"
+            ],
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "required": [
+          "legs"
+        ],
+        "title": "TimeBasedConfig",
+        "type": "object"
+      },
+      "Timing": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "items": {
+              "enum": [
+                "MON",
+                "TUE",
+                "WED",
+                "THU",
+                "FRI"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Days",
+            "type": "array"
+          },
+          "entry": {
+            "default": "09:20",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Entry",
+            "type": "string"
+          },
+          "exit": {
+            "default": "15:15",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Exit",
+            "type": "string"
+          }
+        },
+        "title": "Timing",
+        "type": "object"
+      },
+      "Trailing": {
+        "additionalProperties": false,
+        "description": "Each time the price moves `trigger` in the leg's favour, move the stop-loss `step` the same way.",
+        "properties": {
+          "step": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000.0,
+            "title": "Step",
+            "type": "number"
+          },
+          "trigger": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000.0,
+            "title": "Trigger",
+            "type": "number"
+          },
+          "unit": {
+            "default": "points",
+            "enum": [
+              "points",
+              "percent"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger",
+          "step"
+        ],
+        "title": "Trailing",
+        "type": "object"
+      },
       "UsageItem": {
         "properties": {
           "limit": {
@@ -1292,6 +1995,50 @@
           "limit"
         ],
         "title": "UsageItem",
+        "type": "object"
+      },
+      "ValidateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "ValidateIn",
+        "type": "object"
+      },
+      "ValidateOut": {
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigIssue"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigIssue"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "valid",
+          "errors",
+          "warnings"
+        ],
+        "title": "ValidateOut",
         "type": "object"
       },
       "VerifyIn": {
@@ -1322,6 +2069,103 @@
           "signature"
         ],
         "title": "VerifyIn",
+        "type": "object"
+      },
+      "ZeroDteConfig": {
+        "additionalProperties": false,
+        "description": "Expiry-day ITM straddle seller: on each expiry day, sells a CALL at ATM - itm_points and a PUT at\nATM + itm_points at the entry time that did best over the last `lookback` expiry days (candidates every\nstep_minutes from first_entry to last_entry). Stop-loss stop_loss_pct on each leg's premium, one re-entry,\nexit at exit_time.",
+        "properties": {
+          "exit_time": {
+            "default": "15:15",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Exit Time",
+            "type": "string"
+          },
+          "first_entry": {
+            "default": "09:20",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "First Entry",
+            "type": "string"
+          },
+          "hedge_width": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 5000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hedge Width"
+          },
+          "itm_points": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 0.0,
+            "title": "Itm Points",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "zero_dte",
+            "default": "zero_dte",
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_entry": {
+            "default": "14:30",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Last Entry",
+            "type": "string"
+          },
+          "lookback": {
+            "default": 8,
+            "maximum": 26.0,
+            "minimum": 2.0,
+            "title": "Lookback",
+            "type": "integer"
+          },
+          "lots": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Lots",
+            "type": "integer"
+          },
+          "reentry": {
+            "default": true,
+            "title": "Reentry",
+            "type": "boolean"
+          },
+          "step_minutes": {
+            "default": 10,
+            "maximum": 60.0,
+            "minimum": 5.0,
+            "title": "Step Minutes",
+            "type": "integer"
+          },
+          "stop_loss_pct": {
+            "default": 30.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 500.0,
+            "title": "Stop Loss Pct",
+            "type": "number"
+          },
+          "underlying": {
+            "default": "NIFTY",
+            "enum": [
+              "NIFTY",
+              "BANKNIFTY",
+              "FINNIFTY",
+              "MIDCPNIFTY",
+              "SENSEX"
+            ],
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "title": "ZeroDteConfig",
         "type": "object"
       }
     }
@@ -2828,6 +3672,51 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "description": "Only these statuses (repeat it)",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "draft",
+                      "ready",
+                      "archived"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only these statuses (repeat it)",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "Name contains (case-insensitive)",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Name contains (case-insensitive)",
+              "title": "Q"
+            }
           }
         ],
         "responses": {
@@ -2992,6 +3881,179 @@
           }
         },
         "summary": "Create Strategy",
+        "tags": [
+          "strategies"
+        ]
+      }
+    },
+    "/v1/strategies/catalog": {
+      "get": {
+        "operationId": "strategy_catalog_v1_strategies_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StrategyCatalogOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Strategy Catalog",
+        "tags": [
+          "strategies"
+        ]
+      }
+    },
+    "/v1/strategies/validate": {
+      "post": {
+        "description": "Check a config without saving it: field-level errors (block saving) and plan warnings (block deploying).",
+        "operationId": "validate_config_v1_strategies_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Validate Config",
         "tags": [
           "strategies"
         ]

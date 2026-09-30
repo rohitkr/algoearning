@@ -1,25 +1,61 @@
-"""Saved strategies, always scoped to the signed-in user. Phase 8 adds config validation, versioning rules,
-plan limits and the builder; phase 3 establishes the ownership, pagination, error and audit patterns."""
+"""Saved strategies, always scoped to the signed-in user. Every save is validated with ae_core.strategy (the
+same module the trading engine reads configs with, ADR 0010); the builder uses /catalog and /validate."""
 
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from datetime import timedelta
+from typing import Annotated, Any, Literal
 
+from ae_core.strategy import (
+    INSTRUMENTS,
+    MARKET_CLOSE,
+    MARKET_OPEN,
+    MAX_LEGS,
+    MAX_LOTS,
+    MAX_STRIKE_OFFSET,
+    PRESETS,
+    SCHEMA_VERSION,
+    AnyConfig,
+    Issue,
+    check,
+    parse,
+    parse_issues,
+    plan_warnings,
+)
 from ae_db.enums import StrategyStatus
 from ae_db.models import Strategy
 from ae_db.repositories import StrategyRepo
 from fastapi import APIRouter, Query, Request, Response, status
+from pydantic import ValidationError
+from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import audit
 from ..deps import CurrentUser, UserSession
 from ..entitlements import load_entitlements, require_within
-from ..errors import AppError, NotFound
-from ..schemas import ERROR_RESPONSES, DuplicateIn, Page, StrategyIn, StrategyOut, StrategyPatch
+from ..errors import AppError, Invalid, NotFound
+from ..schemas import (
+    ERROR_RESPONSES,
+    ConfigIssue,
+    DuplicateIn,
+    InstrumentOut,
+    Page,
+    PresetOut,
+    StrategyCatalogOut,
+    StrategyIn,
+    StrategyLimits,
+    StrategyOut,
+    StrategyPatch,
+    ValidateIn,
+    ValidateOut,
+)
 from ..settings import SettingsDep
 
 router = APIRouter(prefix="/v1/strategies", tags=["strategies"], responses=ERROR_RESPONSES)
+
+StatusFilter = Literal["draft", "ready", "archived"]
 
 
 async def _own(repo: StrategyRepo, strategy_id: uuid.UUID) -> Strategy:
@@ -34,24 +70,82 @@ async def _check_strategy_limit(s: AsyncSession, user_id: uuid.UUID, grace_days:
     require_within(ent, "max_strategies", ent.usage["max_strategies"])
 
 
+def _issues(issues: list[Issue]) -> list[ConfigIssue]:
+    return [ConfigIssue(loc=list(i.loc), msg=i.msg, type=i.type) for i in issues]
+
+
+def _stored(config: AnyConfig) -> dict[str, Any]:
+    """The columns a config sets, after the rules that span fields pass (422 with the paths otherwise)."""
+    issues = check(config)
+    if issues:
+        details = [{"loc": ["body", "config", *i.loc], "msg": i.msg, "type": i.type} for i in issues]
+        raise Invalid(f"the strategy config is invalid: {issues[0].msg}", details)
+    return {"config": config.model_dump(mode="json"), "kind": config.kind, "schema_version": SCHEMA_VERSION}
+
+
+def _like(q: str) -> str:
+    return "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
 @router.get("", response_model=Page[StrategyOut])
 async def list_strategies(
-    user: CurrentUser, s: UserSession, cursor: str | None = None, limit: int = Query(20, ge=1, le=100)
+    user: CurrentUser,
+    s: UserSession,
+    cursor: str | None = None,
+    limit: int = Query(20, ge=1, le=100),
+    status: Annotated[list[StatusFilter] | None, Query(description="Only these statuses (repeat it)")] = None,
+    q: Annotated[str | None, Query(max_length=120, description="Name contains (case-insensitive)")] = None,
 ) -> Page[StrategyOut]:
+    filters: list[ColumnElement[bool]] = []
+    if status:
+        filters.append(Strategy.status.in_([StrategyStatus(x) for x in status]))
+    if q and q.strip():
+        filters.append(Strategy.name.ilike(_like(q.strip()), escape="\\"))
     try:
-        page = await StrategyRepo(s, user.user_id).list(cursor, limit)
+        page = await StrategyRepo(s, user.user_id).list(cursor, limit, filters)
     except ValueError as exc:
         raise AppError(str(exc)) from exc
     return Page[StrategyOut](items=[StrategyOut.model_validate(x) for x in page.items], next_cursor=page.next_cursor)
+
+
+@router.get("/catalog", response_model=StrategyCatalogOut)
+async def strategy_catalog(user: CurrentUser, s: UserSession, settings: SettingsDep) -> StrategyCatalogOut:
+    ent = await load_entitlements(s, user.user_id, timedelta(days=settings.subscription_grace_days))
+    return StrategyCatalogOut(
+        instruments=[InstrumentOut(**asdict(i)) for i in INSTRUMENTS.values()],
+        presets=[PresetOut(id=p.id, name=p.name, description=p.description, config=p.config) for p in PRESETS],
+        limits=StrategyLimits(
+            max_legs=MAX_LEGS,
+            max_strike_offset=MAX_STRIKE_OFFSET,
+            max_lots=MAX_LOTS,
+            max_lots_per_order=ent.limit("max_lots_per_order"),
+            market_open=MARKET_OPEN,
+            market_close=MARKET_CLOSE,
+        ),
+    )
+
+
+@router.post("/validate", response_model=ValidateOut)
+async def validate_config(body: ValidateIn, user: CurrentUser, s: UserSession, settings: SettingsDep) -> ValidateOut:
+    """Check a config without saving it: field-level errors (block saving) and plan warnings (block deploying)."""
+    try:
+        config = parse(body.config)
+    except ValidationError as exc:
+        return ValidateOut(valid=False, errors=_issues(parse_issues(exc)), warnings=[])
+    ent = await load_entitlements(s, user.user_id, timedelta(days=settings.subscription_grace_days))
+    errors = check(config)
+    warnings = plan_warnings(config, ent.limit("max_lots_per_order"))
+    return ValidateOut(valid=not errors, errors=_issues(errors), warnings=_issues(warnings))
 
 
 @router.post("", response_model=StrategyOut, status_code=status.HTTP_201_CREATED)
 async def create_strategy(
     body: StrategyIn, user: CurrentUser, s: UserSession, request: Request, settings: SettingsDep
 ) -> StrategyOut:
+    stored = _stored(body.config)
     await _check_strategy_limit(s, user.user_id, settings.subscription_grace_days)
-    obj = await StrategyRepo(s, user.user_id).create(**body.model_dump())
-    await audit(s, request, "strategy.create", user.user_id, "strategy", obj.id, name=obj.name)
+    obj = await StrategyRepo(s, user.user_id).create(name=body.name, description=body.description, **stored)
+    await audit(s, request, "strategy.create", user.user_id, "strategy", obj.id, name=obj.name, kind=obj.kind)
     return StrategyOut.model_validate(obj)
 
 
@@ -66,10 +160,11 @@ async def update_strategy(
 ) -> StrategyOut:
     repo = StrategyRepo(s, user.user_id)
     obj = await _own(repo, strategy_id)
-    changes = body.model_dump(exclude_unset=True)
+    changes = body.model_dump(exclude_unset=True, exclude={"config"})
     if "status" in changes:
         changes["status"] = StrategyStatus(changes["status"])
-    if "config" in changes:
+    if body.config is not None:
+        changes |= _stored(body.config)
         changes["version"] = obj.version + 1
     obj = await repo.update(obj, **changes)
     await audit(s, request, "strategy.update", user.user_id, "strategy", obj.id, fields=sorted(changes))
