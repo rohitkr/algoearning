@@ -27,6 +27,7 @@ class InstrumentFacts:
     strike_step: int
     weekly_expiry: bool
     nearest_expiry: date
+    expiries: tuple[date, ...] = ()  # every listed option expiry from today, sorted
 
 
 def derive_facts(rows: Iterable[Mapping[str, str]], code: str, today: date) -> InstrumentFacts | None:
@@ -48,7 +49,7 @@ def derive_facts(rows: Iterable[Mapping[str, str]], code: str, today: date) -> I
     if lot <= 0 or not gaps:
         return None
     weekly = len(expiries) > 1 and (expiries[1] - expiries[0]).days <= 8
-    return InstrumentFacts(code, lot, int(min(gaps)), weekly, expiries[0])
+    return InstrumentFacts(code, lot, int(min(gaps)), weekly, expiries[0], tuple(expiries))
 
 
 def parse_dump(text: str) -> list[dict[str, str]]:

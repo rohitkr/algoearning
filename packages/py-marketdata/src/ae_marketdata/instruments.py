@@ -59,6 +59,7 @@ async def refresh_instruments(db: Database, fetch: Fetch = _kite_fetch, today: d
             }
             for k, value in new.items():
                 setattr(row, k, value)
+            row.expiries = [e.isoformat() for e in facts.expiries]  # rolls daily: not reported as a change
             row.source, row.refreshed_at = "kite", now
             if diff:
                 result.changed[row.code] = diff

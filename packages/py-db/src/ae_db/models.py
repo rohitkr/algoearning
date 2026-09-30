@@ -114,6 +114,7 @@ class Instrument(UUIDPk, Timestamps, Base):
         String(10), default="NSE", server_default="NSE"
     )  # where the index itself trades
     feed_code: Mapped[str | None] = mapped_column(String(20))  # the market-data feed's code (Breeze stock_code)
+    expiries: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")  # listed option expiries
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     source: Mapped[str] = mapped_column(String(20), default="seed")  # seed | kite | admin: who set the facts last
     refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -276,6 +277,37 @@ class StrategyRun(UUIDPk, Timestamps, Base):
     stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     realized_pnl: Mapped[Decimal] = mapped_column(AMOUNT, default=Decimal(0))
     error: Mapped[str | None] = mapped_column(Text)
+    # phase 9: what ran and how it is doing
+    strategy_name: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    kind: Mapped[str] = mapped_column(String(40), default="time_based", server_default="time_based")
+    schema_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    multiplier: Mapped[int] = mapped_column(Integer, default=1, server_default="1")  # lots x this
+    state: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")  # the runner's state
+    unrealized_pnl: Mapped[Decimal] = mapped_column(AMOUNT, default=Decimal(0), server_default="0")
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stop_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class UserRiskSettings(UUIDPk, Timestamps, Base):
+    """A user's own trading limits across all their runs (None = no limit). Checked by the engine before every
+    entry; breaching the daily loss/profit squares everything off."""
+
+    __tablename__ = "user_risk_settings"
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    max_daily_loss: Mapped[Decimal | None] = mapped_column(AMOUNT)
+    max_daily_profit: Mapped[Decimal | None] = mapped_column(AMOUNT)
+    max_open_positions: Mapped[int | None] = mapped_column(Integer)
+    max_trades_per_day: Mapped[int | None] = mapped_column(Integer)
+    kill_switch: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class PlatformSetting(UUIDPk, Timestamps, Base):
+    """Small platform switches set by admins (e.g. trading_halted). System only."""
+
+    __tablename__ = "platform_settings"
+    key: Mapped[str] = mapped_column(String(60), unique=True)
+    value: Mapped[Any] = mapped_column(JSONB)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"))
 
 
 # -- trading ----------------------------------------------------------------------------------------------

@@ -41,6 +41,8 @@ TABLES = (
     "subscriptions",
     "webhook_events",
     "user_overrides",
+    "user_risk_settings",
+    "platform_settings",
     "users",
 )
 

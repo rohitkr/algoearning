@@ -33,6 +33,7 @@ def test_weekly_index_uses_the_nearest_live_expiry() -> None:
     f = derive_facts(rows, "NIFTY", TODAY)
     assert f is not None
     assert (f.lot_size, f.strike_step, f.weekly_expiry, f.nearest_expiry) == (65, 50, True, date(2026, 10, 6))
+    assert f.expiries == (date(2026, 10, 6), date(2026, 10, 13))
 
 
 def test_monthly_only_index() -> None:
