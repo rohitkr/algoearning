@@ -327,7 +327,10 @@ async def live_status(user: CurrentUser, s: UserSession, settings: SettingsDep) 
     if not plan:
         reasons.append(f"your {ent.plan_name} plan does not include live trading")
     if not unlocked:
-        reasons.append("real orders are not unlocked for your account yet (ask support)")
+        reasons.append(
+            "real orders are not unlocked for your account (an admin turns this on: "
+            "Monitor > Users > your user > Real orders)"
+        )
     if not brokers:
         reasons.append("add your broker account")
     elif not any(b.connected and b.engine_enabled for b in brokers):
