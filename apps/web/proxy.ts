@@ -3,8 +3,19 @@
 // page protects itself with `await auth.protect()` (see lib/session.ts), and the API independently verifies the
 // session token on each call.
 import { clerkMiddleware } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
-export default clerkMiddleware();
+// Monitor (the admin panel) also answers on its own host, e.g. monitor.algoearning.com: its home page is the
+// panel, and every other path (the panel's own /monitor/... links, sign-in) works as on the main host. Admin
+// access is still checked by the panel and by the API; the host only changes the front door.
+export default clerkMiddleware((_auth, req) => {
+  const host = req.headers.get("host") ?? "";
+  if (host.startsWith("monitor.") && req.nextUrl.pathname === "/") {
+    const url = req.nextUrl.clone();
+    url.pathname = "/monitor";
+    return NextResponse.rewrite(url);
+  }
+});
 
 export const config = {
   matcher: [

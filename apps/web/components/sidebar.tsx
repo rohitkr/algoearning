@@ -5,10 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { Logo } from "./logo";
-import { NAV, isActive } from "./nav";
+import { ADMIN_NAV, NAV, isActive } from "./nav";
 import { UserCard } from "./user-card";
 
-export function Sidebar() {
+export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface px-3 py-4 md:flex">
@@ -16,7 +16,7 @@ export function Sidebar() {
         <Logo />
       </div>
       <nav aria-label="Main" className="flex flex-col gap-1">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {(isAdmin ? [...NAV, ADMIN_NAV] : NAV).map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           return (
             <Link

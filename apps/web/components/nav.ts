@@ -4,6 +4,7 @@ import {
   FileText,
   FlaskConical,
   LayoutDashboard,
+  ShieldCheck,
   Link2,
   type LucideIcon,
   Workflow,
@@ -26,6 +27,9 @@ export const NAV: NavItem[] = [
   { href: "/reports", label: "Reports", icon: FileText, phase: 11 },
   { href: "/subscription", label: "Subscription", icon: CreditCard, phase: 6 },
 ];
+
+/** Shown to admins only (the API decides who is one). */
+export const ADMIN_NAV: NavItem = { href: "/monitor", label: "Monitor", icon: ShieldCheck, phase: 8 };
 
 export function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);

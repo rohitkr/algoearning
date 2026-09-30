@@ -4,17 +4,17 @@ import { cn } from "@algoearning/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { NAV, isActive } from "./nav";
+import { ADMIN_NAV, NAV, isActive } from "./nav";
 
 /** Below md the sidebar is hidden: the same destinations as a horizontally scrollable row. */
-export function MobileNav() {
+export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   return (
     <nav
       aria-label="Main"
       className="flex gap-1 overflow-x-auto border-b border-border bg-surface px-2 py-2 md:hidden"
     >
-      {NAV.map(({ href, label, icon: Icon }) => {
+      {(isAdmin ? [...NAV, ADMIN_NAV] : NAV).map(({ href, label, icon: Icon }) => {
         const active = isActive(pathname, href);
         return (
           <Link

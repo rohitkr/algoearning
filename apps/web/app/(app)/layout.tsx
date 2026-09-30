@@ -1,3 +1,4 @@
+import type { Me } from "@algoearning/api-types";
 import { UserButton } from "@clerk/nextjs";
 import { ThemeToggle } from "@algoearning/ui";
 import { Bell } from "lucide-react";
@@ -7,14 +8,17 @@ import { ApiStatus } from "@/components/api-status";
 import { Logo } from "@/components/logo";
 import { MobileNav } from "@/components/mobile-nav";
 import { Sidebar } from "@/components/sidebar";
+import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 
 /** The signed-in app shell (auth arrives in phase 4): sidebar + top bar + content. */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   await requireUser();
+  const me = await apiGet<Me>("/v1/me");
+  const isAdmin = me.ok && me.data.role === "admin";
   return (
     <div className="flex min-h-dvh">
-      <Sidebar />
+      <Sidebar isAdmin={isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center justify-end gap-2 border-b border-border bg-surface px-4">
           <span className="mr-auto md:hidden">
@@ -33,7 +37,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </button>
           <UserButton />
         </header>
-        <MobileNav />
+        <MobileNav isAdmin={isAdmin} />
         <main className="flex-1 p-4 md:p-8">{children}</main>
       </div>
     </div>
