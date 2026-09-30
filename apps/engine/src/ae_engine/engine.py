@@ -25,6 +25,7 @@ import httpx
 import structlog
 from ae_brokers.base import BrokerError
 from ae_brokers.kite import ContractBook, KiteClient
+from ae_core.notifications import FROM_ENGINE, compose
 from ae_core.secrets import SecretBox
 from ae_core.strategy import migrate, parse
 from ae_core.trading.model import IST, Contract, Intent, Market, Position
@@ -36,6 +37,7 @@ from ae_db.models import (
     BrokerAccount,
     BrokerSession,
     Instrument,
+    Notification,
     Order,
     PlatformSetting,
     StrategyRun,
@@ -452,6 +454,9 @@ class Engine:
         rn.reject(i, o.message)
         if "session expired" in o.message and acc is not None and acc.status != BrokerAccountStatus.EXPIRED:
             acc.status = BrokerAccountStatus.EXPIRED
+            s.add(Notification(user_id=r.user_id, event="broker_login", title="Log in to Zerodha again",
+                               body="Your Zerodha session expired. Entries are paused and exits keep retrying "
+                                    "until you log in on the Broker page.", run_id=r.id))  # fmt: skip
         if i.kind == "entry":
             self._event(s, r, "order_failed", level="WARNING", contract=i.contract.label, side=i.side, reason=o.message)
             return
@@ -672,4 +677,30 @@ class Engine:
     ) -> None:
         s.add(
             TradeEvent(user_id=r.user_id, run_id=r.id, trade_id=trade_id, event=event[:60], level=level, detail=detail)
+        )
+        self._notify(s, r, event, detail)
+
+    def _notify(self, s: AsyncSession, r: StrategyRun, event: str, detail: dict[str, Any]) -> None:
+        """Queue what the user may want to hear about; the worker applies their settings and sends it."""
+        kind, title = FROM_ENGINE.get(event, (None, ""))
+        if event in ("entry", "exit"):
+            reason = str(detail.get("reason", ""))
+            if event == "exit" and reason in ("stop-loss", "target"):
+                kind, title = "stop_loss", "Stop-loss hit" if reason == "stop-loss" else "Target hit"
+            else:
+                kind, title = (
+                    ("trade_opened", "Position opened") if event == "entry" else ("trade_closed", "Position closed")
+                )
+        if kind is None:
+            return
+        if r.mode == TradingMode.LIVE and r.dry_run:
+            title = f"[dry run] {title}"
+        s.add(
+            Notification(
+                user_id=r.user_id,
+                event=kind,
+                title=f"{title}: {r.strategy_name}"[:200],
+                body=compose(r.strategy_name, title, detail),
+                run_id=r.id,
+            )
         )

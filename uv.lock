@@ -166,6 +166,7 @@ name = "ae-worker"
 version = "0.1.0"
 source = { editable = "apps/worker" }
 dependencies = [
+    { name = "ae-core" },
     { name = "ae-db" },
     { name = "ae-marketdata" },
     { name = "httpx" },
@@ -174,6 +175,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "ae-core", editable = "packages/py-core" },
     { name = "ae-db", editable = "packages/py-db" },
     { name = "ae-marketdata", editable = "packages/py-marketdata" },
     { name = "httpx", specifier = ">=0.28" },

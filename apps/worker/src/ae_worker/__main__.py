@@ -21,11 +21,20 @@ from ae_db.session import Database
 from ae_marketdata.instruments import IST, refresh_instruments
 
 from . import __version__
+from .notify import Sender, check_engine, dispatch_pending, link_telegram
 
 log = structlog.get_logger("ae_worker")
 
 JOBS: dict[str, tuple[time, Callable[[Database], Awaitable[object]]]] = {
     "refresh-instruments": (time(8, 0), refresh_instruments),
+}
+
+# every few seconds, while the worker runs (not part of --once)
+_sender = Sender.from_env()
+EVERY: dict[str, tuple[float, Callable[[Database], Awaitable[object]]]] = {
+    "send-notifications": (5, lambda db: dispatch_pending(db, _sender)),
+    "link-telegram": (3, lambda db: link_telegram(db, _sender)),
+    "check-engine": (30, check_engine),
 }
 
 
@@ -52,6 +61,16 @@ async def _schedule(db: Database, name: str) -> None:
         await _run_job(db, name)
 
 
+async def _every(db: Database, name: str) -> None:
+    seconds, fn = EVERY[name]
+    while True:
+        try:
+            await fn(db)
+        except Exception:
+            log.exception("job failed", job=name)
+        await asyncio.sleep(seconds)
+
+
 async def _main(args: argparse.Namespace) -> int:
     url = os.environ.get("DATABASE_URL")
     if not url:
@@ -64,7 +83,7 @@ async def _main(args: argparse.Namespace) -> int:
         if args.job or args.once:
             return 0 if ok else 1
         log.info("worker ready", version=__version__, jobs=names)
-        await asyncio.gather(*(_schedule(db, n) for n in names))
+        await asyncio.gather(*(_schedule(db, n) for n in names), *(_every(db, n) for n in EVERY))
         return 0
     finally:
         await db.dispose()
