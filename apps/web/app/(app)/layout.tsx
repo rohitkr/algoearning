@@ -34,13 +34,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             <ApiStatus />
           </span>
           <ThemeToggle />
-          <button
-            type="button"
+          <Link
+            href="/notifications"
             aria-label="Notifications"
             className="rounded-lg p-2 text-muted hover:bg-surface-2"
           >
             <Bell className="size-[18px]" aria-hidden />
-          </button>
+          </Link>
           <UserButton />
         </header>
         <MobileNav isAdmin={isAdmin} />
