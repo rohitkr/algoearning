@@ -11,15 +11,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
-from ae_db.enums import BillingOrderStatus, SubscriptionStatus, UserRole
-from ae_db.models import AuditLog, BillingOrder, Subscription, User
-from ae_db.repositories import PlanRepo
+from ae_db.enums import BillingOrderStatus, UserRole
+from ae_db.models import BillingOrder, User
+from ae_db.repositories import AuditRepo, PlanRepo
 from ae_db.session import Database
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .admin_ops import complimentary_subscription
 from .settings import Settings
 
 
@@ -51,31 +52,20 @@ async def _run(args: argparse.Namespace) -> int:
 
 
 async def _grant(s: AsyncSession, user: User, plan_code: str, days: int) -> int:
-    """A complimentary period of a plan (team, testers, support cases): an active subscription with no payment."""
     plan = await PlanRepo(s).by_code(plan_code)
     if plan is None:
         print(f"no plan {plan_code!r}")
         return 1
-    now = datetime.now(UTC)
-    sub = Subscription(
-        user_id=user.id,
-        plan_id=plan.id,
-        status=SubscriptionStatus.ACTIVE,
-        provider="manual",
-        current_period_start=now,
-        current_period_end=now + timedelta(days=days),
-    )
+    sub = complimentary_subscription(user.id, plan, days)
     s.add(sub)
     await s.flush()
-    s.add(
-        AuditLog(
-            user_id=user.id,
-            actor="admin",
-            action="subscription.grant",
-            target_type="subscription",
-            target_id=str(sub.id),
-            detail={"plan": plan_code, "days": days, "via": "cli"},
-        )
+    await AuditRepo(s).record(
+        "subscription.grant",
+        user_id=user.id,
+        actor="admin",
+        target_type="subscription",
+        target_id=str(sub.id),
+        detail={"plan": plan_code, "days": days, "via": "cli"},
     )
     print(f"{user.email} has {plan.name} until {sub.current_period_end:%Y-%m-%d}")
     return 0

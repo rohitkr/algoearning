@@ -11,7 +11,14 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from ae_core.entitlements import FEATURES, FREE_PLAN, Entitlements, SubscriptionView, effective_subscription
+from ae_core.entitlements import (
+    FEATURES,
+    FREE_PLAN,
+    Entitlements,
+    SubscriptionView,
+    effective_features,
+    effective_subscription,
+)
 from ae_db.repositories import PlanRepo, UsageRepo
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,7 +47,9 @@ async def load_entitlements(
         "max_running_strategies": await usage.running_strategies(),
         "max_broker_accounts": await usage.broker_accounts(),
     }
-    return Entitlements(plan.code, plan.name, dict(plan.features), status, end, used)
+    overrides = await usage.overrides()
+    features = effective_features(plan.features, overrides)
+    return Entitlements(plan.code, plan.name, features, status, end, used, overrides)
 
 
 def require_feature(ent: Entitlements, feature: str) -> None:

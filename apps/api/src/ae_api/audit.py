@@ -29,11 +29,14 @@ async def audit(
     user_id: uuid.UUID | None,
     target_type: str | None = None,
     target_id: object = None,
+    *,
+    actor: str = "user",
     **detail: Any,
 ) -> None:
     await AuditRepo(session).record(
         action,
         user_id=user_id,
+        actor=actor,
         target_type=target_type,
         target_id=str(target_id) if target_id is not None else None,
         ip=client_ip(request),

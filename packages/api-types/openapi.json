@@ -1,6 +1,421 @@
 {
   "components": {
     "schemas": {
+      "AdminBrokerAccount": {
+        "properties": {
+          "broker": {
+            "title": "Broker",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "engine_enabled": {
+            "title": "Engine Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "broker",
+          "client_id",
+          "label",
+          "status",
+          "engine_enabled",
+          "last_login_at"
+        ],
+        "title": "AdminBrokerAccount",
+        "type": "object"
+      },
+      "AdminSubscription": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_period_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Period End"
+          },
+          "current_period_start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Period Start"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "plan_code": {
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "plan_code",
+          "plan_name",
+          "status",
+          "provider",
+          "current_period_start",
+          "current_period_end",
+          "created_at"
+        ],
+        "title": "AdminSubscription",
+        "type": "object"
+      },
+      "AdminUserDetail": {
+        "properties": {
+          "broker_accounts": {
+            "items": {
+              "$ref": "#/components/schemas/AdminBrokerAccount"
+            },
+            "title": "Broker Accounts",
+            "type": "array"
+          },
+          "entitlements": {
+            "$ref": "#/components/schemas/EntitlementsOut"
+          },
+          "override_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Note"
+          },
+          "recent_activity": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            },
+            "title": "Recent Activity",
+            "type": "array"
+          },
+          "subscriptions": {
+            "items": {
+              "$ref": "#/components/schemas/AdminSubscription"
+            },
+            "title": "Subscriptions",
+            "type": "array"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AdminUserRow"
+          }
+        },
+        "required": [
+          "user",
+          "entitlements",
+          "override_note",
+          "subscriptions",
+          "broker_accounts",
+          "recent_activity"
+        ],
+        "title": "AdminUserDetail",
+        "type": "object"
+      },
+      "AdminUserPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "user",
+                  "admin"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "active",
+                  "suspended"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "AdminUserPatch",
+        "type": "object"
+      },
+      "AdminUserRow": {
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "broker_accounts": {
+            "title": "Broker Accounts",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "has_overrides": {
+            "title": "Has Overrides",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "plan_code": {
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "admin"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "suspended",
+              "deleted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "strategies": {
+            "title": "Strategies",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "avatar_url",
+          "role",
+          "status",
+          "plan_code",
+          "plan_name",
+          "has_overrides",
+          "strategies",
+          "broker_accounts",
+          "created_at",
+          "last_seen_at"
+        ],
+        "title": "AdminUserRow",
+        "type": "object"
+      },
+      "AuditEntry": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "target_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Type"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          },
+          "user_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Email"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "user_id",
+          "actor",
+          "action",
+          "target_type",
+          "target_id",
+          "ip",
+          "detail"
+        ],
+        "title": "AuditEntry",
+        "type": "object"
+      },
       "BrokerAccountIn": {
         "additionalProperties": false,
         "properties": {
@@ -545,6 +960,23 @@
             "title": "Features",
             "type": "object"
           },
+          "overrides": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Overrides",
+            "type": "object"
+          },
           "plan_code": {
             "title": "Plan Code",
             "type": "string"
@@ -578,6 +1010,7 @@
           "subscription_status",
           "current_period_end",
           "features",
+          "overrides",
           "usage",
           "catalog"
         ],
@@ -656,6 +1089,29 @@
         "title": "FeatureInfo",
         "type": "object"
       },
+      "GrantIn": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "maximum": 3660.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "plan_code": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Plan Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_code",
+          "days"
+        ],
+        "title": "GrantIn",
+        "type": "object"
+      },
       "Health": {
         "properties": {
           "env": {
@@ -678,6 +1134,83 @@
           "env"
         ],
         "title": "Health",
+        "type": "object"
+      },
+      "InstrumentAdminOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "exchange": {
+            "title": "Exchange",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "lot_size": {
+            "title": "Lot Size",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "refreshed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshed At"
+          },
+          "session_close": {
+            "title": "Session Close",
+            "type": "string"
+          },
+          "session_open": {
+            "title": "Session Open",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "strike_step": {
+            "title": "Strike Step",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "weekly_expiry": {
+            "title": "Weekly Expiry",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "exchange",
+          "lot_size",
+          "strike_step",
+          "weekly_expiry",
+          "session_open",
+          "session_close",
+          "refreshed_at",
+          "is_active",
+          "source",
+          "updated_at"
+        ],
+        "title": "InstrumentAdminOut",
         "type": "object"
       },
       "InstrumentOut": {
@@ -739,6 +1272,84 @@
           "refreshed_at"
         ],
         "title": "InstrumentOut",
+        "type": "object"
+      },
+      "InstrumentPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "session_close": {
+            "anyOf": [
+              {
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Close"
+          },
+          "session_open": {
+            "anyOf": [
+              {
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Open"
+          }
+        },
+        "title": "InstrumentPatch",
+        "type": "object"
+      },
+      "InstrumentRefreshOut": {
+        "properties": {
+          "changed": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "items": {},
+                "type": "array"
+              },
+              "type": "object"
+            },
+            "title": "Changed",
+            "type": "object"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "unchanged": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unchanged",
+            "type": "array"
+          }
+        },
+        "required": [
+          "changed",
+          "unchanged",
+          "missing"
+        ],
+        "title": "InstrumentRefreshOut",
         "type": "object"
       },
       "Leg": {
@@ -901,6 +1512,186 @@
           "created_at"
         ],
         "title": "Me",
+        "type": "object"
+      },
+      "OverridesIn": {
+        "additionalProperties": false,
+        "properties": {
+          "features": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Features",
+            "type": "object"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "features"
+        ],
+        "title": "OverridesIn",
+        "type": "object"
+      },
+      "Overview": {
+        "properties": {
+          "active_users": {
+            "title": "Active Users",
+            "type": "integer"
+          },
+          "broker_accounts": {
+            "title": "Broker Accounts",
+            "type": "integer"
+          },
+          "connected_broker_accounts": {
+            "title": "Connected Broker Accounts",
+            "type": "integer"
+          },
+          "instruments_refreshed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instruments Refreshed At"
+          },
+          "new_users_7d": {
+            "title": "New Users 7D",
+            "type": "integer"
+          },
+          "paying_users": {
+            "title": "Paying Users",
+            "type": "integer"
+          },
+          "ready_strategies": {
+            "title": "Ready Strategies",
+            "type": "integer"
+          },
+          "recent_payments": {
+            "items": {
+              "$ref": "#/components/schemas/RecentPayment"
+            },
+            "title": "Recent Payments",
+            "type": "array"
+          },
+          "recent_users": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUserRow"
+            },
+            "title": "Recent Users",
+            "type": "array"
+          },
+          "revenue_30d_paise": {
+            "title": "Revenue 30D Paise",
+            "type": "integer"
+          },
+          "strategies": {
+            "title": "Strategies",
+            "type": "integer"
+          },
+          "suspended_users": {
+            "title": "Suspended Users",
+            "type": "integer"
+          },
+          "users": {
+            "title": "Users",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "users",
+          "active_users",
+          "new_users_7d",
+          "suspended_users",
+          "paying_users",
+          "strategies",
+          "ready_strategies",
+          "broker_accounts",
+          "connected_broker_accounts",
+          "revenue_30d_paise",
+          "recent_payments",
+          "recent_users",
+          "instruments_refreshed_at"
+        ],
+        "title": "Overview",
+        "type": "object"
+      },
+      "Page_AdminUserRow_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUserRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[AdminUserRow]",
+        "type": "object"
+      },
+      "Page_AuditEntry_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[AuditEntry]",
         "type": "object"
       },
       "Page_StrategyOut_": {
@@ -1476,6 +2267,47 @@
         "title": "Readiness",
         "type": "object"
       },
+      "RecentPayment": {
+        "properties": {
+          "amount_paise": {
+            "title": "Amount Paise",
+            "type": "integer"
+          },
+          "order_id": {
+            "title": "Order Id",
+            "type": "string"
+          },
+          "paid_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid At"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "user_email": {
+            "title": "User Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_id",
+          "user_email",
+          "plan_name",
+          "amount_paise",
+          "paid_at"
+        ],
+        "title": "RecentPayment",
+        "type": "object"
+      },
       "StrategyCatalogOut": {
         "description": "Everything the builder needs: instruments, starting points and limits.",
         "properties": {
@@ -2010,6 +2842,23 @@
         "title": "UsageItem",
         "type": "object"
       },
+      "UserRole": {
+        "enum": [
+          "user",
+          "admin"
+        ],
+        "title": "UserRole",
+        "type": "string"
+      },
+      "UserStatus": {
+        "enum": [
+          "active",
+          "suspended",
+          "deleted"
+        ],
+        "title": "UserStatus",
+        "type": "string"
+      },
       "ValidateIn": {
         "additionalProperties": false,
         "properties": {
@@ -2228,6 +3077,503 @@
         "summary": "Ready",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/v1/admin/audit": {
+      "get": {
+        "operationId": "audit_log_v1_admin_audit_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User Id"
+            }
+          },
+          {
+            "description": "Action starts with, e.g. strategy.",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Action starts with, e.g. strategy.",
+              "title": "Action"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AuditEntry_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Audit Log",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/instruments": {
+      "get": {
+        "operationId": "list_instruments_v1_admin_instruments_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InstrumentAdminOut"
+                  },
+                  "title": "Response List Instruments V1 Admin Instruments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "List Instruments",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/instruments/refresh": {
+      "post": {
+        "description": "Refresh lot sizes etc. from the broker's instrument list now (the worker does it daily at 08:00 IST).",
+        "operationId": "refresh_now_v1_admin_instruments_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstrumentRefreshOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Refresh Now",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/instruments/{code}": {
+      "patch": {
+        "operationId": "update_instrument_v1_admin_instruments__code__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstrumentPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstrumentAdminOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Update Instrument",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/overview": {
+      "get": {
+        "operationId": "overview_v1_admin_overview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Overview",
+        "tags": [
+          "admin"
         ]
       }
     },
@@ -2502,6 +3848,665 @@
           }
         },
         "summary": "Update Plan",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/users": {
+      "get": {
+        "operationId": "list_users_v1_admin_users_get",
+        "parameters": [
+          {
+            "description": "Email or name contains",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Email or name contains",
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UserStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UserRole"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AdminUserRow_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "List Users",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/users/{user_id}": {
+      "get": {
+        "operationId": "get_user_v1_admin_users__user_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Get User",
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "update_user_v1_admin_users__user_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUserPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Update User",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/users/{user_id}/grants": {
+      "post": {
+        "operationId": "grant_plan_v1_admin_users__user_id__grants_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Grant Plan",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/users/{user_id}/grants/{subscription_id}": {
+      "delete": {
+        "description": "End a complimentary plan now (paid subscriptions are never ended here: refunds go through billing).",
+        "operationId": "end_grant_v1_admin_users__user_id__grants__subscription_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "End Grant",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/users/{user_id}/overrides": {
+      "put": {
+        "operationId": "set_overrides_v1_admin_users__user_id__overrides_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverridesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Set Overrides",
         "tags": [
           "admin"
         ]

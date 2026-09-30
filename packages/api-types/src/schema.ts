@@ -38,6 +38,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Log */
+        get: operations["audit_log_v1_admin_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/instruments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Instruments */
+        get: operations["list_instruments_v1_admin_instruments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/instruments/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Now
+         * @description Refresh lot sizes etc. from the broker's instrument list now (the worker does it daily at 08:00 IST).
+         */
+        post: operations["refresh_now_v1_admin_instruments_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/instruments/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Instrument */
+        patch: operations["update_instrument_v1_admin_instruments__code__patch"];
+        trace?: never;
+    };
+    "/v1/admin/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Overview */
+        get: operations["overview_v1_admin_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/plans": {
         parameters: {
             query?: never;
@@ -71,6 +159,95 @@ export interface paths {
         head?: never;
         /** Update Plan */
         patch: operations["update_plan_v1_admin_plans__code__patch"];
+        trace?: never;
+    };
+    "/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Users */
+        get: operations["list_users_v1_admin_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get User */
+        get: operations["get_user_v1_admin_users__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update User */
+        patch: operations["update_user_v1_admin_users__user_id__patch"];
+        trace?: never;
+    };
+    "/v1/admin/users/{user_id}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grant Plan */
+        post: operations["grant_plan_v1_admin_users__user_id__grants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{user_id}/grants/{subscription_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * End Grant
+         * @description End a complimentary plan now (paid subscriptions are never ended here: refunds go through billing).
+         */
+        delete: operations["end_grant_v1_admin_users__user_id__grants__subscription_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{user_id}/overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Overrides */
+        put: operations["set_overrides_v1_admin_users__user_id__overrides_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/billing/checkout": {
@@ -398,6 +575,140 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AdminBrokerAccount */
+        AdminBrokerAccount: {
+            /** Broker */
+            broker: string;
+            /** Client Id */
+            client_id: string;
+            /** Engine Enabled */
+            engine_enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string | null;
+            /** Last Login At */
+            last_login_at: string | null;
+            /** Status */
+            status: string;
+        };
+        /** AdminSubscription */
+        AdminSubscription: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Current Period End */
+            current_period_end: string | null;
+            /** Current Period Start */
+            current_period_start: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Plan Code */
+            plan_code: string;
+            /** Plan Name */
+            plan_name: string;
+            /** Provider */
+            provider: string;
+            /** Status */
+            status: string;
+        };
+        /** AdminUserDetail */
+        AdminUserDetail: {
+            /** Broker Accounts */
+            broker_accounts: components["schemas"]["AdminBrokerAccount"][];
+            entitlements: components["schemas"]["EntitlementsOut"];
+            /** Override Note */
+            override_note: string | null;
+            /** Recent Activity */
+            recent_activity: components["schemas"]["AuditEntry"][];
+            /** Subscriptions */
+            subscriptions: components["schemas"]["AdminSubscription"][];
+            user: components["schemas"]["AdminUserRow"];
+        };
+        /** AdminUserPatch */
+        AdminUserPatch: {
+            /** Role */
+            role?: ("user" | "admin") | null;
+            /** Status */
+            status?: ("active" | "suspended") | null;
+        };
+        /** AdminUserRow */
+        AdminUserRow: {
+            /** Avatar Url */
+            avatar_url: string | null;
+            /** Broker Accounts */
+            broker_accounts: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string;
+            /** Has Overrides */
+            has_overrides: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /** Name */
+            name: string | null;
+            /** Plan Code */
+            plan_code: string;
+            /** Plan Name */
+            plan_name: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "admin";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "suspended" | "deleted";
+            /** Strategies */
+            strategies: number;
+        };
+        /** AuditEntry */
+        AuditEntry: {
+            /** Action */
+            action: string;
+            /** Actor */
+            actor: string;
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: number;
+            /** Ip */
+            ip: string | null;
+            /** Target Id */
+            target_id: string | null;
+            /** Target Type */
+            target_type: string | null;
+            /**
+             * Ts
+             * Format: date-time
+             */
+            ts: string;
+            /** User Email */
+            user_email?: string | null;
+            /** User Id */
+            user_id: string | null;
+        };
         /** BrokerAccountIn */
         BrokerAccountIn: {
             /** Api Key */
@@ -577,6 +888,10 @@ export interface components {
             features: {
                 [key: string]: boolean | number | null;
             };
+            /** Overrides */
+            overrides: {
+                [key: string]: boolean | number | null;
+            };
             /** Plan Code */
             plan_code: string;
             /** Plan Name */
@@ -618,6 +933,13 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** GrantIn */
+        GrantIn: {
+            /** Days */
+            days: number;
+            /** Plan Code */
+            plan_code: string;
+        };
         /** Health */
         Health: {
             /** Env */
@@ -629,6 +951,36 @@ export interface components {
             status: "ok";
             /** Version */
             version: string;
+        };
+        /** InstrumentAdminOut */
+        InstrumentAdminOut: {
+            /** Code */
+            code: string;
+            /** Exchange */
+            exchange: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Lot Size */
+            lot_size: number;
+            /** Name */
+            name: string;
+            /** Refreshed At */
+            refreshed_at: string | null;
+            /** Session Close */
+            session_close: string;
+            /** Session Open */
+            session_open: string;
+            /** Source */
+            source: string;
+            /** Strike Step */
+            strike_step: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Weekly Expiry */
+            weekly_expiry: boolean;
         };
         /** InstrumentOut */
         InstrumentOut: {
@@ -650,6 +1002,28 @@ export interface components {
             strike_step: number;
             /** Weekly Expiry */
             weekly_expiry: boolean;
+        };
+        /** InstrumentPatch */
+        InstrumentPatch: {
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Session Close */
+            session_close?: string | null;
+            /** Session Open */
+            session_open?: string | null;
+        };
+        /** InstrumentRefreshOut */
+        InstrumentRefreshOut: {
+            /** Changed */
+            changed: {
+                [key: string]: {
+                    [key: string]: unknown[];
+                };
+            };
+            /** Missing */
+            missing: string[];
+            /** Unchanged */
+            unchanged: string[];
         };
         /** Leg */
         Leg: {
@@ -706,6 +1080,58 @@ export interface components {
              * @enum {string}
              */
             role: "user" | "admin";
+        };
+        /** OverridesIn */
+        OverridesIn: {
+            /** Features */
+            features: {
+                [key: string]: boolean | number | null;
+            };
+            /** Note */
+            note?: string | null;
+        };
+        /** Overview */
+        Overview: {
+            /** Active Users */
+            active_users: number;
+            /** Broker Accounts */
+            broker_accounts: number;
+            /** Connected Broker Accounts */
+            connected_broker_accounts: number;
+            /** Instruments Refreshed At */
+            instruments_refreshed_at: string | null;
+            /** New Users 7D */
+            new_users_7d: number;
+            /** Paying Users */
+            paying_users: number;
+            /** Ready Strategies */
+            ready_strategies: number;
+            /** Recent Payments */
+            recent_payments: components["schemas"]["RecentPayment"][];
+            /** Recent Users */
+            recent_users: components["schemas"]["AdminUserRow"][];
+            /** Revenue 30D Paise */
+            revenue_30d_paise: number;
+            /** Strategies */
+            strategies: number;
+            /** Suspended Users */
+            suspended_users: number;
+            /** Users */
+            users: number;
+        };
+        /** Page[AdminUserRow] */
+        Page_AdminUserRow_: {
+            /** Items */
+            items: components["schemas"]["AdminUserRow"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** Page[AuditEntry] */
+        Page_AuditEntry_: {
+            /** Items */
+            items: components["schemas"]["AuditEntry"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
         };
         /** Page[StrategyOut] */
         Page_StrategyOut_: {
@@ -951,6 +1377,19 @@ export interface components {
              */
             status: "ready" | "not_ready";
         };
+        /** RecentPayment */
+        RecentPayment: {
+            /** Amount Paise */
+            amount_paise: number;
+            /** Order Id */
+            order_id: string;
+            /** Paid At */
+            paid_at: string | null;
+            /** Plan Name */
+            plan_name: string;
+            /** User Email */
+            user_email: string;
+        };
         /**
          * StrategyCatalogOut
          * @description Everything the builder needs: instruments, starting points and limits.
@@ -1142,6 +1581,16 @@ export interface components {
             /** Used */
             used: number;
         };
+        /**
+         * UserRole
+         * @enum {string}
+         */
+        UserRole: "user" | "admin";
+        /**
+         * UserStatus
+         * @enum {string}
+         */
+        UserStatus: "active" | "suspended" | "deleted";
         /** ValidateIn */
         ValidateIn: {
             /** Config */
@@ -1279,6 +1728,388 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Readiness"];
+                };
+            };
+        };
+    };
+    audit_log_v1_admin_audit_get: {
+        parameters: {
+            query?: {
+                user_id?: string | null;
+                /** @description Action starts with, e.g. strategy. */
+                action?: string | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_AuditEntry_"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_instruments_v1_admin_instruments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentAdminOut"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    refresh_now_v1_admin_instruments_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentRefreshOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_instrument_v1_admin_instruments__code__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentAdminOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    overview_v1_admin_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Overview"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1457,6 +2288,478 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanAdminOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_users_v1_admin_users_get: {
+        parameters: {
+            query?: {
+                /** @description Email or name contains */
+                q?: string | null;
+                status?: components["schemas"]["UserStatus"] | null;
+                role?: components["schemas"]["UserRole"] | null;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_AdminUserRow_"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_user_v1_admin_users__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDetail"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_user_v1_admin_users__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDetail"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    grant_plan_v1_admin_users__user_id__grants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDetail"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    end_grant_v1_admin_users__user_id__grants__subscription_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_overrides_v1_admin_users__user_id__overrides_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverridesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDetail"];
                 };
             };
             /** @description Bad request */

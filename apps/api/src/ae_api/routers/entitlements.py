@@ -22,6 +22,7 @@ async def my_entitlements(user: CurrentUser, s: UserSession, settings: SettingsD
         subscription_status=ent.subscription_status,
         current_period_end=ent.current_period_end,
         features=dict(ent.features),
+        overrides=dict(ent.overrides),
         usage={k: UsageItem(used=v, limit=ent.limit(k)) for k, v in ent.usage.items()},
         catalog=[FeatureInfo(key=f.key, kind=f.kind, label=f.label) for f in FEATURES.values()],
     )
