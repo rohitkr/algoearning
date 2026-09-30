@@ -14,6 +14,8 @@ const config: NextConfig = {
   outputFileTracingRoot: fileURLToPath(new URL("../../", import.meta.url)),
   poweredByHeader: false,
   reactStrictMode: true,
+  // `next dev` only: keep Next's "N" dev-tools button off the sidebar's account card (bottom-left)
+  devIndicators: { position: "bottom-right" },
   transpilePackages: ["@algoearning/ui", "@algoearning/shared", "@algoearning/api-types"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
