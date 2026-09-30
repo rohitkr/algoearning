@@ -6,6 +6,7 @@
 #   scripts/dev.sh --stop-db    # also stop Postgres + Redis when you press Ctrl-C
 #
 # Steps: check tools -> env files -> dependencies (only when changed) -> Postgres + Redis -> migrations
+#        -> instrument refresh
 #        -> API (:8000) + web (:3000) with prefixed logs -> wait until both answer -> Ctrl-C stops both.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -111,6 +112,13 @@ DATABASE_URL=${DATABASE_URL:-postgresql://algoearning:algoearning@localhost:5432
 DATABASE_URL=$DATABASE_URL uv run alembic -c packages/py-db/alembic.ini upgrade head 2>&1 |
   grep -E "Running upgrade|ERROR|Error" | sed 's/^/    /' || true
 ok "database schema is current"
+
+step "Refreshing instruments (lot sizes, strike steps, expiries) from Zerodha"
+if DATABASE_URL=$DATABASE_URL uv run python -m ae_worker refresh-instruments >/dev/null 2>&1; then
+  ok "instruments are current"
+else
+  warn "could not refresh instruments (offline?): using the last known values"
+fi
 
 # -- 6. API + web -----------------------------------------------------------------------------------------
 step "Starting API and web"

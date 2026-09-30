@@ -3,7 +3,12 @@ name = "ae-worker"
 version = "0.1.0"
 description = "AlgoEarning background jobs (scheduled + async)"
 requires-python = ">=3.13"
-dependencies = ["structlog>=26.1"]
+dependencies = [
+    "structlog>=26.1",
+    "httpx>=0.28",
+    "ae-db",
+    "ae-brokers",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -11,3 +16,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ae_worker"]
+
+[tool.uv.sources]
+ae-db = { workspace = true }
+ae-brokers = { workspace = true }

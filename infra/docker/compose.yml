@@ -56,6 +56,9 @@ services:
   worker:
     build: { context: ../.., dockerfile: infra/docker/api.Dockerfile }
     command: ["python", "-m", "ae_worker"]
+    environment:
+      DATABASE_URL: postgresql://algoearning:algoearning@postgres:5432/algoearning
+    restart: unless-stopped
     depends_on: [api]
   web:
     build: { context: ../.., dockerfile: infra/docker/web.Dockerfile }

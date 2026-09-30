@@ -131,11 +131,19 @@ name = "ae-worker"
 version = "0.1.0"
 source = { editable = "apps/worker" }
 dependencies = [
+    { name = "ae-brokers" },
+    { name = "ae-db" },
+    { name = "httpx" },
     { name = "structlog" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "structlog", specifier = ">=26.1" }]
+requires-dist = [
+    { name = "ae-brokers", editable = "packages/py-brokers" },
+    { name = "ae-db", editable = "packages/py-db" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "structlog", specifier = ">=26.1" },
+]
 
 [[package]]
 name = "alembic"
