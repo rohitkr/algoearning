@@ -666,3 +666,49 @@ class OpenPosition(TradeRow):
 class LiveUnlockIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     unlocked: bool
+
+
+# -- notifications ---------------------------------------------------------------------------------------------
+class NotificationEventInfo(BaseModel):
+    key: str
+    label: str
+    hint: str
+    default: bool
+
+
+class NotificationSettingsOut(BaseModel):
+    email_enabled: bool
+    email_address: str | None  # None: the account's email
+    account_email: str
+    telegram_enabled: bool
+    telegram_connected: bool
+    events: list[str]  # the events switched on (defaults when never chosen)
+    catalog: list[NotificationEventInfo]
+    email_available: bool  # the server can send email
+    telegram_available: bool  # the server has a Telegram bot
+
+
+class NotificationSettingsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email_enabled: bool
+    email_address: str | None = Field(default=None, max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    telegram_enabled: bool
+    events: list[str]
+
+
+class TelegramLink(BaseModel):
+    url: str | None  # https://t.me/<bot>?start=<code>
+    code: str
+    bot_username: str | None
+
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    created_at: datetime
+    event: str
+    title: str
+    body: str
+    status: str
+    sent_via: list[str]
+    error: str | None

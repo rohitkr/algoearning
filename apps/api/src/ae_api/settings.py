@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     razorpay_webhook_secret: str | None = Field(default=None, repr=False)
     app_encryption_key: str | None = Field(default=None, repr=False)
     api_public_url: str = "http://localhost:8000"
+    smtp_host: str | None = None  # only to tell the UI whether email is set up; the worker sends
+    telegram_bot_token: str | None = Field(default=None, repr=False)  # likewise
+    telegram_bot_username: str | None = None  # for the "Connect Telegram" link
     breeze_api_key: str | None = None  # only for Monitor's login link; the feed process holds the secret
 
     @property

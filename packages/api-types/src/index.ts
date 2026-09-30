@@ -62,3 +62,6 @@ export type TradeRow = Schemas["TradeRow"];
 export type TradePage = Schemas["Page_TradeRow_"];
 export type OpenPosition = Schemas["OpenPosition"];
 export type LiveStatus = Schemas["LiveStatus"];
+export type NotificationSettings = Schemas["NotificationSettingsOut"];
+export type NotificationItem = Schemas["NotificationOut"];
+export type TelegramLink = Schemas["TelegramLink"];
