@@ -1,7 +1,7 @@
 "use client";
 
 import type { AdminUserDetail, PlanAdmin } from "@algoearning/api-types";
-import { Button, Card, CardTitle, Meter, StatusPill, cn } from "@algoearning/ui";
+import { Button, Card, CardTitle, Meter, StatusPill, Switch, cn } from "@algoearning/ui";
 import { useState } from "react";
 
 import { inputClass } from "@/components/builder/fields";
@@ -248,5 +248,40 @@ export function EndGrantButton({ userId, subscriptionId }: { userId: string; sub
       </Button>
       {note && !note.ok && <span className="text-xs text-loss">{note.text}</span>}
     </span>
+  );
+}
+
+/** Real orders for this user: off until an admin turns it on (their plan must include live trading too). */
+export function LiveUnlock({ detail }: { detail: AdminUserDetail }) {
+  const { run, busy, note } = useAdminAction();
+  const planAllows = !!detail.entitlements.features.live_trading;
+  return (
+    <Card className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <CardTitle>Real orders</CardTitle>
+        <p className="mt-1 text-sm text-muted">
+          {detail.live_unlocked
+            ? "Unlocked: this user can deploy strategies that place real orders."
+            : "Locked: paper and dry runs only."}
+          {!planAllows && " Their plan does not include live trading either."}
+        </p>
+        {note && <p className={cn("mt-1 text-sm", note.ok ? "text-profit" : "text-loss")}>{note.text}</p>}
+      </div>
+      <Switch
+        checked={detail.live_unlocked}
+        disabled={busy !== null}
+        aria-label="Allow real orders"
+        onCheckedChange={(on) => {
+          if (on && !confirm(`Allow ${detail.user.email} to place real orders?`)) return;
+          void run(
+            "live",
+            "PUT",
+            `/v1/admin/users/${detail.user.id}/live`,
+            { unlocked: on },
+            on ? "Unlocked." : "Locked.",
+          );
+        }}
+      />
+    </Card>
   );
 }

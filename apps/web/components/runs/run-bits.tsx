@@ -18,7 +18,8 @@ export function RunStatusPill({ run }: { run: Pick<Run, "status" | "engine_stale
   return <StatusPill tone={m.tone}>{m.text}</StatusPill>;
 }
 
-export function ModePill({ mode }: { mode: Run["mode"] }) {
+export function ModePill({ mode, dryRun = false }: { mode: Run["mode"]; dryRun?: boolean }) {
+  if (mode === "live" && dryRun) return <StatusPill tone="warning">Live · dry run</StatusPill>;
   return mode === "live" ? (
     <StatusPill tone="danger">LIVE</StatusPill>
   ) : (

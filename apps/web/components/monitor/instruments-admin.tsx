@@ -14,7 +14,8 @@ function Row({ i }: { i: InstrumentAdmin }) {
   const { run, busy, note } = useAdminAction();
   const [open, setOpen] = useState(i.session_open);
   const [close, setClose] = useState(i.session_close);
-  const dirty = open !== i.session_open || close !== i.session_close;
+  const [freeze, setFreeze] = useState(i.freeze_qty);
+  const dirty = open !== i.session_open || close !== i.session_close || freeze !== i.freeze_qty;
   return (
     <tr>
       <td className={td}>
@@ -26,6 +27,16 @@ function Row({ i }: { i: InstrumentAdmin }) {
       <td className={`${td} tabular-nums`}>{i.lot_size}</td>
       <td className={`${td} tabular-nums`}>{i.strike_step}</td>
       <td className={td}>{i.weekly_expiry ? "weekly" : "monthly"}</td>
+      <td className={td}>
+        <input
+          type="number"
+          min={1}
+          aria-label={`${i.code} freeze quantity`}
+          className={`${inputClass} w-24`}
+          value={freeze}
+          onChange={(e) => setFreeze(Math.max(1, Math.trunc(e.target.valueAsNumber || 1)))}
+        />
+      </td>
       <td className={td}>
         <div className="flex items-center gap-1.5">
           <input
@@ -52,7 +63,7 @@ function Row({ i }: { i: InstrumentAdmin }) {
                   "hours",
                   "PATCH",
                   `/v1/admin/instruments/${i.code}`,
-                  { session_open: open, session_close: close },
+                  { session_open: open, session_close: close, freeze_qty: freeze },
                   "Saved.",
                 )
               }
@@ -125,6 +136,7 @@ export function InstrumentsAdmin({ instruments }: { instruments: InstrumentAdmin
           "Lot size",
           "Strike step",
           "Expiries",
+          "Max qty per order",
           "Trading hours (IST)",
           "Available",
           "Last update",

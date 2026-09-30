@@ -44,7 +44,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         <div className="min-w-48 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold">{run.strategy_name}</h1>
-            <ModePill mode={run.mode} />
+            <ModePill mode={run.mode} dryRun={run.dry_run} />
             <RunStatusPill run={run} />
           </div>
           <p className="mt-1 text-sm text-muted">

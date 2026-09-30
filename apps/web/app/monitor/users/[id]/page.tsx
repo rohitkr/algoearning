@@ -5,7 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { LoadError, Table, UserStatus, fmtDate, fmtDateTime, td } from "@/components/monitor/bits";
-import { AccountActions, EndGrantButton, PlanAndLimits } from "@/components/monitor/user-admin";
+import { AccountActions, EndGrantButton, LiveUnlock, PlanAndLimits } from "@/components/monitor/user-admin";
 import { apiGet } from "@/lib/api";
 
 export const metadata = { title: "User" };
@@ -60,6 +60,8 @@ export default async function MonitorUser({ params }: { params: Promise<{ id: st
         </div>
         <AccountActions detail={d} isSelf={me.ok && me.data.id === u.id} />
       </Card>
+
+      <LiveUnlock detail={d} />
 
       <PlanAndLimits key={JSON.stringify(d.entitlements.overrides)} detail={d} plans={plans.data} />
 

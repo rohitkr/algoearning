@@ -60,7 +60,7 @@ export default async function MonitorEngine() {
                   </span>
                 </td>
                 <td className={td}>
-                  <ModePill mode={r.mode} />
+                  <ModePill mode={r.mode} dryRun={r.dry_run} />
                 </td>
                 <td className={td}>
                   <RunStatusPill run={r} />

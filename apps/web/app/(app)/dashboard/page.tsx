@@ -99,7 +99,7 @@ export default async function DashboardPage() {
                       {r.strategy_name}
                     </Link>
                     <span className="flex gap-1">
-                      <ModePill mode={r.mode} />
+                      <ModePill mode={r.mode} dryRun={r.dry_run} />
                       <RunStatusPill run={r} />
                     </span>
                   </span>

@@ -58,7 +58,7 @@ export default async function RunsPage() {
                     <Link href={`/runs/${r.id}`} className="font-semibold hover:underline">
                       {r.strategy_name}
                     </Link>
-                    <ModePill mode={r.mode} />
+                    <ModePill mode={r.mode} dryRun={r.dry_run} />
                     <RunStatusPill run={r} />
                   </div>
                   <p className="mt-1 text-xs text-muted">
