@@ -640,6 +640,12 @@ export interface components {
             lot_size: number;
             /** Name */
             name: string;
+            /** Refreshed At */
+            refreshed_at: string | null;
+            /** Session Close */
+            session_close: string;
+            /** Session Open */
+            session_open: string;
             /** Strike Step */
             strike_step: number;
             /** Weekly Expiry */
@@ -967,10 +973,6 @@ export interface components {
         };
         /** StrategyLimits */
         StrategyLimits: {
-            /** Market Close */
-            market_close: string;
-            /** Market Open */
-            market_open: string;
             /** Max Legs */
             max_legs: number;
             /** Max Lots */

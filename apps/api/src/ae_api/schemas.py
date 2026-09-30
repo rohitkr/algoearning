@@ -142,12 +142,16 @@ class StrategyOut(BaseModel):
 
 
 class InstrumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     code: str
     name: str
     exchange: str
-    lot_size: int
+    lot_size: int  # of the nearest expiry, refreshed daily
     strike_step: int
     weekly_expiry: bool
+    session_open: str  # trading hours, HH:MM IST
+    session_close: str
+    refreshed_at: datetime | None  # last refresh from the broker's instrument list (null: seed values)
 
 
 class PresetOut(BaseModel):
@@ -162,8 +166,6 @@ class StrategyLimits(BaseModel):
     max_strike_offset: int
     max_lots: int
     max_lots_per_order: int | None  # the user's plan (null = unlimited)
-    market_open: str
-    market_close: str
 
 
 class StrategyCatalogOut(BaseModel):

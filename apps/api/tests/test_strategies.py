@@ -129,3 +129,31 @@ def test_list_filters(api: TestClient) -> None:
     assert names("q=50%25_") == ["Bank 50%_off"]  # % and _ are literal, not wildcards
     assert names("q=%25") == ["Bank 50%_off"]
     assert api.get("/v1/strategies?status=deleted", headers=A).status_code == 422
+
+
+def test_rules_use_the_instruments_table(api: TestClient, clean_db: str) -> None:
+    """Lot sizes and trading hours are data: a change in the table reaches the catalog and validation at once."""
+    from sqlalchemy import create_engine, text
+
+    def validate(config: dict[str, Any]) -> list[list[str | int]]:
+        r = api.post("/v1/strategies/validate", json={"config": config}, headers=A)
+        return [e["loc"] for e in r.json()["errors"]]
+
+    late = cfg(timing={"entry": "09:20", "exit": "15:40"})
+    assert validate(late) == []  # F&O closes at 15:40
+    nifty = next(i for i in api.get("/v1/strategies/catalog", headers=A).json()["instruments"] if i["code"] == "NIFTY")
+    assert (nifty["lot_size"], nifty["session_close"]) == (65, "15:40")
+
+    e = create_engine(clean_db)
+    try:
+        with e.begin() as c:
+            c.execute(text("UPDATE instruments SET lot_size = 75, session_close = '15:30' WHERE code = 'NIFTY'"))
+        nifty = next(
+            i for i in api.get("/v1/strategies/catalog", headers=A).json()["instruments"] if i["code"] == "NIFTY"
+        )
+        assert nifty["lot_size"] == 75
+        assert validate(late) == [["timing", "exit"]]
+    finally:
+        with e.begin() as c:
+            c.execute(text("UPDATE instruments SET lot_size = 65, session_close = '15:40' WHERE code = 'NIFTY'"))
+        e.dispose()

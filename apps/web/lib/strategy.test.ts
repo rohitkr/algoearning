@@ -20,6 +20,9 @@ const NIFTY: Instrument = {
   lot_size: 65,
   strike_step: 50,
   weekly_expiry: true,
+  session_open: "09:15",
+  session_close: "15:40",
+  refreshed_at: null,
 };
 
 const leg = (over: Partial<StrategyLeg> = {}): StrategyLeg => ({

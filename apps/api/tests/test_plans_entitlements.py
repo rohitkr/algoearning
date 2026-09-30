@@ -117,3 +117,15 @@ def test_admin_plan_management(api: TestClient, clean_db: str) -> None:
     assert api.patch("/v1/admin/plans/pro_year", json={"is_active": False}, headers=ADMIN).status_code == 200
     assert "pro_year" not in [p["code"] for p in api.get("/v1/plans").json()]  # hidden from pricing
     assert "pro_year" in [p["code"] for p in api.get("/v1/admin/plans", headers=ADMIN).json()]
+
+
+def test_cli_grant_gives_a_complimentary_plan(api: TestClient, clean_db: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    from ae_api import cli
+
+    api.get("/v1/me", headers=A)  # users exist once they have signed in
+    monkeypatch.setenv("DATABASE_URL", clean_db)
+    assert cli.main(["grant", "alice@example.com", "pro_plus", "--days", "365"]) == 0
+    e = api.get("/v1/me/entitlements", headers=A).json()
+    assert e["plan_code"] == "pro_plus" and e["features"]["max_lots_per_order"] == 50
+    assert cli.main(["grant", "alice@example.com", "gold"]) == 1
+    assert cli.main(["grant", "nobody@example.com", "pro"]) == 1

@@ -74,12 +74,14 @@ const ZERO_DTE_PARAMS: ParamSpec<ZeroDteConfig>[] = [
 function ProvenParams<C extends Proven>({
   config,
   specs,
+  hours,
   errs,
   warns,
   onChange,
 }: {
   config: C;
   specs: ParamSpec<C>[];
+  hours: { min?: string; max?: string };
   errs: Errs;
   warns: Errs;
   onChange: (c: C) => void;
@@ -97,6 +99,7 @@ function ProvenParams<C extends Proven>({
                 key={s.key}
                 label={s.label}
                 value={config[s.key] as string}
+                {...hours}
                 error={errs[s.key]}
                 onChange={(v) => set(s.key, v)}
               />
@@ -145,6 +148,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
   const seq = useRef(0);
 
   const inst = catalog.instruments.find((i) => i.code === config.underlying);
+  const hours = { min: inst?.session_open, max: inst?.session_close };
   const errs = useMemo(() => ({ ...issueMap(check?.errors), ...saveErrors }), [check, saveErrors]);
   const warns = useMemo(() => issueMap(check?.warnings), [check]);
   const summary = useMemo(() => describeConfig(config, catalog.instruments), [config, catalog.instruments]);
@@ -327,7 +331,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                 error={errs.underlying}
                 hint={
                   inst
-                    ? `Lot size ${inst.lot_size} · strikes every ${inst.strike_step} · ${inst.weekly_expiry ? "weekly" : "monthly"} expiries`
+                    ? `Lot size ${inst.lot_size} · strikes every ${inst.strike_step} · ${inst.weekly_expiry ? "weekly" : "monthly"} expiries · trades ${inst.session_open}–${inst.session_close}`
                     : undefined
                 }
                 options={catalog.instruments.map((i) => ({
@@ -376,12 +380,14 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                   <TimeField
                     label="Entry time"
                     value={config.timing?.entry}
+                    {...hours}
                     error={errs["timing.entry"]}
                     onChange={(v) => setTimeBased((c) => ({ ...c, timing: { ...timingOf(c), entry: v } }))}
                   />
                   <TimeField
                     label="Exit time"
                     value={config.timing?.exit}
+                    {...hours}
                     error={errs["timing.exit"]}
                     onChange={(v) => setTimeBased((c) => ({ ...c, timing: { ...timingOf(c), exit: v } }))}
                   />
@@ -525,6 +531,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                 <ProvenParams
                   config={config}
                   specs={RANGE_PARAMS}
+                  hours={hours}
                   errs={errs}
                   warns={warns}
                   onChange={update}
@@ -533,6 +540,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                 <ProvenParams
                   config={config}
                   specs={ZERO_DTE_PARAMS}
+                  hours={hours}
                   errs={errs}
                   warns={warns}
                   onChange={update}

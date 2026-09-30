@@ -4,20 +4,18 @@ same module the trading engine reads configs with, ADR 0010); the builder uses /
 from __future__ import annotations
 
 import uuid
-from dataclasses import asdict
 from datetime import timedelta
 from typing import Annotated, Any, Literal
 
 from ae_core.strategy import (
-    INSTRUMENTS,
-    MARKET_CLOSE,
-    MARKET_OPEN,
     MAX_LEGS,
     MAX_LOTS,
     MAX_STRIKE_OFFSET,
     PRESETS,
     SCHEMA_VERSION,
     AnyConfig,
+    Instrument,
+    Instruments,
     Issue,
     check,
     parse,
@@ -26,7 +24,7 @@ from ae_core.strategy import (
 )
 from ae_db.enums import StrategyStatus
 from ae_db.models import Strategy
-from ae_db.repositories import StrategyRepo
+from ae_db.repositories import InstrumentRepo, StrategyRepo
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import ValidationError
 from sqlalchemy import ColumnElement
@@ -70,13 +68,23 @@ async def _check_strategy_limit(s: AsyncSession, user_id: uuid.UUID, grace_days:
     require_within(ent, "max_strategies", ent.usage["max_strategies"])
 
 
+async def _instruments(s: AsyncSession) -> dict[str, Instrument]:
+    """Today's tradable instruments (database, refreshed daily: ADR 0011)."""
+    return {
+        r.code: Instrument(
+            r.code, r.name, r.exchange, r.lot_size, r.strike_step, r.weekly_expiry, r.session_open, r.session_close
+        )
+        for r in await InstrumentRepo(s).list_active()
+    }
+
+
 def _issues(issues: list[Issue]) -> list[ConfigIssue]:
     return [ConfigIssue(loc=list(i.loc), msg=i.msg, type=i.type) for i in issues]
 
 
-def _stored(config: AnyConfig) -> dict[str, Any]:
+def _stored(config: AnyConfig, instruments: Instruments) -> dict[str, Any]:
     """The columns a config sets, after the rules that span fields pass (422 with the paths otherwise)."""
-    issues = check(config)
+    issues = check(config, instruments)
     if issues:
         details = [{"loc": ["body", "config", *i.loc], "msg": i.msg, "type": i.type} for i in issues]
         raise Invalid(f"the strategy config is invalid: {issues[0].msg}", details)
@@ -112,15 +120,13 @@ async def list_strategies(
 async def strategy_catalog(user: CurrentUser, s: UserSession, settings: SettingsDep) -> StrategyCatalogOut:
     ent = await load_entitlements(s, user.user_id, timedelta(days=settings.subscription_grace_days))
     return StrategyCatalogOut(
-        instruments=[InstrumentOut(**asdict(i)) for i in INSTRUMENTS.values()],
+        instruments=[InstrumentOut.model_validate(r) for r in await InstrumentRepo(s).list_active()],
         presets=[PresetOut(id=p.id, name=p.name, description=p.description, config=p.config) for p in PRESETS],
         limits=StrategyLimits(
             max_legs=MAX_LEGS,
             max_strike_offset=MAX_STRIKE_OFFSET,
             max_lots=MAX_LOTS,
             max_lots_per_order=ent.limit("max_lots_per_order"),
-            market_open=MARKET_OPEN,
-            market_close=MARKET_CLOSE,
         ),
     )
 
@@ -133,7 +139,7 @@ async def validate_config(body: ValidateIn, user: CurrentUser, s: UserSession, s
     except ValidationError as exc:
         return ValidateOut(valid=False, errors=_issues(parse_issues(exc)), warnings=[])
     ent = await load_entitlements(s, user.user_id, timedelta(days=settings.subscription_grace_days))
-    errors = check(config)
+    errors = check(config, await _instruments(s))
     warnings = plan_warnings(config, ent.limit("max_lots_per_order"))
     return ValidateOut(valid=not errors, errors=_issues(errors), warnings=_issues(warnings))
 
@@ -142,7 +148,7 @@ async def validate_config(body: ValidateIn, user: CurrentUser, s: UserSession, s
 async def create_strategy(
     body: StrategyIn, user: CurrentUser, s: UserSession, request: Request, settings: SettingsDep
 ) -> StrategyOut:
-    stored = _stored(body.config)
+    stored = _stored(body.config, await _instruments(s))
     await _check_strategy_limit(s, user.user_id, settings.subscription_grace_days)
     obj = await StrategyRepo(s, user.user_id).create(name=body.name, description=body.description, **stored)
     await audit(s, request, "strategy.create", user.user_id, "strategy", obj.id, name=obj.name, kind=obj.kind)
@@ -164,7 +170,7 @@ async def update_strategy(
     if "status" in changes:
         changes["status"] = StrategyStatus(changes["status"])
     if body.config is not None:
-        changes |= _stored(body.config)
+        changes |= _stored(body.config, await _instruments(s))
         changes["version"] = obj.version + 1
     obj = await repo.update(obj, **changes)
     await audit(s, request, "strategy.update", user.user_id, "strategy", obj.id, fields=sorted(changes))

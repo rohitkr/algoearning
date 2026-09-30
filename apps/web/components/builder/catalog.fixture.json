@@ -1,20 +1,15 @@
 {
   "instruments": [
     {
-      "code": "NIFTY",
-      "name": "Nifty 50",
-      "exchange": "NFO",
-      "lot_size": 65,
-      "strike_step": 50,
-      "weekly_expiry": true
-    },
-    {
       "code": "BANKNIFTY",
       "name": "Nifty Bank",
       "exchange": "NFO",
       "lot_size": 30,
       "strike_step": 100,
-      "weekly_expiry": false
+      "weekly_expiry": false,
+      "session_open": "09:15",
+      "session_close": "15:40",
+      "refreshed_at": null
     },
     {
       "code": "FINNIFTY",
@@ -22,7 +17,10 @@
       "exchange": "NFO",
       "lot_size": 60,
       "strike_step": 50,
-      "weekly_expiry": false
+      "weekly_expiry": false,
+      "session_open": "09:15",
+      "session_close": "15:40",
+      "refreshed_at": null
     },
     {
       "code": "MIDCPNIFTY",
@@ -30,7 +28,21 @@
       "exchange": "NFO",
       "lot_size": 120,
       "strike_step": 25,
-      "weekly_expiry": false
+      "weekly_expiry": false,
+      "session_open": "09:15",
+      "session_close": "15:40",
+      "refreshed_at": null
+    },
+    {
+      "code": "NIFTY",
+      "name": "Nifty 50",
+      "exchange": "NFO",
+      "lot_size": 65,
+      "strike_step": 50,
+      "weekly_expiry": true,
+      "session_open": "09:15",
+      "session_close": "15:40",
+      "refreshed_at": null
     },
     {
       "code": "SENSEX",
@@ -38,7 +50,10 @@
       "exchange": "BFO",
       "lot_size": 20,
       "strike_step": 100,
-      "weekly_expiry": true
+      "weekly_expiry": true,
+      "session_open": "09:15",
+      "session_close": "15:40",
+      "refreshed_at": null
     }
   ],
   "presets": [
@@ -339,8 +354,6 @@
     "max_legs": 6,
     "max_strike_offset": 20,
     "max_lots": 100,
-    "max_lots_per_order": 10,
-    "market_open": "09:15",
-    "market_close": "15:30"
+    "max_lots_per_order": 10
   }
 }

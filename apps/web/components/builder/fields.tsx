@@ -101,12 +101,16 @@ export function TimeField({
   value,
   onChange,
   error,
+  min,
+  max,
   className,
 }: {
   label: string;
   value: string | undefined;
   onChange: (v: string) => void;
   error?: string;
+  min?: string;
+  max?: string;
   className?: string;
 }) {
   return (
@@ -117,8 +121,8 @@ export function TimeField({
           type="time"
           className={inputClass}
           value={value ?? ""}
-          min="09:15"
-          max="15:30"
+          min={min}
+          max={max}
           onChange={(e) => onChange(e.target.value.slice(0, 5))}
         />
       )}

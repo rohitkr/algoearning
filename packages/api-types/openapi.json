@@ -698,6 +698,26 @@
             "title": "Name",
             "type": "string"
           },
+          "refreshed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshed At"
+          },
+          "session_close": {
+            "title": "Session Close",
+            "type": "string"
+          },
+          "session_open": {
+            "title": "Session Open",
+            "type": "string"
+          },
           "strike_step": {
             "title": "Strike Step",
             "type": "integer"
@@ -713,7 +733,10 @@
           "exchange",
           "lot_size",
           "strike_step",
-          "weekly_expiry"
+          "weekly_expiry",
+          "session_open",
+          "session_close",
+          "refreshed_at"
         ],
         "title": "InstrumentOut",
         "type": "object"
@@ -1534,14 +1557,6 @@
       },
       "StrategyLimits": {
         "properties": {
-          "market_close": {
-            "title": "Market Close",
-            "type": "string"
-          },
-          "market_open": {
-            "title": "Market Open",
-            "type": "string"
-          },
           "max_legs": {
             "title": "Max Legs",
             "type": "integer"
@@ -1570,9 +1585,7 @@
           "max_legs",
           "max_strike_offset",
           "max_lots",
-          "max_lots_per_order",
-          "market_open",
-          "market_close"
+          "max_lots_per_order"
         ],
         "title": "StrategyLimits",
         "type": "object"

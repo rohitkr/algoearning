@@ -3,6 +3,7 @@
 uv run --env-file .env python -m ae_api.cli promote you@example.com   # make an existing user an admin
 uv run --env-file .env python -m ae_api.cli demote you@example.com
 uv run --env-file .env python -m ae_api.cli users                     # list users
+uv run --env-file .env python -m ae_api.cli grant you@example.com pro_plus --days 365  # complimentary plan
 """
 
 from __future__ import annotations
@@ -10,12 +11,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
-from ae_db.enums import BillingOrderStatus, UserRole
-from ae_db.models import BillingOrder, User
+from ae_db.enums import BillingOrderStatus, SubscriptionStatus, UserRole
+from ae_db.models import AuditLog, BillingOrder, Subscription, User
+from ae_db.repositories import PlanRepo
 from ae_db.session import Database
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .settings import Settings
 
@@ -38,11 +41,44 @@ async def _run(args: argparse.Namespace) -> int:
             if user is None:
                 print(f"no user {args.email!r} (they must sign in once first)")
                 return 1
+            if args.cmd == "grant":
+                return await _grant(s, user, args.plan, args.days)
             user.role = UserRole.ADMIN if args.cmd == "promote" else UserRole.USER
             print(f"{user.email} is now {user.role.value}")
             return 0
     finally:
         await db.dispose()
+
+
+async def _grant(s: AsyncSession, user: User, plan_code: str, days: int) -> int:
+    """A complimentary period of a plan (team, testers, support cases): an active subscription with no payment."""
+    plan = await PlanRepo(s).by_code(plan_code)
+    if plan is None:
+        print(f"no plan {plan_code!r}")
+        return 1
+    now = datetime.now(UTC)
+    sub = Subscription(
+        user_id=user.id,
+        plan_id=plan.id,
+        status=SubscriptionStatus.ACTIVE,
+        provider="manual",
+        current_period_start=now,
+        current_period_end=now + timedelta(days=days),
+    )
+    s.add(sub)
+    await s.flush()
+    s.add(
+        AuditLog(
+            user_id=user.id,
+            actor="admin",
+            action="subscription.grant",
+            target_type="subscription",
+            target_id=str(sub.id),
+            detail={"plan": plan_code, "days": days, "via": "cli"},
+        )
+    )
+    print(f"{user.email} has {plan.name} until {sub.current_period_end:%Y-%m-%d}")
+    return 0
 
 
 async def _reconcile(settings: Settings, db: Database) -> int:
@@ -81,6 +117,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("promote", "demote"):
         sub.add_parser(name).add_argument("email")
+    g = sub.add_parser("grant", help="give a user a plan for N days without payment")
+    g.add_argument("email")
+    g.add_argument("plan")
+    g.add_argument("--days", type=int, default=30)
     sub.add_parser("users")
     sub.add_parser("reconcile-payments")
     return asyncio.run(_run(ap.parse_args(argv)))
