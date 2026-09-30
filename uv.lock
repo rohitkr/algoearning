@@ -34,6 +34,7 @@ dependencies = [
     { name = "ae-brokers" },
     { name = "ae-core" },
     { name = "ae-db" },
+    { name = "ae-marketdata" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic-settings" },
@@ -48,6 +49,7 @@ requires-dist = [
     { name = "ae-brokers", editable = "packages/py-brokers" },
     { name = "ae-core", editable = "packages/py-core" },
     { name = "ae-db", editable = "packages/py-db" },
+    { name = "ae-marketdata", editable = "packages/py-marketdata" },
     { name = "fastapi", specifier = ">=0.142" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "pydantic-settings", specifier = ">=2.15" },
@@ -120,18 +122,8 @@ name = "ae-marketdata"
 version = "0.1.0"
 source = { editable = "packages/py-marketdata" }
 dependencies = [
-    { name = "ae-core" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "ae-core", editable = "packages/py-core" }]
-
-[[package]]
-name = "ae-worker"
-version = "0.1.0"
-source = { editable = "apps/worker" }
-dependencies = [
     { name = "ae-brokers" },
+    { name = "ae-core" },
     { name = "ae-db" },
     { name = "httpx" },
     { name = "structlog" },
@@ -140,7 +132,27 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "ae-brokers", editable = "packages/py-brokers" },
+    { name = "ae-core", editable = "packages/py-core" },
     { name = "ae-db", editable = "packages/py-db" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "structlog", specifier = ">=26.1" },
+]
+
+[[package]]
+name = "ae-worker"
+version = "0.1.0"
+source = { editable = "apps/worker" }
+dependencies = [
+    { name = "ae-db" },
+    { name = "ae-marketdata" },
+    { name = "httpx" },
+    { name = "structlog" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ae-db", editable = "packages/py-db" },
+    { name = "ae-marketdata", editable = "packages/py-marketdata" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "structlog", specifier = ">=26.1" },
 ]

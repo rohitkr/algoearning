@@ -3,7 +3,7 @@ name = "ae-marketdata"
 version = "0.1.0"
 description = "Platform market-data feed (Breeze first) and tick fan-out"
 requires-python = ">=3.13"
-dependencies = ["ae-core"]
+dependencies = ["ae-core", "ae-db", "ae-brokers", "httpx>=0.28", "structlog>=26.1"]
 
 [build-system]
 requires = ["hatchling"]
@@ -14,3 +14,5 @@ packages = ["src/ae_marketdata"]
 
 [tool.uv.sources]
 ae-core = { workspace = true }
+ae-db = { workspace = true }
+ae-brokers = { workspace = true }

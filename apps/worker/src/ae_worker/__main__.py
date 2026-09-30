@@ -18,9 +18,9 @@ from datetime import datetime, time, timedelta
 
 import structlog
 from ae_db.session import Database
+from ae_marketdata.instruments import IST, refresh_instruments
 
 from . import __version__
-from .instruments import IST, refresh_instruments
 
 log = structlog.get_logger("ae_worker")
 

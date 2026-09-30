@@ -3,8 +3,8 @@ from datetime import UTC, date, datetime, time
 
 import pytest
 from ae_db.session import Database
+from ae_marketdata.instruments import refresh_instruments
 from ae_worker.__main__ import main, next_run
-from ae_worker.instruments import refresh_instruments
 from sqlalchemy import create_engine, text
 
 HEADER = (

@@ -1,5 +1,6 @@
-"""Daily job: refresh every instrument's exchange facts (lot size, strike step, weekly or monthly expiries) from
+"""Refresh every instrument's exchange facts (lot size, strike step, weekly or monthly expiries) from
 Zerodha's public instrument list, so a SEBI lot-size change reaches strategies without a release (ADR 0011).
+Run daily by the worker and on demand from Monitor.
 
 Only facts the list can prove are written; an instrument missing from the list keeps its values and is reported.
 Trading hours and is_active are admin settings and are never touched here."""
@@ -17,7 +18,7 @@ from ae_db.models import Instrument
 from ae_db.repositories import InstrumentRepo
 from ae_db.session import Database
 
-log = structlog.get_logger("ae_worker.instruments")
+log = structlog.get_logger("ae_marketdata.instruments")
 IST = timezone(timedelta(hours=5, minutes=30))
 
 Fetch = Callable[[str], Awaitable[list[dict[str, str]]]]

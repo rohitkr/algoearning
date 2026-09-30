@@ -7,7 +7,7 @@ dependencies = [
     "structlog>=26.1",
     "httpx>=0.28",
     "ae-db",
-    "ae-brokers",
+    "ae-marketdata",
 ]
 
 [build-system]
@@ -19,4 +19,4 @@ packages = ["src/ae_worker"]
 
 [tool.uv.sources]
 ae-db = { workspace = true }
-ae-brokers = { workspace = true }
+ae-marketdata = { workspace = true }
