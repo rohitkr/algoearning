@@ -16,7 +16,7 @@ from sqlalchemy import ColumnElement, Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .enums import RunStatus, UserStatus
-from .models import AuditLog, BrokerAccount, Plan, Strategy, StrategyRun, Subscription, User
+from .models import AuditLog, BrokerAccount, Instrument, Plan, Strategy, StrategyRun, Subscription, User
 from .pagination import Page, clamp_limit, decode_cursor, encode_cursor
 
 M = TypeVar("M", Strategy, BrokerAccount)
@@ -165,6 +165,18 @@ class PlanRepo:
 
     async def by_code(self, code: str) -> Plan | None:
         return (await self.s.execute(select(Plan).where(Plan.code == code))).scalar_one_or_none()
+
+
+class InstrumentRepo:
+    def __init__(self, session: AsyncSession) -> None:
+        self.s = session
+
+    async def list_active(self) -> list[Instrument]:
+        q = select(Instrument).where(Instrument.is_active.is_(True)).order_by(Instrument.code)
+        return list((await self.s.execute(q)).scalars())
+
+    async def list_all(self) -> list[Instrument]:
+        return list((await self.s.execute(select(Instrument).order_by(Instrument.code))).scalars())
 
 
 RUNNING = (RunStatus.PENDING, RunStatus.RUNNING, RunStatus.STOPPING)

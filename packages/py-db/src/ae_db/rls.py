@@ -30,7 +30,7 @@ USER_TABLES: dict[str, str] = {
     "audit_log": "user_id",
 }
 # readable by users, written by the system only
-PUBLIC_READ_TABLES = ("plans",)
+PUBLIC_READ_TABLES = ("plans",)  # later tables: public_read_sql() in their migration (instruments: 0005)
 # system only (no ae_app privileges at all)
 SYSTEM_ONLY_TABLES = ("webhook_events",)
 
@@ -44,6 +44,14 @@ def table_sql(table: str, col: str = "user_id") -> list[str]:
         f"CREATE POLICY user_isolation ON {table} TO {APP_ROLE} USING ({col} = app_user_id()) "
         f"WITH CHECK ({col} = app_user_id())",
         f"CREATE POLICY system_all ON {table} TO {SYSTEM_ROLE} USING (true) WITH CHECK (true)",
+    ]
+
+
+def public_read_sql(table: str) -> list[str]:
+    """Privileges for a platform table users may read but only the system writes (used by later migrations)."""
+    return [
+        f"GRANT SELECT ON {table} TO {APP_ROLE}",
+        f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO {SYSTEM_ROLE}",
     ]
 
 

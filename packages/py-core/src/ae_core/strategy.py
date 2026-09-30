@@ -13,13 +13,15 @@ fields (entry before exit, weekly expiry only where the exchange lists one, trai
 `plan_warnings()` compares a config with the user's plan without refusing it: the engine enforces plan limits
 when the strategy is deployed.
 
-Configs belong to the user who saved them. Only the instrument catalogue below is platform-wide, because lot
-sizes, strike steps and expiry days are set by the exchange, not by users.
+Configs belong to the user who saved them. Instruments (lot size, strike step, expiry type, trading hours) are
+platform data set by the exchange: they live in the database, refreshed daily from the broker's instrument list
+(ADR 0011), and are passed in. DEFAULT_INSTRUMENTS only seeds that table and serves tests.
 
 Changing the shape of a config: bump SCHEMA_VERSION and teach `migrate()` to upgrade older configs."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from itertools import pairwise
 from typing import Annotated, Any, Literal
@@ -27,24 +29,28 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, ValidationError
 
 SCHEMA_VERSION = 1
-MARKET_OPEN, MARKET_CLOSE = "09:15", "15:30"
 MAX_LEGS = 6
 MAX_STRIKE_OFFSET = 20  # strikes away from ATM
 MAX_LOTS = 100  # sanity cap per leg; plans usually allow far fewer (max_lots_per_order)
 
 
-# -- instruments (platform-wide exchange facts) ---------------------------------------------------------------
+# -- instruments (platform data: exchange facts, stored in the database) ---------------------------------------
 @dataclass(frozen=True)
 class Instrument:
     code: str
     name: str
     exchange: str  # derivatives segment: NFO (NSE) or BFO (BSE)
-    lot_size: int
+    lot_size: int  # of the nearest expiry; the engine uses each contract's own lot size when it orders
     strike_step: int
     weekly_expiry: bool  # False: only monthly expiries are listed
+    session_open: str = "09:15"  # when strategies may trade (HH:MM, IST)
+    session_close: str = "15:40"
 
 
-INSTRUMENTS: dict[str, Instrument] = {
+Instruments = Mapping[str, Instrument]
+
+# Seed values for the instruments table (migration 0005); the daily refresh keeps the table current.
+DEFAULT_INSTRUMENTS: dict[str, Instrument] = {
     i.code: i
     for i in (
         Instrument("NIFTY", "Nifty 50", "NFO", 65, 50, True),
@@ -210,16 +216,14 @@ def parse_issues(exc: ValidationError) -> list[Issue]:
     return out
 
 
-def _in_market(t: str) -> bool:
-    return MARKET_OPEN <= t <= MARKET_CLOSE
+def _hours(inst: Instrument, t: str, loc: Loc) -> list[Issue]:
+    if inst.session_open <= t <= inst.session_close:
+        return []
+    return [Issue(loc, f"must be within {inst.code} trading hours ({inst.session_open}-{inst.session_close})")]
 
 
-def _times(c: AnyConfig, order: list[str]) -> list[Issue]:
-    issues = [
-        Issue((k,), f"must be within market hours ({MARKET_OPEN}-{MARKET_CLOSE})")
-        for k in order
-        if not _in_market(getattr(c, k))
-    ]
+def _times(c: AnyConfig, inst: Instrument, order: list[str]) -> list[Issue]:
+    issues = [i for k in order for i in _hours(inst, getattr(c, k), (k,))]
     for a, b in pairwise(order):
         if getattr(c, a) > getattr(c, b):
             issues.append(Issue((b,), f"must not be before {a.replace('_', ' ')} ({getattr(c, a)})"))
@@ -238,14 +242,15 @@ def _threshold(t: Threshold, loc: Loc, action: str, is_target: bool) -> list[Iss
     return []
 
 
-def check(c: AnyConfig) -> list[Issue]:
-    """Rules that span fields. An empty list means the config can be saved."""
-    inst = INSTRUMENTS[c.underlying]
+def check(c: AnyConfig, instruments: Instruments) -> list[Issue]:
+    """Rules that span fields, against the current instruments. An empty list means the config can be saved."""
+    inst = instruments.get(c.underlying)
+    if inst is None:
+        return [Issue(("underlying",), f"{c.underlying} is not available for trading right now")]
     issues: list[Issue] = []
     if isinstance(c, TimeBasedConfig):
         for k in ("entry", "exit"):
-            if not _in_market(getattr(c.timing, k)):
-                issues.append(Issue(("timing", k), f"must be within market hours ({MARKET_OPEN}-{MARKET_CLOSE})"))
+            issues += _hours(inst, getattr(c.timing, k), ("timing", k))
         if c.timing.entry >= c.timing.exit:
             issues.append(Issue(("timing", "exit"), "must be after the entry time"))
         if len(set(c.timing.days)) != len(c.timing.days):
@@ -285,18 +290,14 @@ def check(c: AnyConfig) -> list[Issue]:
     if c.hedge_width is not None and c.hedge_width % inst.strike_step:
         issues.append(Issue(("hedge_width",), f"must be a multiple of {inst.strike_step}"))
     if isinstance(c, RangeBreakoutConfig):
-        issues += _times(c, ["range_start", "range_end", "last_entry", "exit_time"])
+        issues += _times(c, inst, ["range_start", "range_end", "last_entry", "exit_time"])
         if c.range_start == c.range_end:
             issues.append(Issue(("range_end",), "the range needs at least one minute"))
     else:
-        issues += _times(c, ["first_entry", "last_entry", "exit_time"])
+        issues += _times(c, inst, ["first_entry", "last_entry", "exit_time"])
         if c.last_entry == c.exit_time:
             issues.append(Issue(("exit_time",), "must be after the last entry time"))
     return issues
-
-
-def max_leg_lots(c: AnyConfig) -> int:
-    return max(leg.lots for leg in c.legs) if isinstance(c, TimeBasedConfig) else c.lots
 
 
 def plan_warnings(c: AnyConfig, max_lots_per_order: int | None) -> list[Issue]:

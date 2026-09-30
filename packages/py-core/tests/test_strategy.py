@@ -2,9 +2,10 @@ from typing import Any
 
 import pytest
 from ae_core.strategy import (
-    INSTRUMENTS,
+    DEFAULT_INSTRUMENTS,
     PRESETS,
     SCHEMA_VERSION,
+    Instrument,
     RangeBreakoutConfig,
     TimeBasedConfig,
     ZeroDteConfig,
@@ -34,14 +35,14 @@ def leg(**over: Any) -> dict[str, Any]:
 
 
 def locs(raw: dict[str, Any]) -> list[tuple[str | int, ...]]:
-    return [i.loc for i in check(parse(raw))]
+    return [i.loc for i in check(parse(raw), DEFAULT_INSTRUMENTS)]
 
 
 def test_presets_and_default_are_valid_and_round_trip() -> None:
     assert len({p.id for p in PRESETS}) == len(PRESETS)
     for p in (*PRESETS, None):
         cfg = p.config if p else default_config()
-        assert check(cfg) == [], p and p.id
+        assert check(cfg, DEFAULT_INSTRUMENTS) == [], p and p.id
         assert parse(cfg.model_dump(mode="json")) == cfg  # what the API stores reads back identically
 
 
@@ -116,7 +117,18 @@ def test_plan_warnings() -> None:
 
 
 def test_instruments_and_migrate() -> None:
-    assert INSTRUMENTS["NIFTY"].weekly_expiry and not INSTRUMENTS["BANKNIFTY"].weekly_expiry
+    assert DEFAULT_INSTRUMENTS["NIFTY"].weekly_expiry and not DEFAULT_INSTRUMENTS["BANKNIFTY"].weekly_expiry
     assert migrate(SCHEMA_VERSION, {"kind": "zero_dte"}) == {"kind": "zero_dte"}
     with pytest.raises(ValueError, match="schema version"):
         migrate(99, {})
+
+
+def test_rules_follow_the_instruments_passed_in() -> None:
+    """Lot sizes, expiry types and trading hours are data: the same config is judged by today's instruments."""
+    cfg = parse(time_based(timing={"entry": "09:20", "exit": "15:40"}, underlying="SENSEX"))
+    assert check(cfg, DEFAULT_INSTRUMENTS) == []  # F&O trades until 15:40
+    early = {"SENSEX": Instrument("SENSEX", "BSE Sensex", "BFO", 20, 100, True, "09:15", "15:30")}
+    assert [i.loc for i in check(cfg, early)] == [("timing", "exit")]
+    monthly = {"SENSEX": Instrument("SENSEX", "BSE Sensex", "BFO", 20, 100, False)}
+    assert [i.loc for i in check(cfg, monthly)] == [("legs", 0, "expiry")]
+    assert [i.loc for i in check(cfg, {})] == [("underlying",)]

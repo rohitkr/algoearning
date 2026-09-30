@@ -97,6 +97,24 @@ class Plan(UUIDPk, Timestamps, Base):
     provider_plan_id: Mapped[str | None] = mapped_column(String(100), unique=True)
 
 
+class Instrument(UUIDPk, Timestamps, Base):
+    """An underlying strategies can trade. Exchange facts (lot size, strike step, expiry type) are refreshed daily from
+    the broker's instrument list; trading hours are set by admins. Read-only for users (ADR 0011)."""
+
+    __tablename__ = "instruments"
+    code: Mapped[str] = mapped_column(String(20), unique=True)
+    name: Mapped[str] = mapped_column(String(80))
+    exchange: Mapped[str] = mapped_column(String(10))  # derivatives segment: NFO, BFO
+    lot_size: Mapped[int] = mapped_column(Integer)
+    strike_step: Mapped[int] = mapped_column(Integer)
+    weekly_expiry: Mapped[bool] = mapped_column(Boolean)
+    session_open: Mapped[str] = mapped_column(String(5), default="09:15")  # HH:MM IST
+    session_close: Mapped[str] = mapped_column(String(5), default="15:40")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    source: Mapped[str] = mapped_column(String(20), default="seed")  # seed | kite | admin: who set the facts last
+    refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Subscription(UUIDPk, Timestamps, Base):
     __tablename__ = "subscriptions"
     user_id: Mapped[uuid.UUID] = owner()
