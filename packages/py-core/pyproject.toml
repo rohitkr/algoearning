@@ -5,6 +5,7 @@ description = "Trading domain: lifecycle, risk, validation, orders, trade/strate
 requires-python = ">=3.13"
 dependencies = [
     "cryptography>=44",
+    "pydantic>=2.13",
 ]
 
 [build-system]
