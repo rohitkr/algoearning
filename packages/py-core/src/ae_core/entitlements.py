@@ -67,6 +67,23 @@ def validate_features(raw: Mapping[str, Any]) -> dict[str, bool | int | None]:
     return out
 
 
+def validate_overrides(raw: Mapping[str, Any]) -> dict[str, bool | int | None]:
+    """A user's overrides: only the features given (the rest come from the plan), same types as a plan."""
+    unknown = set(raw) - FEATURES.keys()
+    if unknown:
+        raise InvalidFeatures(f"unknown features: {sorted(unknown)}")
+    full = validate_features({k: raw[k] for k in raw})
+    return {k: full[k] for k in raw}
+
+
+def effective_features(
+    plan: Mapping[str, bool | int | None], overrides: Mapping[str, bool | int | None]
+) -> dict[str, bool | int | None]:
+    """What a user may do: their plan's features, with an admin's per-user overrides on top (e.g. a tester with
+    more broker accounts than their plan). Overrides apply whatever the plan, and stay until an admin removes them."""
+    return {**plan, **overrides}
+
+
 @dataclass(frozen=True)
 class SubscriptionView:
     """The fields of a subscription this module needs (decoupled from the ORM)."""
@@ -103,6 +120,7 @@ class Entitlements:
     subscription_status: str | None = None  # None: on the free plan
     current_period_end: datetime | None = None
     usage: Mapping[str, int] = field(default_factory=dict)
+    overrides: Mapping[str, bool | int | None] = field(default_factory=dict)  # already merged into `features`
 
     def allows(self, feature: str) -> bool:
         f = FEATURES[feature]

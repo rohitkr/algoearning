@@ -16,7 +16,7 @@ from sqlalchemy import ColumnElement, Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .enums import RunStatus, UserStatus
-from .models import AuditLog, BrokerAccount, Instrument, Plan, Strategy, StrategyRun, Subscription, User
+from .models import AuditLog, BrokerAccount, Instrument, Plan, Strategy, StrategyRun, Subscription, User, UserOverride
 from .pagination import Page, clamp_limit, decode_cursor, encode_cursor
 
 M = TypeVar("M", Strategy, BrokerAccount)
@@ -121,6 +121,10 @@ class UserRepo:
     async def get(self, id_: uuid.UUID) -> User | None:
         return await self.s.get(User, id_)
 
+    async def by_email(self, email: str) -> User | None:
+        q = select(User).where(User.email == email.strip().lower())
+        return (await self.s.execute(q)).scalar_one_or_none()
+
     async def by_auth_subject(self, subject: str) -> User | None:
         return (await self.s.execute(select(User).where(User.auth_subject == subject))).scalar_one_or_none()
 
@@ -200,6 +204,10 @@ class UsageRepo:
         return await self._count(
             select(StrategyRun.id).where(StrategyRun.user_id == self.user_id, StrategyRun.status.in_(RUNNING))
         )
+
+    async def overrides(self) -> dict[str, Any]:
+        q = select(UserOverride.features).where(UserOverride.user_id == self.user_id)
+        return dict((await self.s.execute(q)).scalar_one_or_none() or {})
 
     async def broker_accounts(self) -> int:
         return await self._count(select(BrokerAccount.id).where(BrokerAccount.user_id == self.user_id))

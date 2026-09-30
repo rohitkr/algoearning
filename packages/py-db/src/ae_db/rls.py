@@ -47,6 +47,18 @@ def table_sql(table: str, col: str = "user_id") -> list[str]:
     ]
 
 
+def user_read_only_sql(table: str, col: str = "user_id") -> list[str]:
+    """A user may read their own rows but never write them (admin-set data such as feature overrides)."""
+    return [
+        f"GRANT SELECT ON {table} TO {APP_ROLE}",
+        f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO {SYSTEM_ROLE}",
+        f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY",
+        f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY",
+        f"CREATE POLICY user_read ON {table} FOR SELECT TO {APP_ROLE} USING ({col} = app_user_id())",
+        f"CREATE POLICY system_all ON {table} TO {SYSTEM_ROLE} USING (true) WITH CHECK (true)",
+    ]
+
+
 def public_read_sql(table: str) -> list[str]:
     """Privileges for a platform table users may read but only the system writes (used by later migrations)."""
     return [

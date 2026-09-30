@@ -115,6 +115,17 @@ class Instrument(UUIDPk, Timestamps, Base):
     refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class UserOverride(UUIDPk, Timestamps, Base):
+    """An admin's per-user feature overrides on top of the plan (validated by ae_core.entitlements).
+    Users can read their own row (it shapes what they may do) but only the system writes it."""
+
+    __tablename__ = "user_overrides"
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    features: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    note: Mapped[str | None] = mapped_column(Text)  # why (shown to admins only)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"))
+
+
 class Subscription(UUIDPk, Timestamps, Base):
     __tablename__ = "subscriptions"
     user_id: Mapped[uuid.UUID] = owner()

@@ -133,3 +133,21 @@ def test_models_match_the_migrations(migrated_db: str) -> None:
     from conftest import _alembic
 
     command.check(_alembic())  # raises if the models changed without a migration
+
+
+async def test_users_read_their_own_overrides_but_cannot_write_them(db: Database) -> None:
+    from ae_db.models import UserOverride
+
+    a, b = await two_users(db)
+    async with db.system_session() as s:
+        s.add(UserOverride(user_id=a.id, features={"max_broker_accounts": 5}))
+        s.add(UserOverride(user_id=b.id, features={"live_trading": True}))
+    async with db.user_session(a.id) as s:
+        rows = (await s.execute(select(UserOverride.features))).scalars().all()
+        assert rows == [{"max_broker_accounts": 5}]  # only their own
+        with pytest.raises(ProgrammingError):  # no UPDATE privilege at all
+            await s.execute(update(UserOverride).values(features={"max_broker_accounts": None}))
+    async with db.user_session(a.id) as s:
+        with pytest.raises(ProgrammingError):
+            s.add(UserOverride(user_id=a.id, features={}))
+            await s.flush()

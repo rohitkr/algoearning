@@ -40,6 +40,7 @@ TABLES = (
     "payments",
     "subscriptions",
     "webhook_events",
+    "user_overrides",
     "users",
 )
 

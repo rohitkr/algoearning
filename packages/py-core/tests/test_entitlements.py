@@ -70,3 +70,19 @@ def test_entitlement_checks() -> None:
     assert unlimited.limit("max_strategies") is None and unlimited.within("max_strategies", used=10_000)
     with pytest.raises(KeyError):
         e.allows("max_strategies")
+
+
+def test_overrides_are_partial_and_win_over_the_plan() -> None:
+    from ae_core.entitlements import effective_features, validate_overrides
+
+    assert validate_overrides({"max_broker_accounts": 5}) == {"max_broker_accounts": 5}
+    assert validate_overrides({}) == {}
+    for bad in ({"max_brokers": 5}, {"max_broker_accounts": -1}, {"live_trading": "yes"}):
+        with pytest.raises(InvalidFeatures):
+            validate_overrides(bad)
+    plan = validate_features({"max_broker_accounts": 1})
+    eff = effective_features(plan, {"max_broker_accounts": None, "live_trading": True})
+    assert eff["max_broker_accounts"] is None and eff["live_trading"] is True
+    assert eff["max_strategies"] == plan["max_strategies"]
+    e = Entitlements("free", "Free", eff, overrides={"max_broker_accounts": None})
+    assert e.within("max_broker_accounts", 100)
