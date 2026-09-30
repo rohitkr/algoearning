@@ -109,6 +109,43 @@ export interface paths {
         patch: operations["update_instrument_v1_admin_instruments__code__patch"];
         trace?: never;
     };
+    "/v1/admin/market-data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Market Data Admin */
+        get: operations["market_data_admin_v1_admin_market_data_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/market-data/breeze-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Breeze Session
+         * @description Store today's Breeze session token (from ICICI's login redirect); the feed reconnects with it.
+         */
+        put: operations["set_breeze_session_v1_admin_market_data_breeze_session_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/overview": {
         parameters: {
             query?: never;
@@ -380,6 +417,23 @@ export interface paths {
         };
         /** Broker Catalog */
         get: operations["broker_catalog_v1_brokers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/market/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Snapshot */
+        get: operations["snapshot_v1_market_snapshot_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -709,6 +763,11 @@ export interface components {
             /** User Id */
             user_id: string | null;
         };
+        /** BreezeSessionIn */
+        BreezeSessionIn: {
+            /** Session Token */
+            session_token: string;
+        };
         /** BrokerAccountIn */
         BrokerAccountIn: {
             /** Api Key */
@@ -933,6 +992,17 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** FeedInstrument */
+        FeedInstrument: {
+            /** Bars Today */
+            bars_today: number;
+            /** Code */
+            code: string;
+            /** Ltp */
+            ltp: number | null;
+            /** Ts */
+            ts: string | null;
+        };
         /** GrantIn */
         GrantIn: {
             /** Days */
@@ -1056,6 +1126,43 @@ export interface components {
             strike?: components["schemas"]["Strike"];
             target?: components["schemas"]["Threshold"] | null;
             trailing?: components["schemas"]["Trailing"] | null;
+        };
+        /** MarketDataAdmin */
+        MarketDataAdmin: {
+            /** Api Calls Today */
+            api_calls_today: number;
+            /** Connected */
+            connected: boolean;
+            /** Error */
+            error: string | null;
+            /** Instruments */
+            instruments: components["schemas"]["FeedInstrument"][];
+            /** Last Event */
+            last_event: string | null;
+            /** Login Url */
+            login_url: string | null;
+            /** Session */
+            session: string | null;
+            /** Session Expires At */
+            session_expires_at: string | null;
+            /** Source */
+            source: string | null;
+            /** Subscribed */
+            subscribed: number;
+            /** Updated At */
+            updated_at: string | null;
+            /** Wanted */
+            wanted: number;
+        };
+        /** MarketSnapshot */
+        MarketSnapshot: {
+            /**
+             * Feed Status
+             * @enum {string}
+             */
+            feed_status: "live" | "simulated" | "down";
+            /** Quotes */
+            quotes: components["schemas"]["Quote"][];
         };
         /** Me */
         Me: {
@@ -1277,6 +1384,20 @@ export interface components {
             period_end: string | null;
             /** Plan Code */
             plan_code: string;
+        };
+        /** Quote */
+        Quote: {
+            /** Key */
+            key: string;
+            /** Ltp */
+            ltp: number;
+            /** Prev Close */
+            prev_close: number | null;
+            /**
+             * Ts
+             * Format: date-time
+             */
+            ts: string;
         };
         /**
          * RangeBreakoutConfig
@@ -1982,6 +2103,158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstrumentAdminOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    market_data_admin_v1_admin_market_data_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketDataAdmin"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_breeze_session_v1_admin_market_data_breeze_session_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreezeSessionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketDataAdmin"];
                 };
             };
             /** @description Bad request */
@@ -3522,6 +3795,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrokerInfoOut"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    snapshot_v1_market_snapshot_get: {
+        parameters: {
+            query?: {
+                /** @description Instrument keys; default: every index */
+                keys?: string[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketSnapshot"];
                 };
             };
             /** @description Bad request */

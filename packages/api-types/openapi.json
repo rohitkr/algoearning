@@ -416,6 +416,22 @@
         "title": "AuditEntry",
         "type": "object"
       },
+      "BreezeSessionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "session_token": {
+            "maxLength": 200,
+            "minLength": 4,
+            "title": "Session Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_token"
+        ],
+        "title": "BreezeSessionIn",
+        "type": "object"
+      },
       "BrokerAccountIn": {
         "additionalProperties": false,
         "properties": {
@@ -1089,6 +1105,49 @@
         "title": "FeatureInfo",
         "type": "object"
       },
+      "FeedInstrument": {
+        "properties": {
+          "bars_today": {
+            "title": "Bars Today",
+            "type": "integer"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "ltp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ltp"
+          },
+          "ts": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ts"
+          }
+        },
+        "required": [
+          "code",
+          "ltp",
+          "ts",
+          "bars_today"
+        ],
+        "title": "FeedInstrument",
+        "type": "object"
+      },
       "GrantIn": {
         "additionalProperties": false,
         "properties": {
@@ -1454,6 +1513,155 @@
           "option_type"
         ],
         "title": "Leg",
+        "type": "object"
+      },
+      "MarketDataAdmin": {
+        "properties": {
+          "api_calls_today": {
+            "title": "Api Calls Today",
+            "type": "integer"
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "instruments": {
+            "items": {
+              "$ref": "#/components/schemas/FeedInstrument"
+            },
+            "title": "Instruments",
+            "type": "array"
+          },
+          "last_event": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event"
+          },
+          "login_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Login Url"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session"
+          },
+          "session_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Expires At"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "subscribed": {
+            "title": "Subscribed",
+            "type": "integer"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "wanted": {
+            "title": "Wanted",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source",
+          "connected",
+          "session",
+          "session_expires_at",
+          "login_url",
+          "error",
+          "wanted",
+          "subscribed",
+          "api_calls_today",
+          "last_event",
+          "updated_at",
+          "instruments"
+        ],
+        "title": "MarketDataAdmin",
+        "type": "object"
+      },
+      "MarketSnapshot": {
+        "properties": {
+          "feed_status": {
+            "enum": [
+              "live",
+              "simulated",
+              "down"
+            ],
+            "title": "Feed Status",
+            "type": "string"
+          },
+          "quotes": {
+            "items": {
+              "$ref": "#/components/schemas/Quote"
+            },
+            "title": "Quotes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "quotes",
+          "feed_status"
+        ],
+        "title": "MarketSnapshot",
         "type": "object"
       },
       "Me": {
@@ -2115,6 +2323,42 @@
           "period_end"
         ],
         "title": "PurchaseOut",
+        "type": "object"
+      },
+      "Quote": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "ltp": {
+            "title": "Ltp",
+            "type": "number"
+          },
+          "prev_close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prev Close"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "ltp",
+          "prev_close",
+          "ts"
+        ],
+        "title": "Quote",
         "type": "object"
       },
       "RangeBreakoutConfig": {
@@ -3493,6 +3737,179 @@
         "summary": "Update Instrument",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/v1/admin/market-data": {
+      "get": {
+        "operationId": "market_data_admin_v1_admin_market_data_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataAdmin"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Market Data Admin",
+        "tags": [
+          "market"
+        ]
+      }
+    },
+    "/v1/admin/market-data/breeze-session": {
+      "put": {
+        "description": "Store today's Breeze session token (from ICICI's login redirect); the feed reconnects with it.",
+        "operationId": "set_breeze_session_v1_admin_market_data_breeze_session_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreezeSessionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataAdmin"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Set Breeze Session",
+        "tags": [
+          "market"
         ]
       }
     },
@@ -5408,6 +5825,111 @@
         "summary": "Broker Catalog",
         "tags": [
           "brokers"
+        ]
+      }
+    },
+    "/v1/market/snapshot": {
+      "get": {
+        "operationId": "snapshot_v1_market_snapshot_get",
+        "parameters": [
+          {
+            "description": "Instrument keys; default: every index",
+            "in": "query",
+            "name": "keys",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 50,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Instrument keys; default: every index",
+              "title": "Keys"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Snapshot",
+        "tags": [
+          "market"
         ]
       }
     },

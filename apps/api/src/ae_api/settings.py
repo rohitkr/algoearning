@@ -20,6 +20,7 @@
 | RAZORPAY_WEBHOOK_SECRET |              | verifies Razorpay -> /v1/webhooks/razorpay             |
 | APP_ENCRYPTION_KEY    |                | base64 32-byte master key for broker credentials       |
 | API_PUBLIC_URL        | http://localhost:8000 | how browsers/brokers reach this API (callbacks) |
+| BREEZE_API_KEY        |                | ICICI Breeze app key: the platform price feed (phase 10) |
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ class Settings(BaseSettings):
     razorpay_webhook_secret: str | None = Field(default=None, repr=False)
     app_encryption_key: str | None = Field(default=None, repr=False)
     api_public_url: str = "http://localhost:8000"
+    breeze_api_key: str | None = None  # only for Monitor's login link; the feed process holds the secret
 
     @property
     def web_url(self) -> str:

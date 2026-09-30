@@ -44,3 +44,6 @@ export type InstrumentAdmin = Schemas["InstrumentAdminOut"];
 export type InstrumentRefresh = Schemas["InstrumentRefreshOut"];
 export type Overview = Schemas["Overview"];
 export type PlanAdmin = Schemas["PlanAdminOut"];
+export type MarketSnapshot = Schemas["MarketSnapshot"];
+export type MarketQuote = Schemas["Quote"];
+export type MarketDataAdmin = Schemas["MarketDataAdmin"];

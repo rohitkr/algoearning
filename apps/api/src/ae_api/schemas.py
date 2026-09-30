@@ -427,3 +427,43 @@ class Overview(BaseModel):
     recent_payments: list[RecentPayment]
     recent_users: list[AdminUserRow]
     instruments_refreshed_at: datetime | None
+
+
+# -- market data -----------------------------------------------------------------------------------------------
+class Quote(BaseModel):
+    key: str  # "NIFTY" or "NIFTY:2026-10-06:25000:CE"
+    ltp: float
+    prev_close: float | None
+    ts: datetime
+
+
+class MarketSnapshot(BaseModel):
+    quotes: list[Quote]
+    feed_status: Literal["live", "simulated", "down"]  # down: no price in the last 2 minutes
+
+
+class FeedInstrument(BaseModel):
+    code: str
+    ltp: float | None
+    ts: datetime | None
+    bars_today: int
+
+
+class MarketDataAdmin(BaseModel):
+    source: str | None  # breeze | simulated | None (feed not running)
+    connected: bool
+    session: str | None  # active | login needed | not needed
+    session_expires_at: datetime | None
+    login_url: str | None  # ICICI login page for the Breeze app (null: BREEZE_API_KEY not set)
+    error: str | None
+    wanted: int
+    subscribed: int
+    api_calls_today: int
+    last_event: datetime | None
+    updated_at: datetime | None  # the feed's last heartbeat
+    instruments: list[FeedInstrument]
+
+
+class BreezeSessionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_token: str = Field(min_length=4, max_length=200)  # the apisession value from ICICI's redirect
