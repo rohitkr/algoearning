@@ -160,6 +160,9 @@ pids+=($!)
 # the platform price feed: Breeze when BREEZE_API_KEY/SECRET are set in .env, simulated prices otherwise
 ( uv run --env-file .env python -m ae_marketdata 2>&1 | prefix "${yellow}feed${reset}│ " ) &
 pids+=($!)
+# the worker: sends notifications, links Telegram, raises the engine-down alert, refreshes instruments daily
+( uv run --env-file .env python -m ae_worker 2>&1 | prefix "${magenta}wrk ${reset}│ " ) &
+pids+=($!)
 # the trading engine: steps every deployed strategy (paper) every second
 ( uv run --env-file .env python -m ae_engine 2>&1 | prefix "${green}eng ${reset}│ " ) &
 pids+=($!)

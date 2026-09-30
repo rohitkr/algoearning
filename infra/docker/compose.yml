@@ -79,6 +79,12 @@ services:
     command: ["python", "-m", "ae_worker"]
     environment:
       DATABASE_URL: postgresql://algoearning:algoearning@postgres:5432/algoearning
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-AlgoEarning <alerts@example.com>}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
     restart: unless-stopped
     depends_on: [api]
   web:
