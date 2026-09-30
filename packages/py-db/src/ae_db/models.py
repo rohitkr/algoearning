@@ -18,6 +18,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Identity,
     Index,
@@ -302,6 +303,42 @@ class UserRiskSettings(UUIDPk, Timestamps, Base):
     max_open_positions: Mapped[int | None] = mapped_column(Integer)
     max_trades_per_day: Mapped[int | None] = mapped_column(Integer)
     kill_switch: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class HistoryCandle(Base):
+    """One stored 1-minute candle for backtesting: an index (key "NIFTY") or an option contract (key
+    "NIFTY:2026-10-06:25000:CE", the price feed's key). Platform data: only the system reads and writes it."""
+
+    __tablename__ = "history_candles"
+    key: Mapped[str] = mapped_column(String(60), primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)  # the minute's start
+    open: Mapped[float] = mapped_column(Float)
+    high: Mapped[float] = mapped_column(Float)
+    low: Mapped[float] = mapped_column(Float)
+    close: Mapped[float] = mapped_column(Float)
+    volume: Mapped[int] = mapped_column(BigInteger, default=0)
+
+
+class BacktestRun(UUIDPk, Timestamps, Base):
+    """A backtest a user asked for: the strategy's config as it was, the range, and (when done) the result."""
+
+    __tablename__ = "backtest_runs"
+    user_id: Mapped[uuid.UUID] = owner()
+    strategy_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("strategies.id", ondelete="SET NULL"))
+    strategy_name: Mapped[str] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column(String(40))
+    config_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    schema_version: Mapped[int] = mapped_column(Integer, default=1)
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    multiplier: Mapped[int] = mapped_column(Integer, default=1)
+    slippage_pct: Mapped[float] = mapped_column(Float, default=0.05)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | running | done | error
+    error: Mapped[str | None] = mapped_column(Text)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (Index("ix_backtest_runs_user_created", "user_id", "created_at"),)
 
 
 class NotificationSettings(UUIDPk, Timestamps, Base):

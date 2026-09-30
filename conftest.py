@@ -44,6 +44,7 @@ TABLES = (
     "user_risk_settings",
     "notification_settings",
     "notifications",
+    "backtest_runs",
     "platform_settings",
     "users",
 )
