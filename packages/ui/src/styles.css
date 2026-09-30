@@ -1,0 +1,97 @@
+/*
+ * AlgoEarning design tokens. Light is the default; `.dark` on <html> (set by next-themes) switches every
+ * token, so components never hard-code a colour: they use bg-surface, text-muted, text-profit, ...
+ * Contrast (checked by scripts/check-contrast.py in CI): every text token >= 4.5:1 on background, surface and
+ * surface-2 in both themes, and white on primary >= 4.5:1. Use text-primary-text (not text-primary) for blue text.
+ */
+/* Imported by the app after `@import "tailwindcss"`; @source makes Tailwind scan this package's components. */
+@source "./";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #f6f7fb;
+  --surface: #ffffff;
+  --surface-2: #f0f2f7;
+  --border: #e2e5ee;
+  --foreground: #0f172a;
+  --muted: #566074;
+  --primary: #2459e0;
+  --primary-hover: #1d4bc2;
+  --primary-foreground: #ffffff;
+  --primary-text: #2459e0;
+  --accent: #eaf0ff;
+  --profit: #137a3a;
+  --loss: #c62828;
+  --warning: #a14a07;
+  --ring: #2459e0;
+  --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 4px 16px rgb(15 23 42 / 0.05);
+  color-scheme: light;
+}
+
+.dark {
+  --background: #0d0e12;
+  --surface: #16171c;
+  --surface-2: #1d1f26;
+  --border: #2a2d36;
+  --foreground: #eef0f5;
+  --muted: #9aa3b4;
+  --primary: #2f63e0;
+  --primary-hover: #3b6ff0;
+  --primary-foreground: #ffffff;
+  --primary-text: #82a6fa;
+  --accent: #1b2640;
+  --profit: #34c46a;
+  --loss: #f26d6d;
+  --warning: #f0a53a;
+  --ring: #5a88f7;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-accent: var(--accent);
+  --color-profit: var(--profit);
+  --color-loss: var(--loss);
+  --color-warning: var(--warning);
+  --color-ring: var(--ring);
+  --shadow-card: var(--shadow);
+  --radius-card: 14px;
+  --font-sans: var(--font-inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}

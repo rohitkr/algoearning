@@ -1,0 +1,21 @@
+{
+  "name": "@algoearning/api-types",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "cd ../.. && uv run python -m ae_api.openapi > packages/api-types/openapi.json && cd packages/api-types && openapi-typescript openapi.json -o src/schema.ts",
+    "check": "pnpm run generate && git diff --exit-code -- openapi.json src/schema.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@algoearning/config": "workspace:*",
+    "eslint": "^9.39.5",
+    "openapi-typescript": "^7.13.0",
+    "typescript": "~5.9.3"
+  }
+}
