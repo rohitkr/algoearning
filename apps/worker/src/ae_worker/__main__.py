@@ -3,6 +3,7 @@
     python -m ae_worker                        # run: every job once at start, then on its daily schedule
     python -m ae_worker --once                 # every job once, then exit (cron, deploy hooks)
     python -m ae_worker refresh-instruments    # one job, then exit
+    uv run --with duckdb python -m ae_worker import-history ~/git/algo-trading-claude/data/market_data.duckdb
 
 Jobs (times IST): refresh-instruments at 08:00 (Zerodha publishes the day's list before that). A plain asyncio
 schedule until the job queue lands; every job is idempotent, so running it twice is harmless."""
@@ -18,15 +19,32 @@ from datetime import datetime, time, timedelta
 
 import structlog
 from ae_db.session import Database
+from ae_marketdata.history import archive_today, import_duckdb
+from ae_marketdata.hub import Hub
 from ae_marketdata.instruments import IST, refresh_instruments
+from redis.asyncio import Redis
 
 from . import __version__
+from .backtests import run_pending
 from .notify import Sender, check_engine, dispatch_pending, link_telegram
 
 log = structlog.get_logger("ae_worker")
 
+
+async def archive_history(db: Database) -> int:
+    url = os.environ.get("REDIS_URL")
+    if not url:
+        return 0
+    redis = Redis.from_url(url)
+    try:
+        return int(await archive_today(db, Hub(redis)))
+    finally:
+        await redis.aclose()
+
+
 JOBS: dict[str, tuple[time, Callable[[Database], Awaitable[object]]]] = {
     "refresh-instruments": (time(8, 0), refresh_instruments),
+    "archive-history": (time(16, 5), archive_history),  # after the close: keep the day's bars for backtesting
 }
 
 # every few seconds, while the worker runs (not part of --once)
@@ -35,6 +53,7 @@ EVERY: dict[str, tuple[float, Callable[[Database], Awaitable[object]]]] = {
     "send-notifications": (5, lambda db: dispatch_pending(db, _sender)),
     "link-telegram": (3, lambda db: link_telegram(db, _sender)),
     "check-engine": (30, check_engine),
+    "run-backtests": (3, run_pending),
 }
 
 
@@ -76,8 +95,14 @@ async def _main(args: argparse.Namespace) -> int:
     if not url:
         log.error("DATABASE_URL is not set")
         return 2
-    db = Database(url, pool_size=1)
+    db = Database(url, pool_size=2)
     try:
+        if args.job == "import-history":
+            if not args.file:
+                log.error("usage: python -m ae_worker import-history FILE.duckdb")
+                return 2
+            log.info("history imported", **await import_duckdb(db, args.file))
+            return 0
         names = [args.job] if args.job else list(JOBS)
         ok = all([await _run_job(db, n) for n in names])
         if args.job or args.once:
@@ -91,7 +116,8 @@ async def _main(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m ae_worker")
-    ap.add_argument("job", nargs="?", choices=sorted(JOBS), help="run one job and exit")
+    ap.add_argument("job", nargs="?", choices=[*sorted(JOBS), "import-history"], help="run one job and exit")
+    ap.add_argument("file", nargs="?", help="import-history: algo-trading-claude's market_data.duckdb")
     ap.add_argument("--once", action="store_true", help="run every job once and exit")
     return asyncio.run(_main(ap.parse_args(argv)))
 
