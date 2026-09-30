@@ -18,3 +18,4 @@ supersedes the old one, never by editing history.
 | 0011 | [Instruments and trading hours are data, refreshed daily](0011-instruments-as-data.md) | Accepted                     |
 | 0012 | [Monitor: the admin panel, and per-user limits](0012-monitor.md)                       | Accepted                     |
 | 0013 | [The platform price feed: Breeze streaming through Redis](0013-price-feed.md)          | Accepted                     |
+| 0014 | [The trading engine: one process, isolated runs, paper first](0014-trading-engine.md)  | Accepted                     |

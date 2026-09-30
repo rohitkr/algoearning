@@ -160,6 +160,9 @@ pids+=($!)
 # the platform price feed: Breeze when BREEZE_API_KEY/SECRET are set in .env, simulated prices otherwise
 ( uv run --env-file .env python -m ae_marketdata 2>&1 | prefix "${yellow}feed${reset}│ " ) &
 pids+=($!)
+# the trading engine: steps every deployed strategy (paper) every second
+( uv run --env-file .env python -m ae_engine 2>&1 | prefix "${green}eng ${reset}│ " ) &
+pids+=($!)
 
 wait_for() { # url name seconds
   for _ in $(seq 1 "$3"); do
@@ -178,7 +181,7 @@ ${bold}${green}AlgoEarning is running${reset}
   API docs    http://localhost:$API_PORT/docs
   API health  http://localhost:$API_PORT/health/ready
   Monitor     http://localhost:$WEB_PORT/monitor (admins; market data under Market data)
-  ${dim}Code changes reload automatically (restart for feed changes). Ctrl-C stops the API, web and feed$( [ "$STOP_DB" = 1 ] && echo ", Postgres and Redis").${reset}
+  ${dim}Code changes reload automatically (restart for feed/engine changes). Ctrl-C stops the API, web, feed and engine$( [ "$STOP_DB" = 1 ] && echo ", Postgres and Redis").${reset}
 
 EOF
 wait

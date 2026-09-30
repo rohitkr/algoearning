@@ -52,7 +52,13 @@ services:
   engine:
     build: { context: ../.., dockerfile: infra/docker/api.Dockerfile }
     command: ["python", "-m", "ae_engine"]
-    depends_on: [api]
+    environment:
+      DATABASE_URL: postgresql://algoearning:algoearning@postgres:5432/algoearning
+      REDIS_URL: redis://redis:6379/0
+    restart: unless-stopped
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
   feed:
     build: { context: ../.., dockerfile: infra/docker/api.Dockerfile }
     command: ["python", "-m", "ae_marketdata"]
