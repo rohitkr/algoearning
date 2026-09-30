@@ -157,3 +157,10 @@ def test_deleting_a_strategy_stops_its_run(api: TestClient) -> None:
     assert api.delete(f"/v1/strategies/{sid}", headers=A).status_code == 204
     run = api.get(f"/v1/runs/{rid}", headers=A).json()["run"]
     assert run["status"] == "stopped" and run["stop_reason"] == "strategy deleted"
+
+
+def test_preflight_reports_what_is_missing(api: TestClient) -> None:
+    api.get("/v1/me", headers=A)
+    import uuid
+
+    assert api.post(f"/v1/me/live/preflight?broker_account_id={uuid.uuid4()}", headers=A).status_code == 404

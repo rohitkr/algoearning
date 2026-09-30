@@ -34,6 +34,8 @@ from ..schemas import (
     LiveStatus,
     OrderOut,
     PositionOut,
+    PreflightCheck,
+    PreflightOut,
     RiskSettingsIO,
     RunDetail,
     RunEvent,
@@ -338,3 +340,57 @@ async def live_status(user: CurrentUser, s: UserSession, settings: SettingsDep) 
         can_go_live=plan and unlocked and any(b.connected and b.engine_enabled for b in brokers),
         reasons=reasons,
     )
+
+
+@router.post("/v1/me/live/preflight", response_model=PreflightOut)
+async def preflight(broker_account_id: uuid.UUID, user: CurrentUser, s: UserSession, request: Request) -> PreflightOut:
+    """Before real orders: can we reach the broker with today's session, read the funds, and are prices and the engine
+    alive? Nothing is ordered."""
+    from ae_brokers.base import BrokerError
+    from ae_brokers.kite import KiteClient
+    from ae_marketdata.hub import Hub
+
+    checks: list[PreflightCheck] = []
+
+    def add(name: str, ok: bool, detail: str) -> None:
+        checks.append(PreflightCheck(name=name, ok=ok, detail=detail))
+
+    acc = await BrokerAccountRepo(s, user.user_id).get(broker_account_id)
+    if acc is None:
+        raise NotFound("broker account not found")
+    sess = (
+        await s.execute(select(BrokerSession).where(BrokerSession.broker_account_id == acc.id))
+    ).scalar_one_or_none()
+    box = getattr(request.app.state, "secretbox", None)
+    if sess is None or sess.expires_at <= datetime.now(UTC) or box is None or acc.api_key_enc is None:
+        add("Zerodha session", False, "log in to Zerodha on the Broker page today")
+    else:
+        client = KiteClient(
+            box.decrypt(acc.api_key_enc, f"broker_account:{acc.id}:api_key"),
+            box.decrypt(sess.access_token_enc, f"broker_session:{acc.id}:access_token"),
+        )
+        try:
+            funds = await client.available_margin()
+            add("Zerodha session", True, "logged in")
+            add("Funds", funds > 0, f"₹{funds:,.0f} available")
+        except BrokerError as exc:
+            add("Zerodha session", False, exc.message)
+        finally:
+            await client.aclose()
+    redis = getattr(request.app.state, "redis", None)
+    if redis is None:
+        add("Price feed", False, "Redis is not available")
+        add("Engine", False, "Redis is not available")
+    else:
+        tick = (await Hub(redis).last(["NIFTY"])).get("NIFTY")
+        fresh = tick is not None and datetime.now(UTC) - tick.ts < timedelta(minutes=2)
+        health = await Hub(redis).health()
+        add("Price feed", fresh and not health.get("simulated"),
+            "live prices" if fresh and not health.get("simulated") else "simulated prices: log in to Breeze in Monitor"
+            if fresh else "no prices in the last 2 minutes")  # fmt: skip
+        add(
+            "Engine",
+            bool(await redis.get("engine:leader")),
+            "running" if await redis.get("engine:leader") else "not running: start make dev",
+        )
+    return PreflightOut(ok=all(c.ok for c in checks), checks=checks)

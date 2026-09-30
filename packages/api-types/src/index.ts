@@ -65,3 +65,4 @@ export type LiveStatus = Schemas["LiveStatus"];
 export type NotificationSettings = Schemas["NotificationSettingsOut"];
 export type NotificationItem = Schemas["NotificationOut"];
 export type TelegramLink = Schemas["TelegramLink"];
+export type Preflight = Schemas["PreflightOut"];

@@ -95,6 +95,20 @@ describe("DeployDialog", () => {
     });
   });
 
+  it("runs the pre-flight checks before real orders", async () => {
+    const fetch = vi.fn(async (url: string) => {
+      if (url.endsWith("/v1/me/live")) return new Response(JSON.stringify(READY), { status: 200 });
+      const out = { ok: false, checks: [{ name: "Engine", ok: false, detail: "not running" }] };
+      return new Response(JSON.stringify(out), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    await open();
+    fireEvent.click(screen.getByLabelText(/Live, real orders/));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Check everything is ready" })));
+    expect(screen.getByLabelText("Pre-flight checks").textContent).toContain("✗ Engine: not running");
+    expect(String(fetch.mock.calls.at(-1)![0])).toContain("/preflight?broker_account_id=b1");
+  });
+
   it("starts a dry run without confirmation", async () => {
     const fetch = api(READY);
     await open();

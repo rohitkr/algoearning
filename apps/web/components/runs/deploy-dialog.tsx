@@ -1,6 +1,6 @@
 "use client";
 
-import type { LiveStatus, Run, Strategy } from "@algoearning/api-types";
+import type { LiveStatus, Preflight, Run, Strategy } from "@algoearning/api-types";
 import { Button, cn } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
 import { TriangleAlert } from "lucide-react";
@@ -34,6 +34,7 @@ export function DeployDialog({
   const [broker, setBroker] = useState("");
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pre, setPre] = useState<Preflight | null>(null);
   const [error, setError] = useState<{ text: string; upgrade?: boolean } | null>(null);
 
   useEffect(() => {
@@ -62,6 +63,22 @@ export function DeployDialog({
       alive = false;
     };
   }, [open]);
+
+  async function preflight() {
+    setPre(null);
+    try {
+      setPre(
+        await apiRequest<Preflight>(
+          "POST",
+          `/v1/me/live/preflight?broker_account_id=${broker}`,
+          undefined,
+          getToken,
+        ),
+      );
+    } catch (e) {
+      setError({ text: (e as Error).message });
+    }
+  }
 
   const ready = mode !== "live" || (confirmText.trim() === strategy.name.trim() && !!broker);
 
@@ -157,6 +174,20 @@ export function DeployDialog({
                   ))}
               </select>
             </label>
+            <div className="flex flex-col gap-1.5">
+              <Button size="sm" variant="secondary" className="w-fit" disabled={!broker} onClick={preflight}>
+                Check everything is ready
+              </Button>
+              {pre && (
+                <ul className="text-xs" aria-label="Pre-flight checks">
+                  {pre.checks.map((c) => (
+                    <li key={c.name} className={c.ok ? "text-profit" : "text-loss"}>
+                      {c.ok ? "✓" : "✗"} {c.name}: {c.detail}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <label className="flex flex-col gap-1 text-xs font-medium text-muted">
               Type <span className="font-semibold text-foreground">{strategy.name}</span> to confirm
               <input

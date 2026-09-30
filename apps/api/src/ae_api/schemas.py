@@ -712,3 +712,14 @@ class NotificationOut(BaseModel):
     status: str
     sent_via: list[str]
     error: str | None
+
+
+class PreflightCheck(BaseModel):
+    name: str
+    ok: bool
+    detail: str
+
+
+class PreflightOut(BaseModel):
+    ok: bool
+    checks: list[PreflightCheck]

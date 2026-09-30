@@ -3274,6 +3274,50 @@
         "title": "PositionOut",
         "type": "object"
       },
+      "PreflightCheck": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "ok",
+          "detail"
+        ],
+        "title": "PreflightCheck",
+        "type": "object"
+      },
+      "PreflightOut": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/PreflightCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "checks"
+        ],
+        "title": "PreflightOut",
+        "type": "object"
+      },
       "PresetOut": {
         "properties": {
           "config": {
@@ -8297,6 +8341,100 @@
           }
         },
         "summary": "Live Status",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/v1/me/live/preflight": {
+      "post": {
+        "description": "Before real orders: can we reach the broker with today's session, read the funds, and are prices and the engine\nalive? Nothing is ordered.",
+        "operationId": "preflight_v1_me_live_preflight_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "broker_account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Broker Account Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreflightOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Preflight",
         "tags": [
           "runs"
         ]
