@@ -16,3 +16,4 @@ supersedes the old one, never by editing history.
 | 0009 | [Hosting: portable Docker, provider decided later](0009-hosting.md)                    | Accepted                     |
 | 0010 | [Strategy configs: one typed, versioned schema](0010-strategy-configs.md)              | Accepted (instruments: 0011) |
 | 0011 | [Instruments and trading hours are data, refreshed daily](0011-instruments-as-data.md) | Accepted                     |
+| 0012 | [Monitor: the admin panel, and per-user limits](0012-monitor.md)                       | Accepted                     |
