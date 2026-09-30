@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Generic, Literal, TypeVar
 
 from ae_core.strategy import StrategyConfig, StrategyKind, default_config
@@ -467,3 +467,112 @@ class MarketDataAdmin(BaseModel):
 class BreezeSessionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_token: str = Field(min_length=4, max_length=200)  # the apisession value from ICICI's redirect
+
+
+# -- runs (the engine) -----------------------------------------------------------------------------------------
+RunStatusT = Literal["pending", "running", "stopping", "stopped", "completed", "error"]
+
+
+class DeployIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["paper", "live"] = "paper"
+    broker_account_id: uuid.UUID | None = None  # required for live; optional on paper (for the record)
+    multiplier: int = Field(default=1, ge=1, le=100)  # every leg's lots x this
+
+
+class RunOut(BaseModel):
+    id: uuid.UUID
+    strategy_id: uuid.UUID
+    strategy_name: str
+    kind: str
+    underlying: str
+    mode: Literal["paper", "live"]
+    status: RunStatusT
+    multiplier: int
+    broker_account_id: uuid.UUID | None
+    realized_pnl: float
+    unrealized_pnl: float
+    open_positions: int
+    created_at: datetime
+    started_at: datetime | None
+    stopped_at: datetime | None
+    heartbeat_at: datetime | None  # the engine's last step for this run
+    engine_stale: bool  # running, but the engine has not stepped it for 30 seconds
+    stop_reason: str | None
+    error: str | None
+
+
+class PositionOut(BaseModel):
+    id: uuid.UUID
+    leg: str | None
+    tradingsymbol: str
+    underlying: str
+    expiry: date
+    strike: float
+    option_type: str
+    side: Literal["BUY", "SELL"]
+    lots: int
+    quantity: int
+    status: str  # open | closed
+    entry_price: float
+    entry_time: datetime | None
+    last_ltp: float | None
+    current_sl: float | None
+    target: float | None
+    exit_price: float | None
+    exit_time: datetime | None
+    exit_reason: str | None
+    pnl: float
+
+
+class OrderOut(BaseModel):
+    id: uuid.UUID
+    trade_id: uuid.UUID
+    kind: str
+    side: Literal["BUY", "SELL"]
+    quantity: int
+    avg_price: float | None
+    status: str
+    created_at: datetime
+
+
+class RunEvent(BaseModel):
+    id: int
+    ts: datetime
+    event: str
+    level: str
+    detail: dict[str, Any]
+
+
+class RunDetail(BaseModel):
+    run: RunOut
+    positions: list[PositionOut]
+    orders: list[OrderOut]
+    events: list[RunEvent]
+
+
+class RiskSettingsIO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    max_daily_loss: float | None = Field(default=None, gt=0, le=1_000_000_000)
+    max_daily_profit: float | None = Field(default=None, gt=0, le=1_000_000_000)
+    max_open_positions: int | None = Field(default=None, ge=0, le=1000)
+    max_trades_per_day: int | None = Field(default=None, ge=0, le=10000)
+    kill_switch: bool = False
+
+
+class AdminRunOut(RunOut):
+    user_id: uuid.UUID
+    user_email: str
+
+
+class TradingHaltIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    halted: bool
+    reason: str | None = Field(default=None, max_length=300)
+
+
+class EngineStatus(BaseModel):
+    trading_halted: bool
+    halt_reason: str | None
+    active_runs: int
+    last_heartbeat: datetime | None  # the most recent step of any run

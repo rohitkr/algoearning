@@ -20,7 +20,20 @@ from .billing.razorpay import RazorpayClient
 from .logconfig import configure_logging
 from .login_state import LoginStateSigner
 from .middleware import RequestContextMiddleware
-from .routers import admin, billing, brokers, entitlements, health, market, me, monitor, plans, strategies, webhooks
+from .routers import (
+    admin,
+    billing,
+    brokers,
+    entitlements,
+    health,
+    market,
+    me,
+    monitor,
+    plans,
+    runs,
+    strategies,
+    webhooks,
+)
 from .settings import Settings, load_settings
 
 
@@ -88,6 +101,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         strategies.router,
         monitor.router,
         market.router,
+        runs.router,
         billing.router,
         brokers.router,
         webhooks.router,

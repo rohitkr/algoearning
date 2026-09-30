@@ -22,12 +22,12 @@ from ae_core.strategy import (
     parse_issues,
     plan_warnings,
 )
-from ae_db.enums import StrategyStatus
-from ae_db.models import Strategy
+from ae_db.enums import RunStatus, StrategyStatus
+from ae_db.models import Strategy, StrategyRun
 from ae_db.repositories import InstrumentRepo, StrategyRepo
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import ValidationError
-from sqlalchemy import ColumnElement
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import audit
@@ -198,6 +198,12 @@ async def duplicate_strategy(
 async def delete_strategy(strategy_id: uuid.UUID, user: CurrentUser, s: UserSession, request: Request) -> Response:
     repo = StrategyRepo(s, user.user_id)
     obj = await _own(repo, strategy_id)
+    # a deleted strategy stops trading: running deployments square off (the engine does it within seconds)
+    for run in (await s.execute(select(StrategyRun).where(StrategyRun.strategy_id == obj.id))).scalars():
+        if run.status == RunStatus.PENDING:
+            run.status, run.stop_reason = RunStatus.STOPPED, "strategy deleted"
+        elif run.status == RunStatus.RUNNING:
+            run.status, run.stop_reason = RunStatus.STOPPING, "strategy deleted"
     await repo.delete(obj)
     await audit(s, request, "strategy.delete", user.user_id, "strategy", obj.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

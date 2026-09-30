@@ -11,6 +11,7 @@ from ae_core.entitlements import FEATURES, FREE_PLAN, InvalidFeatures, validate_
 from ae_db.enums import (
     BillingOrderStatus,
     BrokerAccountStatus,
+    RunStatus,
     StrategyStatus,
     SubscriptionStatus,
     UserRole,
@@ -22,8 +23,11 @@ from ae_db.models import (
     BrokerAccount,
     Instrument,
     Plan,
+    PlatformSetting,
     Strategy,
+    StrategyRun,
     Subscription,
+    Trade,
     User,
     UserOverride,
 )
@@ -42,11 +46,13 @@ from ..errors import AppError, NotFound, Unavailable
 from ..schemas import (
     ERROR_RESPONSES,
     AdminBrokerAccount,
+    AdminRunOut,
     AdminSubscription,
     AdminUserDetail,
     AdminUserPatch,
     AdminUserRow,
     AuditEntry,
+    EngineStatus,
     EntitlementsOut,
     FeatureInfo,
     GrantIn,
@@ -57,11 +63,13 @@ from ..schemas import (
     Overview,
     Page,
     RecentPayment,
+    TradingHaltIn,
     UsageItem,
 )
 from ..settings import SettingsDep
 from .admin import Admin
 
+RUN_ACTIVE = (RunStatus.PENDING, RunStatus.RUNNING, RunStatus.STOPPING)
 router = APIRouter(prefix="/v1/admin", tags=["admin"], responses=ERROR_RESPONSES)
 
 
@@ -463,3 +471,74 @@ async def audit_log(
     more = len(items) > limit
     items = items[:limit]
     return Page[AuditEntry](items=items, next_cursor=str(items[-1].id) if more and items else None)
+
+
+# -- engine ----------------------------------------------------------------------------------------------------
+HALT_KEY = "trading_halted"
+
+
+async def _engine_status(s: AsyncSession) -> EngineStatus:
+    row = (await s.execute(select(PlatformSetting).where(PlatformSetting.key == HALT_KEY))).scalar_one_or_none()
+    value = row.value if row else None
+    active = (
+        await s.execute(select(func.count()).select_from(StrategyRun).where(StrategyRun.status.in_(RUN_ACTIVE)))
+    ).scalar_one()
+    beat = (await s.execute(select(func.max(StrategyRun.heartbeat_at)))).scalar_one()
+    return EngineStatus(
+        trading_halted=bool(value),
+        halt_reason=value.get("reason") if isinstance(value, dict) else None,
+        active_runs=int(active),
+        last_heartbeat=beat,
+    )
+
+
+@router.get("/engine", response_model=EngineStatus)
+async def engine_status(_: Admin, db: DbDep) -> EngineStatus:
+    async with db.system_session() as s:
+        return await _engine_status(s)
+
+
+@router.put("/engine/halt", response_model=EngineStatus)
+async def set_halt(body: TradingHaltIn, admin: Admin, db: DbDep, request: Request) -> EngineStatus:
+    """Platform kill switch: squares off every running strategy of every user and blocks new entries until lifted."""
+    async with db.system_session() as s:
+        row = (await s.execute(select(PlatformSetting).where(PlatformSetting.key == HALT_KEY))).scalar_one_or_none()
+        if row is None:
+            row = PlatformSetting(key=HALT_KEY, value=False)
+            s.add(row)
+        row.value = {"reason": body.reason or "halted by an admin"} if body.halted else False
+        row.updated_by = admin.user_id
+        await s.flush()
+        await audit(s, request, "admin.engine.halt", admin.user_id, "platform_setting", HALT_KEY, actor="admin",
+                    halted=body.halted, reason=body.reason)  # fmt: skip
+        return await _engine_status(s)
+
+
+@router.get("/runs", response_model=list[AdminRunOut])
+async def all_runs(
+    _: Admin, db: DbDep, active: bool = True, limit: int = Query(100, ge=1, le=500)
+) -> list[AdminRunOut]:
+    from .runs import run_out
+
+    q = (
+        select(StrategyRun, User.email)
+        .join(User, User.id == StrategyRun.user_id)
+        .where(StrategyRun.status.in_(RUN_ACTIVE) if active else StrategyRun.status.not_in(RUN_ACTIVE))
+        .order_by(StrategyRun.created_at.desc())
+        .limit(limit)
+    )
+    async with db.system_session() as s:
+        rows = (await s.execute(q)).all()
+        opens = dict(
+            (
+                await s.execute(
+                    select(Trade.run_id, func.count())
+                    .where(Trade.run_id.in_([r.id for r, _ in rows]), Trade.status == "open")
+                    .group_by(Trade.run_id)
+                )
+            ).all()
+        )
+        return [
+            AdminRunOut(**run_out(r, int(opens.get(r.id, 0))).model_dump(), user_id=r.user_id, user_email=email)
+            for r, email in rows
+        ]
