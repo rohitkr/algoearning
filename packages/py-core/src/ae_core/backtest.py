@@ -207,6 +207,7 @@ def simulate(
             )
 
     pending_charges: dict[str, float] = {}
+    noted: dict[str, int] = {}
     for day in days:
         spot = history.spot(u, day)
         if not spot:
@@ -235,9 +236,11 @@ def simulate(
             for k in keys:
                 prices.close(k, now)
             for note in runner.notes:
-                if note["event"] in ("no_trade_day", "no_expiry", "order_not_placed") and len(result.warnings) < 20:
-                    result.warnings.append(f"{day}: {note['event'].replace('_', ' ')} {note.get('reason', '')}".strip())
+                if note["event"] in _NOTED:
+                    noted[note["event"]] = noted.get(note["event"], 0) + 1
             runner.notes.clear()
+    for event, n in noted.items():
+        result.warnings.append(f"{n} time(s): {_NOTED[event]}")
     if result.days_without_options:
         result.warnings.insert(
             0,
@@ -291,6 +294,7 @@ def _extremes(runner: Runner, m: Market, prices: _Prices, now: datetime, fill: A
     for intent in runner.step(m2):
         if intent.kind != "exit" or (intent.reason not in _TRIGGERED and not intent.reason.startswith("strategy")):
             runner.reject(intent, "decided again next minute")
+            runner.notes.pop()  # an internal retry, not something to tell the user
             continue
         pos = runner.position(intent.position_id)
         opened = m.price(intent.contract)
@@ -316,6 +320,13 @@ def _extremes(runner: Runner, m: Market, prices: _Prices, now: datetime, fill: A
 
 
 _TRIGGERED = ("stop-loss", "target")
+# runner notes worth telling the user about, counted (not listed per day), with their plain meaning
+_NOTED = {
+    "no_trade_day": "a day was skipped: too few index bars in the strategy's range window",
+    "no_expiry": "a signal was skipped: no listed expiry after that day in the data",
+    "order_not_placed": "an order could not be placed: the contract had no price in the data",
+    "no_price_for_entry": "a breakout was skipped: no price for its contracts within 5 minutes",
+}
 
 
 def summarize_result(r: BacktestResult) -> dict[str, Any]:

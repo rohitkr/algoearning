@@ -346,3 +346,29 @@ def test_risk_checks() -> None:
     assert "entries today" in (check_entry(e, ctx(settings=RiskSettings(max_trades_per_day=3), entries_today=3)) or "")
     assert "plan" in (check_entry(e, ctx(max_lots_per_order=1)) or "")
     assert check_entry(x, ctx(platform_halted=True)) is None  # exits are never blocked
+
+
+def test_range_breakout_waits_for_prices_of_freshly_chosen_contracts() -> None:
+    """Regression: the contracts are only known at the breakout, so the feed cannot be streaming them yet. The signal
+    must be kept until their prices arrive, not rejected (which lost every breakout in live and paper trading)."""
+    day = date(2026, 10, 1)
+    r = make_runner(parse({"kind": "range_breakout", "hedge_width": 300}))
+    assert isinstance(r, RangeBreakoutRunner)
+    sim = Sim(r, day=day)
+    sim.bars = bars(day, "09:15", 120, 24950, 25050)
+    brk = B(datetime.combine(day, time(11, 20), tzinfo=IST), 25040, 25080, 25030, 25070)
+    sim.bars.append(brk)
+    short, wing = c(25150, "PE", date(2026, 10, 6)), c(24850, "PE", date(2026, 10, 6))
+    m = sim.market("11:21")
+    assert r.step(m) == []  # no prices yet: nothing is ordered and nothing is lost
+    assert {short, wing} <= r.wanted(m)  # the engine now asks the feed for them
+    assert r.notes[-1]["event"] == "waiting_for_prices"
+    sim.prices = {short: 180.0, wing: 30.0}
+    out = sim.at("11:22")
+    assert [(i.kind, i.side) for i in out] == [("entry", "BUY"), ("entry", "SELL")]
+    assert r.s["pending_entry"] is None
+    late = Sim(make_runner(parse({"kind": "range_breakout"})), day=day)
+    late.bars = [*bars(day, "09:15", 120, 24950, 25050), brk]
+    late.at("11:21")
+    late.at("11:27")  # still no prices after more than 5 minutes: the breakout is skipped, with a reason
+    assert late.r.notes[-1]["event"] == "no_price_for_entry"

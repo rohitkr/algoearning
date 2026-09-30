@@ -7,7 +7,7 @@ history. Their state is plain JSON (`state()`), stored on the run after every st
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from ..strategy import AnyConfig, Leg, RangeBreakoutConfig, TimeBasedConfig, ZeroDteConfig
@@ -364,7 +364,7 @@ class RangeBreakoutRunner(Runner):
         return rules.at(day, self.cfg.exit_time, IST)
 
     def step(self, m: Market) -> list[Intent]:
-        out: list[Intent] = []
+        out: list[Intent] = self._pending_entry(m)
         bars = [b for b in m.spot_bars if not self.s.get("cursor") or b.ts.isoformat() > self.s["cursor"]]
         for bar in bars:
             out += self._on_bar(bar.ts, float(bar.close), m)
@@ -443,7 +443,31 @@ class RangeBreakoutRunner(Runner):
                 m.underlying, expiry, rules.wing_strike(strike, right, cfg.hedge_width), right
             ).key
         info = {"right": right, "orig_spot": close, "final": self._final(ts.date(), expiry).isoformat()}
+        if any(m.price(k) is None for k in contracts.values()):
+            # the contracts were only just chosen, so the feed is not streaming them yet: ask for them and enter as
+            # soon as their prices arrive (the breakout signal is kept, not lost)
+            self.s["pending_entry"] = {"contracts": contracts, "info": info, "close": close, "ts": m.now.isoformat()}
+            self.note("waiting_for_prices", signal=direction, contracts=sorted(contracts.values()))
+            return out
         return out + self._open(m, ts, close, contracts, info, reentry=False)
+
+    def _pending_entry(self, m: Market) -> list[Intent]:
+        """Enter a breakout whose contracts had no price yet, once they have one (give up after 5 minutes)."""
+        pe = self.s.get("pending_entry")
+        if not pe:
+            return []
+        if self.s.get("pos"):
+            self.s["pending_entry"] = None
+            return []
+        if all(m.price(k) is not None for k in pe["contracts"].values()):
+            self.s["pending_entry"] = None
+            return self._open(m, m.now, pe["close"], pe["contracts"], pe["info"], reentry=False)
+        if m.now - datetime.fromisoformat(pe["ts"]) > timedelta(minutes=5):
+            self.s["pending_entry"] = None
+            self.note(
+                "no_price_for_entry", reason="no price for the contracts within 5 minutes: the breakout was skipped"
+            )
+        return []
 
     def _open(
         self, m: Market, ts: datetime, spot: float, contracts: dict[str, str], info: dict[str, Any], reentry: bool
@@ -467,7 +491,7 @@ class RangeBreakoutRunner(Runner):
 
     def wanted(self, m: Market) -> set[str]:
         keys = super().wanted(m)
-        for p in (self.s.get("pos"), self.s.get("waiting")):
+        for p in (self.s.get("pos"), self.s.get("waiting"), self.s.get("pending_entry")):
             if p:
                 keys |= set(p["contracts"].values())
         return keys
