@@ -82,6 +82,52 @@
     color: var(--foreground);
     font-family: var(--font-sans);
   }
+  /* Cursors, one rule for the whole app (Tailwind v4 leaves buttons on the default arrow): everything you can click
+     shows a pointer, and everything disabled shows "not allowed". Text fields keep their text cursor. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="switch"]:not(:disabled),
+  [role="radio"]:not(:disabled),
+  [role="menuitem"],
+  a[href],
+  summary,
+  select:not(:disabled),
+  input:is(
+      [type="checkbox"],
+      [type="radio"],
+      [type="date"],
+      [type="time"],
+      [type="datetime-local"],
+      [type="month"],
+      [type="week"],
+      [type="color"],
+      [type="file"],
+      [type="range"],
+      [type="submit"],
+      [type="button"]
+    ):not(:disabled),
+  label:has(> input:is([type="checkbox"], [type="radio"]):not(:disabled)) {
+    cursor: pointer;
+  }
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  [role="switch"]:disabled,
+  [role="radio"]:disabled,
+  select:disabled,
+  input:disabled,
+  label:has(> input:disabled) {
+    cursor: not-allowed;
+  }
+  input:is(
+      [type="date"],
+      [type="time"],
+      [type="datetime-local"],
+      [type="month"],
+      [type="week"]
+    )::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+  }
   :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;

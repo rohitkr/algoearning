@@ -90,9 +90,10 @@ export function MarketDataPanel({ data, redirectToken }: { data: MarketDataAdmin
           {data.login_url ? (
             <>
               <p className="text-sm text-muted">
-                Log in with the platform&apos;s ICICI Direct account once each trading day. If the Breeze
-                app&apos;s redirect URL is this page, the session is saved automatically; otherwise paste the{" "}
-                <code>apisession</code> value from the address ICICI sends you to.
+                Log in with the platform&apos;s ICICI Direct account once each trading day. ICICI sends you
+                back to this app and the session is saved automatically (the Breeze app&apos;s redirect URL is
+                the app&apos;s address, e.g. http://localhost:3000). If it ever lands somewhere else, paste
+                the <code>apisession</code> value below.
               </p>
               <Button asChild variant="secondary" className="w-fit">
                 <a href={data.login_url} target="_blank" rel="noreferrer">

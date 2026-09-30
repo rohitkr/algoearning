@@ -8,7 +8,17 @@ import { NextResponse } from "next/server";
 // Monitor (the admin panel) also answers on its own host, e.g. monitor.algoearning.com: its home page is the
 // panel, and every other path (the panel's own /monitor/... links, sign-in) works as on the main host. Admin
 // access is still checked by the panel and by the API; the host only changes the front door.
+// ICICI's Breeze login redirects the browser to the app's root with ?apisession=<token> (the Redirect URL registered
+// for the Breeze app). Forward it to Monitor's market-data page, which saves the session, removes the token from
+// the address bar and confirms. If the admin is signed out, Clerk's sign-in returns to that same URL afterwards.
 export default clerkMiddleware((_auth, req) => {
+  const token = req.nextUrl.searchParams.get("apisession");
+  if (token && req.nextUrl.pathname !== "/monitor/market-data") {
+    const url = req.nextUrl.clone();
+    url.pathname = "/monitor/market-data";
+    url.search = `?apisession=${encodeURIComponent(token)}`;
+    return NextResponse.redirect(url);
+  }
   const host = req.headers.get("host") ?? "";
   if (host.startsWith("monitor.") && req.nextUrl.pathname === "/") {
     const url = req.nextUrl.clone();
