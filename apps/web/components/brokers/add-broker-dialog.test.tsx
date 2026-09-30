@@ -54,6 +54,16 @@ describe("AddBrokerDialog", () => {
     expect((screen.getByLabelText("Client ID") as HTMLInputElement).value).toBe(""); // form reset for next time
   });
 
+  it("has no password field, so the browser does not offer to save the API secret as a password", () => {
+    const { container } = render(<AddBrokerDialog open onClose={vi.fn()} catalog={CATALOG} />);
+    expect(container.querySelectorAll('input[type="password"]')).toHaveLength(0);
+    const secret = screen.getByLabelText(/API secret/) as HTMLInputElement;
+    expect(secret.className).toContain("[-webkit-text-security:disc]"); // masked while typing
+    expect(secret.getAttribute("autocomplete")).toBe("off");
+    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+    expect(secret.className).not.toContain("text-security");
+  });
+
   it("shows the API's message when adding fails", async () => {
     const body = {
       error: { code: "conflict", message: "this broker account is already added", details: null },

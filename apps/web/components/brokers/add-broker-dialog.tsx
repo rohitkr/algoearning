@@ -10,6 +10,19 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { ApiRequestError, apiPost } from "@/lib/client-api";
 
+// Browsers offer to save any submitted <input type="password"> as a website password (autocomplete="off" does not
+// stop Chrome). These are API credentials, not a login: plain text fields, masked with CSS until "Show", and marked
+// for password managers to ignore.
+const NOT_A_LOGIN = {
+  autoComplete: "off",
+  autoCorrect: "off",
+  autoCapitalize: "off",
+  spellCheck: false,
+  "data-1p-ignore": "true",
+  "data-lpignore": "true",
+  "data-bwignore": "true",
+} as const;
+
 const input =
   "h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary";
 
@@ -31,6 +44,7 @@ export function AddBrokerDialog({
   const [error, setError] = useState<{ text: string; upgrade?: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
   const info = catalog.find((b) => b.code === broker);
 
   useEffect(() => {
@@ -59,6 +73,7 @@ export function AddBrokerDialog({
         getToken,
       );
       form.reset();
+      setShowSecret(false);
       onClose();
       router.refresh();
     } catch (err) {
@@ -121,6 +136,7 @@ export function AddBrokerDialog({
             Client ID
             <input
               name="client_id"
+              {...NOT_A_LOGIN}
               required
               minLength={2}
               maxLength={40}
@@ -130,16 +146,40 @@ export function AddBrokerDialog({
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
             Label (optional)
-            <input name="label" maxLength={80} className={input} placeholder="Main account" />
+            <input
+              name="label"
+              {...NOT_A_LOGIN}
+              maxLength={80}
+              className={input}
+              placeholder="Main account"
+            />
           </label>
         </div>
         <label className="flex flex-col gap-1.5 text-sm">
           API key
-          <input name="api_key" required minLength={4} maxLength={200} className={input} />
+          <input name="api_key" {...NOT_A_LOGIN} required minLength={4} maxLength={200} className={input} />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
           API secret
-          <input name="api_secret" type="password" required minLength={4} maxLength={200} className={input} />
+          <span className="flex gap-2">
+            <input
+              name="api_secret"
+              type="text"
+              {...NOT_A_LOGIN}
+              required
+              minLength={4}
+              maxLength={200}
+              className={`${input} ${showSecret ? "" : "[-webkit-text-security:disc]"}`}
+            />
+            <Button
+              size="md"
+              variant="secondary"
+              onClick={() => setShowSecret((v) => !v)}
+              aria-pressed={showSecret}
+            >
+              {showSecret ? "Hide" : "Show"}
+            </Button>
+          </span>
           <span className="text-xs text-muted">
             Encrypted on our server. It is never shown again, even to you.
           </span>
