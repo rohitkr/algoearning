@@ -78,10 +78,14 @@ version = "0.1.0"
 source = { editable = "packages/py-core" }
 dependencies = [
     { name = "cryptography" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "cryptography", specifier = ">=44" }]
+requires-dist = [
+    { name = "cryptography", specifier = ">=44" },
+    { name = "pydantic", specifier = ">=2.13" },
+]
 
 [[package]]
 name = "ae-db"

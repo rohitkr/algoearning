@@ -8,10 +8,11 @@ that is two independent layers keeping users apart.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any, ClassVar, Generic, TypeVar, cast
 
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import ColumnElement, Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .enums import RunStatus, UserStatus
@@ -41,9 +42,11 @@ class UserScopedRepo(Generic[M]):
         res = await self.s.execute(self._q().where(self.model.id == id_))
         return cast("M | None", res.scalar_one_or_none())
 
-    async def list(self, cursor: str | None = None, limit: int | None = None) -> Page[M]:
+    async def list(
+        self, cursor: str | None = None, limit: int | None = None, filters: Sequence[ColumnElement[bool]] = ()
+    ) -> Page[M]:
         n = clamp_limit(limit)
-        q = self._q().order_by(self.model.created_at.desc(), self.model.id.desc()).limit(n + 1)
+        q = self._q().where(*filters).order_by(self.model.created_at.desc(), self.model.id.desc()).limit(n + 1)
         if cursor:
             ts, id_ = decode_cursor(cursor)
             q = q.where(or_(self.model.created_at < ts, and_(self.model.created_at == ts, self.model.id < id_)))
@@ -100,6 +103,7 @@ class StrategyRepo(UserScopedRepo[Strategy]):
             description=src.description,
             kind=src.kind,
             config=dict(src.config),
+            schema_version=src.schema_version,
             status=src.status,
         )
 

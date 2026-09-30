@@ -205,9 +205,10 @@ class Strategy(UUIDPk, Timestamps, Base):
     user_id: Mapped[uuid.UUID] = owner()
     name: Mapped[str] = mapped_column(String(120))
     description: Mapped[str | None] = mapped_column(Text)
-    kind: Mapped[str] = mapped_column(String(40), default="options_multileg")
-    config: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)  # legs, SL/TP, timing, exits
-    version: Mapped[int] = mapped_column(Integer, default=1)
+    kind: Mapped[str] = mapped_column(String(40), default="time_based")  # mirrors config["kind"]
+    config: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)  # ae_core.strategy (ADR 0010)
+    schema_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")  # config's shape
+    version: Mapped[int] = mapped_column(Integer, default=1)  # bumped on every config change
     status: Mapped[StrategyStatus] = mapped_column(
         enum_col(StrategyStatus, "strategy_status"), default=StrategyStatus.DRAFT
     )
