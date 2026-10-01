@@ -11,7 +11,9 @@ import { NextResponse } from "next/server";
 // ICICI's Breeze login redirects the browser to the app's root with ?apisession=<token> (the Redirect URL registered
 // for the Breeze app). Forward it to Monitor's market-data page, which saves the session, removes the token from
 // the address bar and confirms. If the admin is signed out, Clerk's sign-in returns to that same URL afterwards.
-export default clerkMiddleware((_auth, req) => {
+// "/" is the dashboard for a signed-in user and the landing page (apps/landing, copied to public/landing.html by
+// scripts/sync-landing.mjs) for everyone else, so app.algoearning.com and algoearning.com show the same page.
+export default clerkMiddleware(async (auth, req) => {
   const token = req.nextUrl.searchParams.get("apisession");
   if (token && req.nextUrl.pathname !== "/monitor/market-data") {
     const url = req.nextUrl.clone();
@@ -19,12 +21,18 @@ export default clerkMiddleware((_auth, req) => {
     url.search = `?apisession=${encodeURIComponent(token)}`;
     return NextResponse.redirect(url);
   }
-  const host = req.headers.get("host") ?? "";
-  if (host.startsWith("monitor.") && req.nextUrl.pathname === "/") {
-    const url = req.nextUrl.clone();
+  if (req.nextUrl.pathname !== "/") return;
+  const url = req.nextUrl.clone();
+  if ((req.headers.get("host") ?? "").startsWith("monitor.")) {
     url.pathname = "/monitor";
     return NextResponse.rewrite(url);
   }
+  if ((await auth()).userId) {
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
+  }
+  url.pathname = "/landing.html";
+  return NextResponse.rewrite(url);
 });
 
 export const config = {

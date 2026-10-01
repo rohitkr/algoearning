@@ -159,6 +159,7 @@ prefix() { # prefix every line of a process's output, unbuffered
 ( uv run --env-file .env uvicorn ae_api.main:app --reload --port "$API_PORT" \
     --reload-dir apps/api/src --reload-dir packages 2>&1 | prefix "${magenta}api ${reset}│ " ) &
 pids+=($!)
+node apps/web/scripts/sync-landing.mjs  # the signed-out home page comes from apps/landing
 ( pnpm --filter @algoearning/web exec next dev --port "$WEB_PORT" 2>&1 | prefix "${blue}web ${reset}│ " ) &
 pids+=($!)
 # the platform price feed: Breeze when BREEZE_API_KEY/SECRET are set in .env, simulated prices otherwise

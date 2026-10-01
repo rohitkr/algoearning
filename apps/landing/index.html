@@ -23,14 +23,18 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="landing.css" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
 
     <header class="nav">
       <div class="container nav-inner">
-        <a class="brand" href="#top" aria-label="AlgoEarning home">
+        <a
+          class="brand"
+          href="https://app.algoearning.com/dashboard"
+          aria-label="AlgoEarning: go to the dashboard"
+        >
           <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
               <path d="M3 17l6-6 4 4 8-8" stroke-linecap="round" stroke-linejoin="round" />
@@ -45,7 +49,7 @@
           <a href="#safety">Safety</a>
         </nav>
         <div class="nav-cta">
-          <a class="btn btn-ghost" href="https://app.algoearning.com/sign-in">Sign in</a>
+          <a class="btn btn-ghost" href="https://app.algoearning.com/dashboard">Sign in</a>
           <a class="btn btn-primary" href="https://app.algoearning.com/sign-up">Get started</a>
         </div>
       </div>
@@ -293,7 +297,11 @@
     <footer class="footer">
       <div class="container footer-inner">
         <div>
-          <a class="brand" href="#top">
+          <a
+            class="brand"
+            href="https://app.algoearning.com/dashboard"
+            aria-label="AlgoEarning: go to the dashboard"
+          >
             <span class="brand-mark" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
                 <path d="M3 17l6-6 4 4 8-8" stroke-linecap="round" stroke-linejoin="round" />
@@ -313,6 +321,13 @@
     </footer>
     <script>
       document.getElementById("year").textContent = new Date().getFullYear();
+      // The same page is the home page of app.algoearning.com (and localhost in development): there, keep links on
+      // the current host instead of sending the visitor to production.
+      if (!/^(www\.)?algoearning\.com$/.test(location.hostname)) {
+        for (const a of document.querySelectorAll('a[href^="https://app.algoearning.com/"]')) {
+          a.href = a.href.replace("https://app.algoearning.com", "");
+        }
+      }
     </script>
   </body>
 </html>

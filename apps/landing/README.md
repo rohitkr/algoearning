@@ -1,8 +1,13 @@
 # Landing page (algoearning.com)
 
-A static page: `index.html`, `styles.css`, `favicon.svg`, `robots.txt`. It has no build step and no
+A static page: `index.html`, `landing.css`, `favicon.svg`, `robots.txt`. It has no build step and no
 dependencies, so it stays up even when the Mac that runs the app (`app.algoearning.com`) is asleep. Its buttons go
-to `https://app.algoearning.com/sign-in` and `/sign-up`.
+to `https://app.algoearning.com/dashboard` and `/sign-up`.
+
+The same page is also the home page of `app.algoearning.com` for signed-out visitors. The web app copies these
+files into `apps/web/public` when it builds (`apps/web/scripts/sync-landing.mjs`), so a change here appears there
+after the next `scripts/home-host.sh deploy`. On any host other than algoearning.com, the page's script keeps its
+links on the current host.
 
 Preview it locally:
 
