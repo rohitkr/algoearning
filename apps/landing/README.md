@@ -15,6 +15,9 @@ Preview it locally:
 python3 -m http.server 4000 -d apps/landing    # then open http://localhost:4000
 ```
 
+Themes: dark by default, with a dark / light / system switch in the header. The choice is kept in `localStorage`
+under `theme`, the same key the app uses, so the two stay in step on app.algoearning.com.
+
 ## Deploy on Render (where algoearning.com already points)
 
 1. In Render, click **New > Static Site** and connect the `rohitkr/algoearning` repository.
