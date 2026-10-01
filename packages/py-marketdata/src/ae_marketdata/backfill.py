@@ -325,6 +325,7 @@ async def backfill(
     client: BreezeHistory | None,
     buffer: int = 4,
     dry_run: bool = False,
+    index_only: bool = False,
 ) -> Report:
     """Index bars for missing weekdays, then options per the plan. With dry_run (or no client) nothing is fetched:
     the report says what would be."""
@@ -351,6 +352,8 @@ async def backfill(
             rep.stopped, rep.calls_made = str(exc), client.calls
             return rep
         days = await _index_days(db, underlying, start, end)
+    if index_only:
+        return rep
     trading = sorted(d for d, (_, _, n) in days.items() if n >= 60)
     if not trading:
         rep.notes.append("no index history in the range yet: the option plan needs it (run without --dry-run first)")

@@ -4,7 +4,7 @@
     python -m ae_worker --once                 # every job once, then exit (cron, deploy hooks)
     python -m ae_worker refresh-instruments    # one job, then exit
     uv run --with duckdb python -m ae_worker import-history ~/git/algo-trading-claude/data/market_data.duckdb
-    python -m ae_worker backfill NIFTY --from 2025-01-01 [--to 2026-09-30] [--dry-run]   # Breeze history (ADR 0018)
+    python -m ae_worker backfill NIFTY --from 2025-01-01 [--to 2026-09-30] [--dry-run] [--index-only]  # ADR 0018
     python -m ae_worker smc-report NIFTY,BANKNIFTY,SENSEX --from 2025-01-01 --out smc.json  # the 3 x 3 SMC backtests
 
 Jobs (times IST): refresh-instruments at 08:00 (Zerodha publishes the day's list before that). A plain asyncio
@@ -105,7 +105,8 @@ async def run_backfill(db: Database, args: argparse.Namespace) -> int:
         client = BreezeHistory(sdk, hub.count_api_call, hub.api_calls_today, reserve=args.reserve)
     try:
         rep = await backfill(db, code, start, end, feed_code=feed, spot_exchange=spot_ex, deriv_exchange=deriv_ex,
-                             strike_step=step, client=client, buffer=args.buffer, dry_run=args.dry_run)  # fmt: skip
+                             strike_step=step, client=client, buffer=args.buffer, dry_run=args.dry_run,
+                             index_only=args.index_only)  # fmt: skip
     finally:
         if redis is not None:
             await redis.aclose()
@@ -198,6 +199,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="backfill: plan and count calls, fetch nothing")
     ap.add_argument("--reserve", type=int, default=500, help="backfill: Breeze calls left for the live feed")
     ap.add_argument("--buffer", type=int, default=4, help="backfill: strikes beyond each day's index range")
+    ap.add_argument("--index-only", action="store_true", help="backfill: the index's candles only, no options")
     ap.add_argument("--out", help="smc-report: write the JSON report to this file")
     return asyncio.run(_main(ap.parse_args(argv)))
 
