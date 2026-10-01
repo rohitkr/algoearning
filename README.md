@@ -21,6 +21,7 @@ packages/
   py-db/        models, migrations, repositories (phase 3)
 infra/docker/   Dockerfiles + compose
 docs/adr/       architecture decision records
+docs/home-hosting.md  running production on this Mac (Cloudflare Tunnel)
 ```
 
 ## Quick start
