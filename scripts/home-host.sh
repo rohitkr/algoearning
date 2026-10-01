@@ -95,11 +95,11 @@ cmd_tunnel() {
   [ -f "$HOME/.cloudflared/cert.pem" ] || die "not logged in: run cloudflared tunnel login (pick $DOMAIN) first"
   local id
   id=$(cloudflared tunnel list --output json 2>/dev/null |
-    python3 -c "import json,sys; print(next((t['id'] for t in json.load(sys.stdin) if t['name']=='$TUNNEL_NAME'), ''))")
+    python3 -c "import json,sys; print(next((t['id'] for t in (json.load(sys.stdin) or []) if t['name']=='$TUNNEL_NAME'), ''))")
   if [ -z "$id" ]; then
     cloudflared tunnel create "$TUNNEL_NAME" >/dev/null
     id=$(cloudflared tunnel list --output json |
-      python3 -c "import json,sys; print(next(t['id'] for t in json.load(sys.stdin) if t['name']=='$TUNNEL_NAME'))")
+      python3 -c "import json,sys; print(next(t['id'] for t in (json.load(sys.stdin) or []) if t['name']=='$TUNNEL_NAME'))")
     ok "created tunnel $id"
   else
     ok "tunnel exists: $id"
