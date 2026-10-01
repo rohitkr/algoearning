@@ -2789,6 +2789,11 @@ export interface components {
              */
             displacement_atr: number;
             /**
+             * Entry Confirm
+             * @default true
+             */
+            entry_confirm: boolean;
+            /**
              * Equal Level Pct
              * @default 0.03
              */
@@ -2841,6 +2846,21 @@ export interface components {
              * @default true
              */
             premium_discount: boolean;
+            /**
+             * Require Bias
+             * @default true
+             */
+            require_bias: boolean;
+            /**
+             * Require Displacement
+             * @default true
+             */
+            require_displacement: boolean;
+            /**
+             * Require Sweep
+             * @default true
+             */
+            require_sweep: boolean;
             /**
              * Sweep Lookback
              * @default 12
@@ -2925,7 +2945,7 @@ export interface components {
              * @default 15
              * @enum {integer}
              */
-            bias: 15 | 30 | 60;
+            bias: 5 | 10 | 15 | 30 | 60;
             /**
              * Entry
              * @default 1
@@ -2937,7 +2957,7 @@ export interface components {
              * @default 5
              * @enum {integer}
              */
-            setup: 3 | 5 | 10;
+            setup: 2 | 3 | 5 | 10 | 15;
         };
         /**
          * StrategyCatalogOut

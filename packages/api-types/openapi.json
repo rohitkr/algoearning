@@ -4672,6 +4672,11 @@
             "title": "Displacement Atr",
             "type": "number"
           },
+          "entry_confirm": {
+            "default": true,
+            "title": "Entry Confirm",
+            "type": "boolean"
+          },
           "equal_level_pct": {
             "default": 0.03,
             "maximum": 0.5,
@@ -4744,6 +4749,21 @@
           "premium_discount": {
             "default": true,
             "title": "Premium Discount",
+            "type": "boolean"
+          },
+          "require_bias": {
+            "default": true,
+            "title": "Require Bias",
+            "type": "boolean"
+          },
+          "require_displacement": {
+            "default": true,
+            "title": "Require Displacement",
+            "type": "boolean"
+          },
+          "require_sweep": {
+            "default": true,
+            "title": "Require Sweep",
             "type": "boolean"
           },
           "sweep_lookback": {
@@ -4865,6 +4885,8 @@
           "bias": {
             "default": 15,
             "enum": [
+              5,
+              10,
               15,
               30,
               60
@@ -4885,9 +4907,11 @@
           "setup": {
             "default": 5,
             "enum": [
+              2,
               3,
               5,
-              10
+              10,
+              15
             ],
             "title": "Setup",
             "type": "integer"

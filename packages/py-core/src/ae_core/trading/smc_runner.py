@@ -135,10 +135,10 @@ class SmcScalpRunner(Runner):
         if not retry:
             self._count("breaks")
         bias = self._bias(m, bars)
-        if bias.trend is None or bias.streak < rl.bias_min_breaks:
+        if rl.require_bias and (bias.trend is None or bias.streak < rl.bias_min_breaks):
             self._reject("bias unclear", brk, detail=f"{tf.bias}m structure has no clear trend")
             return
-        if brk.dir != bias.trend:
+        if rl.require_bias and brk.dir != bias.trend:
             self._reject("against bias", brk, detail=f"{tf.bias}m trend is {bias.trend}")
             return
         atrs = smc.atr(sb, rl.atr_period)
@@ -150,12 +150,17 @@ class SmcScalpRunner(Runner):
             eb = smc.resample(bars, tf.entry)
             pools += smc.swing_pools(eb, smc.swings(eb, rl.swing_entry), rl.equal_level_pct, tf.entry)
         sweep = smc.find_sweep(sb, pools, k - rl.sweep_lookback, k, brk.dir, rl.sweep_min_pct, rl.sweep_reclaim)
+        if sweep is None and not rl.require_sweep:
+            # no sweep needed: the breaking leg's own extreme (its strong low / high) anchors the stop
+            origin = smc.Pool("structure low" if brk.dir == "up" else "structure high", brk.origin,
+                              brk.dir == "down", sb[brk.origin_i].ts)  # fmt: skip
+            sweep = smc.Sweep(origin, brk.origin_i, brk.origin_i, brk.origin)
         if sweep is None:
             self._reject("no liquidity sweep", brk)
             return
         disp_i = next(
             (i for i in range(sweep.i, k + 1) if smc.displacement(sb[i], atrs[i], rl.displacement_atr) == brk.dir),
-            None,
+            None if rl.require_displacement else sweep.i,
         )
         if disp_i is None:
             self._reject("no displacement", brk)
@@ -279,6 +284,11 @@ class SmcScalpRunner(Runner):
                 self.note("smc_poi_tapped", price=b.low if up else b.high)
             else:
                 return []
+        if not self.cfg.rules.entry_confirm:  # enter on the tap itself, once the candle closes back out of the zone
+            if (b.close > lo) if up else (b.close < hi):
+                setup["confirm"] = {"level": round(b.close, 2), "ts": _iso(b.ts), "kind": "tap"}
+                return self._signal(m, setup)
+            return []
         tapped = _ts(setup["tapped"])
         since_tap = [x for x in eb if x.ts >= tapped]
         if len(since_tap) > self.cfg.rules.confirm_bars:
@@ -557,6 +567,8 @@ def explain(setup: Mapping[str, Any], cfg: SmcScalpConfig) -> str:
         f"{tf.setup}m displacement ({setup['displacement']['body_atr']}x ATR) and {setup['break']['kind']} "
         f"through {setup['break']['level']}",
         f"POI {zones}" + (f" in {side} (equilibrium {setup.get('equilibrium')})" if cfg.rules.premium_discount else ""),
-        f"{tf.entry}m CHoCH through {setup['confirm']['level']} after the tap",
+        f"{tf.entry}m CHoCH through {setup['confirm']['level']} after the tap"
+        if setup["confirm"].get("kind") != "tap"
+        else f"entered on the {tf.entry}m tap of the POI (closed at {setup['confirm']['level']})",
     ]
     return " · ".join(parts)

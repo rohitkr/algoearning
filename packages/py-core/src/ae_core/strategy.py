@@ -188,8 +188,8 @@ class SmcTimeframes(_Model):
     """Minutes per candle: bias (structure, premium/discount), setup (sweep, displacement, BOS/CHoCH, OB/FVG) and
     entry (the tap and its confirmation). All are built from the index's 1-minute candles."""
 
-    bias: Literal[15, 30, 60] = 15
-    setup: Literal[3, 5, 10] = 5
+    bias: Literal[5, 10, 15, 30, 60] = 15
+    setup: Literal[2, 3, 5, 10, 15] = 5
     entry: Literal[1, 2, 3] = 1
 
 
@@ -209,6 +209,10 @@ class SmcRules(_Model):
     equal_level_pct: float = Field(default=0.03, ge=0, le=0.5)  # equal highs/lows tolerance, % of price
     opening_range_minutes: int = Field(default=15, ge=5, le=60)
     internal_liquidity: bool = True  # also count the entry timeframe's swing highs/lows as liquidity to sweep
+    require_bias: bool = True  # trade only in the direction of a clear bias
+    require_sweep: bool = True  # a liquidity sweep must precede the break (else the leg's extreme anchors the stop)
+    require_displacement: bool = True
+    entry_confirm: bool = True  # wait for an entry-timeframe CHoCH after the tap (off: enter on the tap)
     poi: Literal["fvg", "ob", "either", "both"] = "either"  # where to enter: FVG, order block, either, overlap
     ob_zone: Literal["body", "range"] = "body"
     poi_max_age: int = Field(default=24, ge=2, le=48)  # setup candles the POI waits for a tap

@@ -43,6 +43,10 @@ const RULES: Spec[] = [
     hint: "Skip when the next buy-side (longs) / sell-side (shorts) liquidity is closer" },
   { key: "premium_discount", label: "Longs only in discount, shorts only in premium", type: "bool" },
   { key: "internal_liquidity", label: "Entry-timeframe swings count as liquidity", type: "bool" },
+  { key: "require_bias", label: "Trade only with a clear bias", type: "bool" },
+  { key: "require_sweep", label: "Require a liquidity sweep before the break", type: "bool" },
+  { key: "require_displacement", label: "Require displacement", type: "bool" },
+  { key: "entry_confirm", label: "Wait for the entry CHoCH after the tap", type: "bool" },
 ]; // prettier-ignore
 
 const RISK: Spec[] = [
@@ -186,8 +190,8 @@ export function SmcParams({
         <div className="grid grid-cols-3 gap-3">
           {(
             [
-              ["bias", "Bias", [15, 30, 60]],
-              ["setup", "Setup (SMC confirmation)", [3, 5, 10]],
+              ["bias", "Bias", [5, 10, 15, 30, 60]],
+              ["setup", "Setup (SMC confirmation)", [2, 3, 5, 10, 15]],
               ["entry", "Entry", [1, 2, 3]],
             ] as const
           ).map(([k, label, choices]) => (
