@@ -158,7 +158,8 @@ class _Prices:
 
     def quote(self, key: str) -> Quote:
         """What a quote would have said at the minute's open: volume so far, last open interest (no bid/ask)."""
-        return Quote(volume=self.volume.get(key, 0), oi=self.oi.get(key))
+        # a contract with no trade yet today, or candles stored without volume, says nothing about liquidity: unknown
+        return Quote(volume=self.volume.get(key) or None, oi=self.oi.get(key))
 
     def bar(self, key: str, ts: datetime) -> Candle | None:
         if key not in self.bars:

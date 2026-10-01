@@ -94,11 +94,16 @@ shows these as signal cards.
 - It counts calls in the feed's daily counter and stops with 500 left for the live feed. It is resumable, and run
   after market hours. Migration 0012 adds a nullable `oi` column.
 
-**Validation protocol.** Defaults were set before any profit and loss was looked at. Only how often each rule
-fired was examined, on NIFTY and SENSEX June–September 2026: the first strict defaults produced no trades in four
-months. `python -m ae_worker smc-report` then runs every index × 1:2 / 1:3 / 1:4 with those defaults over the whole
-range, and reports in-sample and out-of-sample halves separately. Win rate is reported as measured; nothing is tuned
-toward a target.
+**Validation protocol.** Parameters were fixed before any profit or loss was looked at: only how often each rule
+fired was examined, on NIFTY and SENSEX June–September 2026 (the first strict defaults produced no trades in four
+months). Two profiles are evaluated, never tuned toward a result:
+
+- **strict**: the defaults above.
+- **balanced**: 3m setups, with no premium/discount or room filter.
+
+`python -m ae_worker smc-report` runs both profiles × every index × 1:2 / 1:3 / 1:4 over the whole range, and
+reports in-sample and out-of-sample halves separately. Win rate is reported as measured; nothing is tuned toward a
+target.
 
 **Not modelled.** Bid/ask in history (a modelled spread instead), limit fills, partial fills, IV changes beyond
 what option prices show, historical lot sizes, and several setups at once.

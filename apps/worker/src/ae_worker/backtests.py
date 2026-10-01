@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 import structlog
 from ae_core.backtest import BacktestResult, simulate, summarize_result
@@ -142,9 +143,17 @@ def metrics(r: BacktestResult) -> dict[str, object]:
     return {"positions": full["summary"], "signals": sig}
 
 
+# Two parameter sets, both fixed before any profit or loss was looked at (only how often rules fired, ADR 0018):
+# the strict defaults, and a balanced one with 3m setups and no premium/discount or room filter.
+SMC_PROFILES: dict[str, dict[str, object]] = {
+    "strict": {},
+    "balanced": {"timeframes": {"setup": 3}, "rules": {"premium_discount": False, "min_room_r": 0}},
+}
+
+
 async def smc_report(db: Database, underlyings: list[str], rrs: list[int], start: date, end: date) -> dict[str, object]:
-    """Every underlying x R:R with the preset parameters (fixed before any result was seen), over the whole range
-    and split chronologically 60 / 40 into in-sample and out-of-sample."""
+    """Every profile x underlying x R:R over the whole range, also split chronologically 60 / 40 into in-sample and
+    out-of-sample halves."""
     split = start + (end - start) * 6 // 10
     out: dict[str, object] = {"from": str(start), "to": str(end), "split": str(split), "runs": []}
     runs: list[dict[str, object]] = []
@@ -152,18 +161,27 @@ async def smc_report(db: Database, underlyings: list[str], rrs: list[int], start
         async with db.system_session() as s:
             inst = (await s.execute(select(Instrument).where(Instrument.code == u))).scalar_one()
             lot, step = inst.lot_size, inst.strike_step
-        for rr in rrs:
-            cfg = SmcScalpConfig.model_validate({"underlying": u, "risk": {"rr": rr}})
+        for (profile, base), rr in ((p, rr) for p in SMC_PROFILES.items() for rr in rrs):
+            raw: dict[str, Any] = {"underlying": u, **base}
+            raw["risk"] = {**dict(raw.get("risk") or {}), "rr": rr}
+            cfg = SmcScalpConfig.model_validate(raw)
             r = await replay(db, cfg, start, end, multiplier=1, lot_size=lot, strike_step=step, slippage_pct=0.05)
             runs.append({
-                "underlying": u, "rr": f"1:{rr}", "lot_size": lot,
+                "profile": profile, "underlying": u, "rr": f"1:{rr}", "lot_size": lot,
                 "days_replayed": r.days_replayed, "days_without_options": r.days_without_options,
                 "all": metrics(r),
                 "in_sample": metrics(subset(r, start, split)),
                 "out_of_sample": metrics(subset(r, split + timedelta(days=1), end)),
                 "funnel": r.funnel, "warnings": r.warnings[:10],
-                "signals": [{k: v for k, v in x.items() if k != "setup"} for x in r.signals],
+                "signals": (summarize_result(r)["signals"] or {}).get("list", []),
             })  # fmt: skip
-            log.info("smc report run", underlying=u, rr=rr, signals=len(r.signals), net=round(r.gross_pnl - r.charges))
+            log.info(
+                "smc report run",
+                profile=profile,
+                underlying=u,
+                rr=rr,
+                signals=len(r.signals),
+                net=round(r.gross_pnl - r.charges),
+            )
     out["runs"] = runs
     return out
