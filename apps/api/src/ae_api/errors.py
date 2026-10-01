@@ -35,6 +35,16 @@ class Forbidden(AppError):
     status, code = 403, "forbidden"
 
 
+CLOSED_ALPHA = "Internal Alpha Test Environment. Closed to the public."
+
+
+class RegistrationClosed(Forbidden):
+    """A sign-in we have no account for, while new accounts are refused (Settings.accepts_new_users)."""
+
+    def __init__(self) -> None:
+        super().__init__(CLOSED_ALPHA, {"reason": "registration_closed"})
+
+
 class PlanLimitReached(AppError):
     """The user's plan does not allow more of something. details: feature, limit, used, plan."""
 

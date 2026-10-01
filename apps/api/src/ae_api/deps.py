@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import Authenticator, AuthError, Identity
 from .auth.clerk import ProfileFetcher
-from .errors import Conflict, Forbidden, Unauthorized, Unavailable
+from .errors import Conflict, Forbidden, RegistrationClosed, Unauthorized, Unavailable
 
 
 @dataclass(frozen=True)
@@ -56,6 +56,8 @@ async def current_user(request: Request, db: DbDep) -> Principal:
         users = UserRepo(s)
         user = await users.by_auth_subject(identity.subject)
         if user is None:
+            if not request.app.state.settings.accepts_new_users:
+                raise RegistrationClosed()
             if identity.email is None:
                 fetch: ProfileFetcher | None = getattr(request.app.state, "fetch_profile", None)
                 if fetch is None:

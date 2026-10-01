@@ -11,9 +11,12 @@ import { NextResponse } from "next/server";
 // ICICI's Breeze login redirects the browser to the app's root with ?apisession=<token> (the Redirect URL registered
 // for the Breeze app). Forward it to Monitor's market-data page, which saves the session, removes the token from
 // the address bar and confirms. If the admin is signed out, Clerk's sign-in returns to that same URL afterwards.
-// "/" is the dashboard for a signed-in user and the landing page (apps/landing, copied to public/landing.html by
-// scripts/sync-landing.mjs) for everyone else, so app.algoearning.com and algoearning.com show the same page.
-// /dashboard sends a signed-out visitor to that landing page; /sign-in and /sign-up send a signed-in one onwards.
+// Closed alpha: "/" shows the "closed to the public" splash (apps/landing, copied to public/landing.html by
+// scripts/sync-landing.mjs) to anyone signed out, so app.algoearning.com and algoearning.com show the same page and
+// nothing links to sign-in. The team's entry is ALPHA_HOME: signed out it opens sign-in and comes back, signed in it
+// shows the dashboard. A signed-in user at "/" or a sign-in page goes there; a signed-out one at /dashboard goes "/".
+// Sign-up is closed (its page shows the banner; the API refuses accounts it doesn't already have).
+const ALPHA_HOME = "/alpha-testing-dashboard";
 export default clerkMiddleware(async (auth, req) => {
   const token = req.nextUrl.searchParams.get("apisession");
   if (token && req.nextUrl.pathname !== "/monitor/market-data") {
@@ -23,21 +26,30 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(url);
   }
   const { pathname } = req.nextUrl;
-  if (!["/", "/dashboard", "/sign-in", "/sign-up"].includes(pathname)) return;
+  if (![ALPHA_HOME, "/", "/dashboard", "/sign-in", "/sign-up"].includes(pathname)) return;
   const url = req.nextUrl.clone();
   if (pathname === "/" && (req.headers.get("host") ?? "").startsWith("monitor.")) {
     url.pathname = "/monitor";
     return NextResponse.rewrite(url);
   }
   const signedIn = Boolean((await auth()).userId);
+  if (pathname === ALPHA_HOME) {
+    if (signedIn) {
+      url.pathname = "/dashboard";
+      return NextResponse.rewrite(url);
+    }
+    url.pathname = "/sign-in";
+    url.search = `?redirect_url=${encodeURIComponent(ALPHA_HOME)}`;
+    return NextResponse.redirect(url);
+  }
   if (pathname === "/" && !signedIn) {
     url.pathname = "/landing.html";
     return NextResponse.rewrite(url);
   }
-  // signed in, "/" and the sign-in pages lead to the dashboard; signed out, the dashboard leads to the landing page.
+  // signed in, "/" and the sign-in pages lead to the dashboard; signed out, the dashboard leads to the splash.
   // Other pages still go through sign-in and back, so links from alerts keep working.
   if (signedIn === (pathname === "/dashboard")) return;
-  url.pathname = signedIn ? "/dashboard" : "/";
+  url.pathname = signedIn ? ALPHA_HOME : "/";
   url.search = "";
   return NextResponse.redirect(url);
 });

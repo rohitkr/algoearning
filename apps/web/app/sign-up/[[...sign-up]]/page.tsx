@@ -1,13 +1,15 @@
-import { SignUp } from "@clerk/nextjs";
-
 import { AuthShell } from "@/components/auth-shell";
+import { ClosedAlphaBanner } from "@/components/closed-alpha";
 
-export const metadata = { title: "Create your account" };
+export const metadata = { title: "Sign-up closed" };
 
+// Sign-up is closed during the internal alpha: only existing accounts can sign in (the API refuses new ones too).
 export default function SignUpPage() {
   return (
     <AuthShell>
-      <SignUp />
+      <div className="w-full max-w-sm">
+        <ClosedAlphaBanner />
+      </div>
     </AuthShell>
   );
 }

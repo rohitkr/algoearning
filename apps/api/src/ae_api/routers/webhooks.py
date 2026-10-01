@@ -51,7 +51,8 @@ async def clerk_webhook(request: Request, settings: SettingsDep, db: DbDep) -> d
         users = UserRepo(s)
         if etype in ("user.created", "user.updated"):
             ident = identity_from_clerk_user(data)
-            if ident.email:
+            known = await users.by_auth_subject(ident.subject) is not None
+            if ident.email and (known or settings.accepts_new_users):
                 await users.upsert_from_auth(ident.subject, ident.email, ident.name, ident.avatar_url)
         elif etype == "user.deleted" and data.get("id"):
             await users.mark_deleted(str(data["id"]))

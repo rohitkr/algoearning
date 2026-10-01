@@ -3,23 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AlgoEarning · Algo trading for Indian options</title>
-    <meta
-      name="description"
-      content="Build options strategies, test them on real market history and on paper, then run them on your own Zerodha account with stop-losses, daily limits and a kill switch."
-    />
+    <title>AlgoEarning</title>
+    <meta name="description" content="Internal Alpha Test Environment. Closed to the public." />
+    <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#0b0c10" />
     <meta name="color-scheme" content="dark light" />
-    <meta property="og:title" content="AlgoEarning · Algo trading for Indian options" />
-    <meta
-      property="og:description"
-      content="Strategy builder, backtests on real history, paper trading and live execution on your own Zerodha account."
-    />
-    <meta property="og:url" content="https://algoearning.com/" />
-    <meta property="og:type" content="website" />
     <script>
       // Theme before first paint: the visitor's choice ("dark" | "light" | "system", same key as the app's theme
-      // switch), dark when there is none. data-choice picks the switch's icon, data-theme the colours.
+      // switch), dark when there is none. data-choice picks the switch's label, data-theme the colours.
       (function () {
         var choice = "dark";
         try {
@@ -32,352 +23,26 @@
       })();
     </script>
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"
-      rel="stylesheet"
-    />
     <link rel="stylesheet" href="landing.css" />
   </head>
   <body>
-    <a class="skip" href="#main">Skip to content</a>
-
-    <header class="nav">
-      <div class="container nav-inner">
-        <a
-          class="brand"
-          href="https://app.algoearning.com/dashboard"
-          aria-label="AlgoEarning: go to the dashboard"
-        >
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
-              <path d="M3 17l6-6 4 4 8-8" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M15 7h6v6" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </span>
-          AlgoEarning
-        </a>
-        <nav class="nav-links" aria-label="Main">
-          <a href="#features">Features</a>
-          <a href="#how">How it works</a>
-          <a href="#safety">Safety</a>
-        </nav>
-        <div class="nav-cta">
-          <button class="theme-btn" type="button" id="theme-btn" aria-label="Switch theme">
-            <svg
-              class="i-dark"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              aria-hidden="true"
-            >
-              <path
-                d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-            <svg
-              class="i-light"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="12" r="4" />
-              <path
-                d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
-                stroke-linecap="round"
-              />
-            </svg>
-            <svg
-              class="i-system"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              aria-hidden="true"
-            >
-              <rect x="3" y="4" width="18" height="12" rx="2" />
-              <path d="M8 20h8M12 16v4" stroke-linecap="round" />
-            </svg>
-          </button>
-          <a class="btn btn-ghost" href="https://app.algoearning.com/sign-in">Sign in</a>
-          <a class="btn btn-primary" href="https://app.algoearning.com/sign-up">Get started</a>
-        </div>
-      </div>
-    </header>
-
-    <main id="main">
-      <section class="hero" id="top">
-        <div class="glow" aria-hidden="true"></div>
-        <div class="container hero-grid">
-          <div class="hero-copy">
-            <p class="eyebrow">
-              <span class="dot" aria-hidden="true"></span> NIFTY · BANKNIFTY · SENSEX options
-            </p>
-            <h1>Your options strategies, running on <span class="grad">autopilot</span>.</h1>
-            <p class="lede">
-              Build a strategy, prove it on real market history and on paper, then let it trade on your own
-              Zerodha account. Stop-losses, daily limits and a kill switch are on from the first order.
-            </p>
-            <div class="hero-cta">
-              <a class="btn btn-primary btn-lg" href="https://app.algoearning.com/sign-up"
-                >Start on paper, free</a
-              >
-              <a class="btn btn-ghost btn-lg" href="#how">See how it works</a>
-            </div>
-            <ul class="hero-points">
-              <li>Your broker, your money: we never hold funds</li>
-              <li>Paper trading before anything goes live</li>
-            </ul>
-          </div>
-
-          <div class="mock" aria-label="Example of the AlgoEarning dashboard" role="img">
-            <div class="mock-bar">
-              <span></span><span></span><span></span>
-              <p>app.algoearning.com/dashboard</p>
-            </div>
-            <div class="mock-body">
-              <div class="mock-ticker">
-                <span>NIFTY <b>25,184.30</b> <i class="up">+0.42%</i></span>
-                <span>BANKNIFTY <b>56,412.85</b> <i class="up">+0.31%</i></span>
-                <span>SENSEX <b>82,306.10</b> <i class="down">−0.08%</i></span>
-              </div>
-              <div class="mock-row">
-                <div class="mock-card mock-pnl">
-                  <p class="mock-label">Today&rsquo;s P&amp;L</p>
-                  <p class="mock-big">+₹4,820</p>
-                  <svg viewBox="0 0 200 56" preserveAspectRatio="none" aria-hidden="true">
-                    <defs>
-                      <linearGradient id="spark" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0" stop-color="#34c46a" stop-opacity=".35" />
-                        <stop offset="1" stop-color="#34c46a" stop-opacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <path
-                      d="M0 46 L18 42 L34 44 L52 34 L70 36 L88 26 L106 30 L124 20 L142 22 L160 12 L180 15 L200 6 L200 56 L0 56 Z"
-                      fill="url(#spark)"
-                    />
-                    <path
-                      d="M0 46 L18 42 L34 44 L52 34 L70 36 L88 26 L106 30 L124 20 L142 22 L160 12 L180 15 L200 6"
-                      fill="none"
-                      stroke="#34c46a"
-                      stroke-width="2"
-                    />
-                  </svg>
-                </div>
-                <div class="mock-card">
-                  <p class="mock-label">Running</p>
-                  <p class="mock-big">3</p>
-                  <p class="mock-sub">2 paper · 1 live</p>
-                </div>
-              </div>
-              <div class="mock-card mock-list">
-                <div class="mock-item">
-                  <div>
-                    <p>Short straddle 09:20</p>
-                    <span class="pill pill-live">Live</span><span class="pill">Running</span>
-                  </div>
-                  <b class="up">+₹3,150</b>
-                </div>
-                <div class="mock-item">
-                  <div>
-                    <p>SMC scalper · BANKNIFTY</p>
-                    <span class="pill pill-paper">Paper</span><span class="pill">Waiting for setup</span>
-                  </div>
-                  <b class="up">+₹1,240</b>
-                </div>
-                <div class="mock-item">
-                  <div>
-                    <p>Opening range breakout</p>
-                    <span class="pill pill-paper">Paper</span><span class="pill">Stop-loss hit</span>
-                  </div>
-                  <b class="down">−₹570</b>
-                </div>
-              </div>
-            </div>
-            <p class="mock-note">Illustration. Figures are examples, not results.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="strip" aria-label="Built on">
-        <div class="container strip-inner">
-          <span>Orders on <b>Zerodha Kite</b></span>
-          <span>Market data from <b>ICICI Breeze</b></span>
-          <span><b>Encrypted</b> broker keys</span>
-          <span>Alerts on <b>Telegram</b> &amp; email</span>
-        </div>
-      </section>
-
-      <section class="section" id="features">
-        <div class="container">
-          <p class="kicker">Features</p>
-          <h2>Everything from idea to live order, in one place</h2>
-          <div class="grid">
-            <article class="card">
-              <div class="icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M4 5h7v6H4zM13 5h7v14h-7zM4 13h7v6H4z" /></svg>
-              </div>
-              <h3>Strategy builder</h3>
-              <p>
-                Multi-leg options strategies with strikes picked by distance from ATM or by premium. Add
-                per-leg stop-losses, targets, trailing and re-entries. No code needed.
-              </p>
-            </article>
-            <article class="card">
-              <div class="icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6" /></svg>
-              </div>
-              <h3>Backtests on real history</h3>
-              <p>
-                Replay a strategy over stored index and option candles, using the same code that trades live.
-                You get the full trade list, daily P&amp;L and drawdown.
-              </p>
-            </article>
-            <article class="card">
-              <div class="icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M12 3v18M5 8h11a3 3 0 010 6H8a3 3 0 000 6h11" /></svg>
-              </div>
-              <h3>Paper first, then live</h3>
-              <p>
-                Every strategy runs on live prices with simulated fills first. When you trust it, switch it to
-                your Zerodha account with one click.
-              </p>
-            </article>
-            <article class="card">
-              <div class="icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6z" /></svg>
-              </div>
-              <h3>SMC options scalper</h3>
-              <p>
-                Smart Money Concepts turned into objective rules: market structure, liquidity sweeps and
-                displacement. It buys calls or puts, intraday only.
-              </p>
-            </article>
-            <article class="card">
-              <div class="icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /></svg>
-              </div>
-              <h3>Risk controls built in</h3>
-              <p>
-                Daily loss and profit limits, square-off times, position reconciliation with your broker, and
-                a kill switch that closes everything.
-              </p>
-            </article>
-            <article class="card">
-              <div class="icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1112 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4" /></svg>
-              </div>
-              <h3>Alerts where you are</h3>
-              <p>
-                Entries, exits, stop-losses, failed orders and broker logins, sent to Telegram or email. You
-                choose which.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section section-alt" id="how">
-        <div class="container">
-          <p class="kicker">How it works</p>
-          <h2>Three steps to your first automated trade</h2>
-          <ol class="steps">
-            <li>
-              <span class="step-n">1</span>
-              <h3>Connect Zerodha</h3>
-              <p>
-                Add your Kite Connect API key once. It is encrypted at rest and never shown again. Each
-                morning you log in to Zerodha, as usual.
-              </p>
-            </li>
-            <li>
-              <span class="step-n">2</span>
-              <h3>Build and test</h3>
-              <p>Start from a template or build your own. Backtest it on history, then run it on paper.</p>
-            </li>
-            <li>
-              <span class="step-n">3</span>
-              <h3>Go live</h3>
-              <p>
-                Deploy on your account. Watch positions and P&amp;L live, and stop any strategy at any time.
-              </p>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section class="section" id="safety">
-        <div class="container safety">
-          <div>
-            <p class="kicker">Safety</p>
-            <h2>Built so a bad day stays a small one</h2>
-            <p class="lede">
-              Automation should make trading calmer, not riskier. These guardrails are part of the platform
-              and can&rsquo;t be skipped.
-            </p>
-          </div>
-          <ul class="checks">
-            <li>
-              <b>Your money stays with your broker.</b> AlgoEarning places orders; it never holds funds.
-            </li>
-            <li>
-              <b>Every order is placed only once.</b> Orders are tagged and tracked, so a retry never
-              duplicates a position.
-            </li>
-            <li><b>Positions are checked against Zerodha.</b> A mismatch alerts you immediately.</li>
-            <li>
-              <b>Limits apply per strategy and per day.</b> A breach squares off and stops the strategy.
-            </li>
-            <li>
-              <b>Your data is walled off.</b> The database itself keeps every user&rsquo;s data private.
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section class="cta">
-        <div class="container cta-inner">
-          <h2>Try your strategy on paper today</h2>
-          <p>Free to start. No broker needed until you go live.</p>
-          <a class="btn btn-primary btn-lg" href="https://app.algoearning.com/sign-up">Create your account</a>
-        </div>
-      </section>
+    <button id="theme-btn" class="theme" type="button" aria-label="Dark theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <circle cx="12" cy="12" r="5" />
+        <path d="M12 1v3M12 20v3M1 12h3M20 12h3" stroke-linecap="round" />
+      </svg>
+    </button>
+    <main class="splash">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+          <path d="M3 17l6-6 4 4 8-8" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M15 7h6v6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </span>
+      <h1>AlgoEarning</h1>
+      <p>Internal Alpha Test Environment. Closed to the public.</p>
     </main>
-
-    <footer class="footer">
-      <div class="container footer-inner">
-        <div>
-          <a
-            class="brand"
-            href="https://app.algoearning.com/dashboard"
-            aria-label="AlgoEarning: go to the dashboard"
-          >
-            <span class="brand-mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
-                <path d="M3 17l6-6 4 4 8-8" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M15 7h6v6" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </span>
-            AlgoEarning
-          </a>
-          <p class="fine">© <span id="year">2026</span> AlgoEarning</p>
-        </div>
-        <p class="fine disclaimer">
-          Trading in derivatives carries a high risk of loss. AlgoEarning is software for building and running
-          your own strategies. It does not give investment advice or recommendations. Past or backtested
-          performance does not guarantee future results.
-        </p>
-      </div>
-    </footer>
     <script>
-      document.getElementById("year").textContent = new Date().getFullYear();
-
       // the theme switch cycles dark -> light -> system and remembers the choice in this browser
       (function () {
         var order = ["dark", "light", "system"];
@@ -404,13 +69,6 @@
           if (root.dataset.choice === "system") apply("system");
         });
       })();
-      // The same page is the home page of app.algoearning.com (and localhost in development): there, keep links on
-      // the current host instead of sending the visitor to production.
-      if (!/^(www\.)?algoearning\.com$/.test(location.hostname)) {
-        for (const a of document.querySelectorAll('a[href^="https://app.algoearning.com/"]')) {
-          a.href = a.href.replace("https://app.algoearning.com", "");
-        }
-      }
     </script>
   </body>
 </html>

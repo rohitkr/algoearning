@@ -20,14 +20,29 @@ describe("proxy", () => {
     expect(r.headers.get("location")).toBe("http://localhost:3000/monitor/market-data?apisession=57212559");
   });
 
-  it("sends a signed-in user from / to the dashboard", async () => {
+  it("sends a signed-in user from / to the alpha dashboard", async () => {
     await import("./proxy");
     const r = (await handler(signedIn, req("/", "app.algoearning.com"))) as Response;
     expect(r.status).toBe(307);
-    expect(r.headers.get("location")).toBe("http://app.algoearning.com/dashboard");
+    expect(r.headers.get("location")).toBe("http://app.algoearning.com/alpha-testing-dashboard");
   });
 
-  it("shows the landing page at / when signed out, keeping the address", async () => {
+  it("shows the dashboard at the alpha entry when signed in, keeping the address", async () => {
+    await import("./proxy");
+    const r = (await handler(signedIn, req("/alpha-testing-dashboard", "app.algoearning.com"))) as Response;
+    expect(r.headers.get("x-middleware-rewrite")).toBe("http://app.algoearning.com/dashboard");
+  });
+
+  it("sends a signed-out visitor at the alpha entry to sign-in and back", async () => {
+    await import("./proxy");
+    const r = (await handler(signedOut, req("/alpha-testing-dashboard", "app.algoearning.com"))) as Response;
+    expect(r.status).toBe(307);
+    expect(r.headers.get("location")).toBe(
+      "http://app.algoearning.com/sign-in?redirect_url=%2Falpha-testing-dashboard",
+    );
+  });
+
+  it("shows the closed-alpha splash at / when signed out, keeping the address", async () => {
     await import("./proxy");
     const r = (await handler(signedOut, req("/"))) as Response;
     expect(r.headers.get("x-middleware-rewrite")).toBe("http://localhost:3000/landing.html");
@@ -39,18 +54,18 @@ describe("proxy", () => {
     expect(r.headers.get("x-middleware-rewrite")).toBe("http://monitor.algoearning.com/monitor");
   });
 
-  it("shows the landing page instead of sign-in when a signed-out visitor opens the dashboard", async () => {
+  it("shows the splash instead of sign-in when a signed-out visitor opens the dashboard", async () => {
     await import("./proxy");
     const r = (await handler(signedOut, req("/dashboard", "app.algoearning.com"))) as Response;
     expect(r.status).toBe(307);
     expect(r.headers.get("location")).toBe("http://app.algoearning.com/");
   });
 
-  it("sends a signed-in user from the sign-in and sign-up pages to the dashboard", async () => {
+  it("sends a signed-in user from the sign-in and sign-up pages to the alpha dashboard", async () => {
     await import("./proxy");
     for (const page of ["/sign-in", "/sign-up"]) {
       const r = (await handler(signedIn, req(page))) as Response;
-      expect(r.headers.get("location")).toBe("http://localhost:3000/dashboard");
+      expect(r.headers.get("location")).toBe("http://localhost:3000/alpha-testing-dashboard");
     }
   });
 

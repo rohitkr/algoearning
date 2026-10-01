@@ -179,6 +179,39 @@ def test_webhook_syncs_users_and_ignores_replays(ctx: tuple[TestClient, list[str
     assert r.status_code == 403 and r.json()["error"]["code"] == "forbidden"
 
 
+def test_closed_alpha_refuses_new_accounts_but_lets_existing_ones_in(clean_db: str) -> None:
+    app = create_app(
+        Settings(
+            app_env="production",
+            database_url=clean_db,
+            clerk_publishable_key=PK,
+            clerk_webhook_secret=WHSEC,
+            web_origin=ORIGIN,
+        )
+    )
+    app.state.authenticators = [ClerkAuthenticator(PK, [ORIGIN], keys=FakeJwks())]
+    with TestClient(app) as c:
+        r = c.get("/v1/me", headers=bearer(token("user_new")))
+        assert r.status_code == 403
+        assert r.json()["error"]["message"] == "Internal Alpha Test Environment. Closed to the public."
+        assert r.json()["error"]["details"] == {"reason": "registration_closed"}
+        assert webhook(c, {"type": "user.created", "data": CLERK_USER}).json() == {"status": "ok"}
+        assert users(clean_db) == []  # a Clerk sign-up does not create an account either
+    e = create_engine(clean_db)
+    with e.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO users (auth_subject, email, role, status)"
+                " VALUES ('user_web', 'primary@example.com', 'user', 'active')"
+            )
+        )
+    e.dispose()
+    with TestClient(app) as c:
+        assert c.get("/v1/me", headers=bearer(token("user_web"))).status_code == 200
+        webhook(c, {"type": "user.updated", "data": {**CLERK_USER, "first_name": "Renamed"}}, msg_id="msg_9")
+    assert users(clean_db) == [("user_web", "primary@example.com", "active")]
+
+
 def test_webhook_rejects_forged_and_stale_events(ctx: tuple[TestClient, list[str]], clean_db: str) -> None:
     c, _ = ctx
     other = "whsec_" + base64.b64encode(b"a-different-secret-entirely-000").decode()
