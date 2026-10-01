@@ -162,7 +162,10 @@ service applies pending migrations when it starts in production.
 
 Production today is at https://app.algoearning.com (web), https://api.algoearning.com and
 https://monitor.algoearning.com. They are served from the Mac as described in [home-hosting.md](home-hosting.md)
-and ADR 0019. The marketing site at https://algoearning.com is a separate static page (`apps/landing`).
+and ADR 0019. The landing page has one source, `apps/landing` (static HTML and CSS). Render serves it at
+https://algoearning.com. The web app serves the same files as its home page for signed-out visitors:
+`apps/web/scripts/sync-landing.mjs` copies them into `public/` before `next dev` and `next build`, and
+`proxy.ts` sends signed-in visitors from `/` to `/dashboard`.
 
 ## Where to look for…
 
