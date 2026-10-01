@@ -346,6 +346,7 @@ async def backfill(
             for a, b, _ in runs:
                 raw = await client.candles(params, datetime.combine(a, SESSION[0]), datetime.combine(b, SESSION[1]))
                 rep.rows += await _insert_all(db, to_rows(underlying, raw))
+                log.info("backfill index", underlying=underlying, days=f"{a}..{b}", calls=client.calls)
         except BudgetExhausted as exc:
             rep.stopped, rep.calls_made = str(exc), client.calls
             return rep
@@ -361,6 +362,8 @@ async def backfill(
     stored = await _stored_option_days(db, underlying, start, end)
     fetches = plan(underlying, wanted, trading, stored)
     rep.option_fetches, rep.option_calls = len(fetches), sum(f.calls for f in fetches)
+    log.info("backfill plan", underlying=underlying, index_days_fetched=rep.index_days_missing,
+             option_fetches=rep.option_fetches, option_calls=rep.option_calls)  # fmt: skip
     if not live or client is None:
         return rep
     try:
@@ -378,7 +381,7 @@ async def backfill(
                 params, datetime.combine(f.first, SESSION[0]), datetime.combine(f.last, SESSION[1])
             )
             rep.rows += await _insert_all(db, to_rows(f.key, raw))
-            if n % 50 == 0:
+            if n % 10 == 0 or n == len(fetches):
                 log.info("backfill progress", underlying=underlying, done=n, of=len(fetches), calls=client.calls)
     except BudgetExhausted as exc:
         rep.stopped = str(exc)
