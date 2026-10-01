@@ -211,7 +211,7 @@ cmd_install() {
     fi
   done
   if pgrep -f "python -m ae_engine" >/dev/null && ! loaded engine; then
-    die "an engine is already running outside launchd (make dev?): two engines would trade twice. Stop it first."
+    die "an engine is already running outside launchd (make dev?): stop it first, one stack at a time."
   fi
   # Postgres/Redis left running by `make dev` (pg_ctl / redis --daemonize) would hold the ports: hand them over
   if ! loaded postgres; then scripts/local-db.sh down >/dev/null; fi

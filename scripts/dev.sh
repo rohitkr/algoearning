@@ -85,7 +85,7 @@ else
 fi
 
 # -- 4. ports -------------------------------------------------------------------------------------------
-# the home production stack (scripts/home-host.sh) uses the same database: two engines would trade twice
+# the home production stack (scripts/home-host.sh) uses the same ports and database: run one or the other
 if launchctl print "gui/$(id -u)/com.algoearning.engine" >/dev/null 2>&1; then
   die "the production services are running (scripts/home-host.sh status). Stop them first: scripts/home-host.sh stop"
 fi

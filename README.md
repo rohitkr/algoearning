@@ -2,11 +2,15 @@
 
 Algo trading SaaS for Indian markets: build and deploy options strategies on your own broker account.
 
+New here? Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits together and
+[CONTRIBUTING.md](CONTRIBUTING.md) for setup, commands, tests and the branch workflow.
+
 ## Repository layout
 
 ```
 apps/
-  web/          Next.js web app (landing page + dashboard), light and dark themes
+  web/          Next.js web app (dashboard, builder, Monitor), light and dark themes
+  landing/      static marketing page for algoearning.com (no build step)
   api/          FastAPI: HTTP + realtime API          (Python package ae_api)
   engine/       trading engine: per-user sessions     (ae_engine, phase 9)
   worker/       background jobs                       (ae_worker)

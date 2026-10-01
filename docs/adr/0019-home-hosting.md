@@ -14,8 +14,9 @@ tunnel, and a `caffeinate` that keeps the Mac awake) as a launchd agent. launchd
 any that exit. The web app runs from its standalone production build, and the API runs with `APP_ENV=production`,
 so `/docs` is off and `DEV_AUTH` is refused. `.env.production` holds only the public URLs on top of `.env`.
 Development (`make dev`) and production share the database on purpose, so they never run at the same time:
-`install` refuses while `make dev` runs, and `make dev` refuses while the services are installed, because two
-engines would place every order twice.
+`install` refuses while `make dev` runs, and `make dev` refuses while the services are installed. They need the
+same ports, and two workers would send every notification twice. (The engine's Redis lease already keeps a second
+engine standing by instead of trading, ADR 0014.)
 
 **The IP still matters for orders.** Zerodha only takes orders from an IP listed in each user's Kite app (SEBI's
 static-IP rule, ADR 0009). The worker reads the Mac's public IPv4 every 5 minutes (`check-public-ip`) and keeps it
