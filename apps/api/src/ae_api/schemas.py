@@ -254,6 +254,16 @@ class BrokerInfoOut(BaseModel):
     redirect_url: str | None  # what to register as the Redirect URL in the broker's developer console
 
 
+class ServerIpOut(BaseModel):
+    """The IP this server reaches brokers from (checked by the worker): what each user registers in their Kite app."""
+
+    ip: str | None
+    previous: str | None = None
+    changed_at: datetime | None = None
+    checked_at: datetime | None = None
+    changed_recently: bool = False  # changed in the last 3 days: the dashboard warns Zerodha users
+
+
 class BrokerAccountIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     broker: Literal["zerodha", "upstox", "angelone"]

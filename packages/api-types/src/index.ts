@@ -34,6 +34,7 @@ export type Entitlements = Schemas["EntitlementsOut"];
 export type UsageItem = Schemas["UsageItem"];
 export type FeatureInfo = Schemas["FeatureInfo"];
 export type BrokerInfo = Schemas["BrokerInfoOut"];
+export type ServerIp = Schemas["ServerIpOut"];
 export type BrokerAccount = Schemas["BrokerAccountOut"];
 export type AdminUserRow = Schemas["AdminUserRow"];
 export type AdminUserDetail = Schemas["AdminUserDetail"];

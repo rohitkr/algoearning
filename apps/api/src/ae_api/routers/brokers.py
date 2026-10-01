@@ -16,7 +16,7 @@ import structlog
 from ae_brokers.base import BrokerAdapter, BrokerError, Credentials
 from ae_core.secrets import SecretBox, mask
 from ae_db.enums import Broker, BrokerAccountStatus
-from ae_db.models import BrokerAccount
+from ae_db.models import BrokerAccount, PlatformSetting
 from ae_db.models import BrokerSession as SessionRow
 from ae_db.repositories import BrokerAccountRepo
 from fastapi import APIRouter, Request, Response, status
@@ -38,10 +38,12 @@ from ..schemas import (
     BrokerInfoOut,
     BrokerLoginOut,
     BrokerTestOut,
+    ServerIpOut,
 )
 from ..settings import Settings, SettingsDep
 
 router = APIRouter(prefix="/v1", tags=["brokers"], responses=ERROR_RESPONSES)
+IP_CHANGE_WARNING = timedelta(days=3)
 log = structlog.get_logger("ae_api.brokers")
 
 
@@ -134,6 +136,19 @@ async def broker_catalog(request: Request, settings: SettingsDep) -> list[Broker
         )
         for b in catalog(request.app.state.brokers)
     ]
+
+
+@router.get("/brokers/server-ip", response_model=ServerIpOut)
+async def server_ip(_: CurrentUser, db: DbDep) -> ServerIpOut:
+    """Where orders come from: Zerodha refuses any IP the user's Kite app does not list (ADR 0019)."""
+    async with db.system_session() as s:
+        row = (await s.execute(select(PlatformSetting).where(PlatformSetting.key == "public_ip"))).scalar_one_or_none()
+    value = row.value if row is not None and isinstance(row.value, dict) else {}
+    out = ServerIpOut.model_validate({"ip": None, **value})
+    out.changed_recently = bool(
+        out.previous and out.changed_at and datetime.now(UTC) - out.changed_at < IP_CHANGE_WARNING
+    )
+    return out
 
 
 @router.get("/broker-accounts", response_model=list[BrokerAccountOut])

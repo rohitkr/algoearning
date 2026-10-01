@@ -1,7 +1,8 @@
-import type { BrokerAccount, BrokerInfo } from "@algoearning/api-types";
+import type { BrokerAccount, BrokerInfo, ServerIp } from "@algoearning/api-types";
 import { StatusPill } from "@algoearning/ui";
 
 import { BrokerAccounts } from "@/components/brokers/broker-accounts";
+import { ServerIpNotice } from "@/components/brokers/server-ip-notice";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 
@@ -24,9 +25,10 @@ export default async function BrokersPage({
 }) {
   await requireUser();
   const q = await searchParams;
-  const [accounts, catalog] = await Promise.all([
+  const [accounts, catalog, ip] = await Promise.all([
     apiGet<BrokerAccount[]>("/v1/broker-accounts"),
     apiGet<BrokerInfo[]>("/v1/brokers"),
+    apiGet<ServerIp>("/v1/brokers/server-ip"),
   ]);
   const banner = q.connected
     ? { tone: "success" as const, text: "Broker connected. Your session is valid until 06:00 tomorrow." }
@@ -43,6 +45,7 @@ export default async function BrokersPage({
           <StatusPill tone={banner.tone}>{banner.text}</StatusPill>
         </div>
       )}
+      {ip.ok && <ServerIpNotice ip={ip.data} always />}
       {accounts.ok && catalog.ok ? (
         <BrokerAccounts accounts={accounts.data} catalog={catalog.data} />
       ) : (

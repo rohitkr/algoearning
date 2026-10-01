@@ -555,6 +555,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/brokers/server-ip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server Ip
+         * @description Where orders come from: Zerodha refuses any IP the user's Kite app does not list (ADR 0019).
+         */
+        get: operations["server_ip_v1_brokers_server_ip_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/market/snapshot": {
         parameters: {
             query?: never;
@@ -2665,6 +2685,25 @@ export interface components {
             underlying: string;
             /** Unrealized Pnl */
             unrealized_pnl: number;
+        };
+        /**
+         * ServerIpOut
+         * @description The IP this server reaches brokers from (checked by the worker): what each user registers in their Kite app.
+         */
+        ServerIpOut: {
+            /** Changed At */
+            changed_at?: string | null;
+            /**
+             * Changed Recently
+             * @default false
+             */
+            changed_recently: boolean;
+            /** Checked At */
+            checked_at?: string | null;
+            /** Ip */
+            ip: string | null;
+            /** Previous */
+            previous?: string | null;
         };
         /**
          * SmcOption
@@ -6010,6 +6049,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrokerInfoOut"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    server_ip_v1_brokers_server_ip_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerIpOut"];
                 };
             };
             /** @description Bad request */

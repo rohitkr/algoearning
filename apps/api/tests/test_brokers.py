@@ -115,6 +115,36 @@ def test_catalogue(ctx: tuple[TestClient, FakeKite]) -> None:
     assert cat["upstox"]["available"] is False and cat["upstox"]["redirect_url"] is None
 
 
+def test_server_ip(ctx: tuple[TestClient, FakeKite], clean_db: str) -> None:
+    c, _ = ctx
+    assert c.get("/v1/brokers/server-ip", headers=A).json()["ip"] is None  # the worker has not checked yet
+    engine = create_engine(clean_db)
+    with engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO platform_settings (id, key, value) VALUES (gen_random_uuid(), 'public_ip', :v)"),
+            {
+                "v": json.dumps(
+                    {
+                        "ip": "49.36.10.99",
+                        "previous": "49.36.10.20",
+                        "changed_at": (datetime.now(UTC) - timedelta(hours=1)).isoformat(),
+                    }
+                )
+            },
+        )
+    got = c.get("/v1/brokers/server-ip", headers=A).json()
+    assert (got["ip"], got["previous"], got["checked_at"]) == ("49.36.10.99", "49.36.10.20", None)
+    assert got["changed_recently"] is True
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE platform_settings SET value = jsonb_set(value, '{changed_at}', to_jsonb(CAST(:t AS text)))"),
+            {"t": (datetime.now(UTC) - timedelta(days=4)).isoformat()},
+        )
+    engine.dispose()
+    assert c.get("/v1/brokers/server-ip", headers=A).json()["changed_recently"] is False
+    assert c.get("/v1/brokers/server-ip").status_code == 401
+
+
 def test_credentials_are_encrypted_and_never_returned(ctx: tuple[TestClient, FakeKite], clean_db: str) -> None:
     c, _ = ctx
     r = add(c)

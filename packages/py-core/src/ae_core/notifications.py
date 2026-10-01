@@ -36,6 +36,9 @@ EVENTS: dict[str, EventType] = {
         EventType(
             "engine_down", "The engine stopped responding", "Running strategies are not being watched", True, True
         ),
+        EventType(
+            "ip_changed", "The server's IP address changed", "Update the IP in your Zerodha Kite app", True, True
+        ),
     )
 }
 

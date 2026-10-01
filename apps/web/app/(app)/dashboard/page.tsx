@@ -5,12 +5,14 @@ import type {
   ReportDay,
   ReportSummary,
   Run,
+  ServerIp,
 } from "@algoearning/api-types";
 import { formatNumber } from "@algoearning/shared";
 import { Button, Card, CardTitle, Meter, Pnl, StatusPill } from "@algoearning/ui";
 import Link from "next/link";
 
 import { AccountCard } from "@/components/account-card";
+import { ServerIpNotice } from "@/components/brokers/server-ip-notice";
 import { AutoRefresh } from "@/components/runs/auto-refresh";
 import { ModePill, RunStatusPill } from "@/components/runs/run-bits";
 import { apiGet } from "@/lib/api";
@@ -26,14 +28,16 @@ const USAGE: Record<string, string> = {
 
 export default async function DashboardPage() {
   await requireUser();
-  const [runs, month, days, positions, brokers, ent] = await Promise.all([
+  const [runs, month, days, positions, brokers, ent, ip] = await Promise.all([
     apiGet<Run[]>("/v1/runs"),
     apiGet<ReportSummary>("/v1/reports/summary"),
     apiGet<ReportDay[]>("/v1/reports/daily"),
     apiGet<OpenPosition[]>("/v1/positions/open"),
     apiGet<BrokerAccount[]>("/v1/broker-accounts"),
     apiGet<Entitlements>("/v1/me/entitlements"),
+    apiGet<ServerIp>("/v1/brokers/server-ip"),
   ]);
+  const usesKite = brokers.ok && brokers.data.some((b) => b.broker === "zerodha");
   const active = runs.ok ? runs.data : [];
   const open = positions.ok ? positions.data : [];
   // today = the last day of the default report range (the API resolves it in IST)
@@ -44,6 +48,7 @@ export default async function DashboardPage() {
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
       <AutoRefresh seconds={5} />
       <h1 className="text-2xl font-semibold">My Dashboard</h1>
+      {usesKite && ip.ok && <ServerIpNotice ip={ip.data} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card className="col-span-2 bg-primary text-primary-foreground lg:col-span-1">

@@ -36,6 +36,7 @@ from sqlalchemy import select
 from . import __version__
 from .backtests import run_pending, smc_report
 from .notify import Sender, check_engine, dispatch_pending, link_telegram
+from .public_ip import check_public_ip
 
 log = structlog.get_logger("ae_worker")
 
@@ -63,6 +64,7 @@ EVERY: dict[str, tuple[float, Callable[[Database], Awaitable[object]]]] = {
     "link-telegram": (3, lambda db: link_telegram(db, _sender)),
     "check-engine": (30, check_engine),
     "run-backtests": (3, run_pending),
+    "check-public-ip": (300, check_public_ip),  # Zerodha only takes orders from the IP in each user's Kite app
 }
 
 
