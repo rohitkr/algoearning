@@ -9,7 +9,7 @@ const to = (f) => fileURLToPath(new URL(`../public/${f}`, import.meta.url));
 
 for (const [src, dest] of [
   ["landing/index.html", "landing.html"],
-  ["landing/landing.css", "landing.css"],
+  ["landing/home.css", "home.css"], // not landing.css: the splash once used that name and caches still hold it,
   ["../landing/favicon.svg", "favicon.svg"],
 ]) {
   copyFileSync(from(src), to(dest));

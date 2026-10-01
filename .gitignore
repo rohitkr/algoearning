@@ -34,4 +34,5 @@ logs/
 # copied from apps/web/landing by apps/web/scripts/sync-landing.mjs
 apps/web/public/landing.html
 apps/web/public/landing.css
+apps/web/public/home.css
 apps/web/public/favicon.svg
