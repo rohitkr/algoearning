@@ -63,3 +63,23 @@ async def test_a_failing_backtest_is_recorded(db: Database) -> None:
     async with db.system_session() as s:
         run = (await s.execute(select(BacktestRun))).scalar_one()
     assert run.status == "error" and run.error
+
+
+def test_smc_backtests_replay_month_by_month() -> None:
+    from datetime import date
+
+    from ae_core.backtest import BacktestResult
+    from ae_worker.backtests import merge, months
+
+    assert months(date(2025, 1, 20), date(2025, 3, 3)) == [
+        (date(2025, 1, 20), date(2025, 1, 31)),
+        (date(2025, 2, 1), date(2025, 2, 28)),
+        (date(2025, 3, 1), date(2025, 3, 3)),
+    ]
+    total = BacktestResult()
+    for part in (
+        BacktestResult(days_replayed=3, funnel={"armed": 1}),
+        BacktestResult(days_replayed=2, funnel={"armed": 2}),
+    ):
+        merge(total, part)
+    assert total.days_replayed == 5 and total.funnel == {"armed": 3}

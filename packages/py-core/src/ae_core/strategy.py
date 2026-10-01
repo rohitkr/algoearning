@@ -199,21 +199,23 @@ class SmcRules(_Model):
     swing_bias: int = Field(default=2, ge=1, le=5)  # candles each side of a swing, bias timeframe
     swing_setup: int = Field(default=2, ge=1, le=5)
     swing_entry: int = Field(default=2, ge=1, le=5)
-    bias_min_breaks: int = Field(default=2, ge=1, le=4)  # consecutive breaks needed for a clear bias
+    bias_min_breaks: int = Field(default=1, ge=1, le=4)  # consecutive breaks needed for a clear bias
     atr_period: int = Field(default=14, ge=5, le=50)
-    displacement_atr: float = Field(default=1.5, ge=0.5, le=5)  # body >= this x ATR (setup timeframe)
+    displacement_atr: float = Field(default=1.0, ge=0.5, le=5)  # body >= this x ATR (setup timeframe)
     fvg_min_atr: float = Field(default=0.25, ge=0, le=3)
-    sweep_min_pct: float = Field(default=0.02, ge=0, le=0.5)  # how far beyond the pool, % of price
+    sweep_min_pct: float = Field(default=0.01, ge=0, le=0.5)  # how far beyond the pool, % of price
     sweep_reclaim: int = Field(default=2, ge=1, le=5)  # candles allowed to close back inside
-    sweep_lookback: int = Field(default=6, ge=2, le=24)  # setup candles between the sweep and the break
+    sweep_lookback: int = Field(default=12, ge=2, le=24)  # setup candles between the sweep and the break
     equal_level_pct: float = Field(default=0.03, ge=0, le=0.5)  # equal highs/lows tolerance, % of price
     opening_range_minutes: int = Field(default=15, ge=5, le=60)
+    internal_liquidity: bool = True  # also count the entry timeframe's swing highs/lows as liquidity to sweep
     poi: Literal["fvg", "ob", "either", "both"] = "either"  # where to enter: FVG, order block, either, overlap
     ob_zone: Literal["body", "range"] = "body"
-    poi_max_age: int = Field(default=12, ge=2, le=48)  # setup candles the POI waits for a tap
-    confirm_bars: int = Field(default=10, ge=2, le=60)  # entry candles from the tap to the confirming CHoCH
-    premium_discount: bool = True  # longs only in discount, shorts only in premium (bias dealing range)
-    min_room_r: float = Field(default=1.5, ge=0, le=10)  # opposing liquidity at least this many R away
+    poi_max_age: int = Field(default=24, ge=2, le=48)  # setup candles the POI waits for a tap
+    confirm_bars: int = Field(default=15, ge=2, le=60)  # entry candles from the tap to the confirming CHoCH
+    premium_discount: bool = True  # longs only in discount, shorts only in premium
+    pd_range: Literal["setup", "bias"] = "setup"  # of the impulse leg (sweep to break) or the bias dealing range
+    min_room_r: float = Field(default=1.0, ge=0, le=10)  # opposing liquidity at least this many R away
 
 
 class SmcOption(_Model):

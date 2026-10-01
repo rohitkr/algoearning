@@ -4,6 +4,8 @@
     python -m ae_worker --once                 # every job once, then exit (cron, deploy hooks)
     python -m ae_worker refresh-instruments    # one job, then exit
     uv run --with duckdb python -m ae_worker import-history ~/git/algo-trading-claude/data/market_data.duckdb
+    python -m ae_worker backfill NIFTY --from 2025-01-01 [--to 2026-09-30] [--dry-run]   # Breeze history (ADR 0018)
+    python -m ae_worker smc-report NIFTY,BANKNIFTY,SENSEX --from 2025-01-01 --out smc.json  # the 3 x 3 SMC backtests
 
 Jobs (times IST): refresh-instruments at 08:00 (Zerodha publishes the day's list before that). A plain asyncio
 schedule until the job queue lands; every job is idempotent, so running it twice is harmless."""
@@ -12,20 +14,27 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import sys
 from collections.abc import Awaitable, Callable
-from datetime import datetime, time, timedelta
+from dataclasses import asdict
+from datetime import date, datetime, time, timedelta
+from pathlib import Path
 
 import structlog
+from ae_core.secrets import SecretBox, load_master_key
+from ae_db.models import Instrument
 from ae_db.session import Database
+from ae_marketdata.backfill import BreezeHistory, backfill
 from ae_marketdata.history import archive_today, import_duckdb
 from ae_marketdata.hub import Hub
 from ae_marketdata.instruments import IST, refresh_instruments
 from redis.asyncio import Redis
+from sqlalchemy import select
 
 from . import __version__
-from .backtests import run_pending
+from .backtests import run_pending, smc_report
 from .notify import Sender, check_engine, dispatch_pending, link_telegram
 
 log = structlog.get_logger("ae_worker")
@@ -55,6 +64,51 @@ EVERY: dict[str, tuple[float, Callable[[Database], Awaitable[object]]]] = {
     "check-engine": (30, check_engine),
     "run-backtests": (3, run_pending),
 }
+
+
+async def run_backfill(db: Database, args: argparse.Namespace) -> int:
+    """Breeze history for one underlying (index, then options). Needs the day's Breeze session for real fetches."""
+    code = str(args.arg or "").upper()
+    async with db.system_session() as s:
+        inst = (await s.execute(select(Instrument).where(Instrument.code == code))).scalar_one_or_none()
+        if inst is None:
+            log.error("unknown instrument", code=code)
+            return 2
+        feed, spot_ex, deriv_ex, step = inst.feed_code or code, inst.spot_exchange, inst.exchange, inst.strike_step
+    start = date.fromisoformat(args.from_)
+    end = date.fromisoformat(args.to) if args.to else datetime.now(IST).date() - timedelta(days=1)
+    client = None
+    redis = None
+    if not args.dry_run:
+        from ae_marketdata.session import breeze_session
+        from ae_marketdata.sources import _breeze_sdk
+
+        key, secret, enc = (
+            os.environ.get(k, "") for k in ("BREEZE_API_KEY", "BREEZE_API_SECRET", "APP_ENCRYPTION_KEY")
+        )
+        url = os.environ.get("REDIS_URL")
+        if not (key and secret and enc and url):
+            log.error("backfill needs BREEZE_API_KEY, BREEZE_API_SECRET, APP_ENCRYPTION_KEY and REDIS_URL")
+            return 2
+        async with db.system_session() as s:
+            token, _ = await breeze_session(s, SecretBox({1: load_master_key(enc)}, 1))
+        if not token:
+            log.error("no Breeze session today: log in from Monitor > Market data first")
+            return 2
+        redis = Redis.from_url(url)
+        hub = Hub(redis)
+        sdk = _breeze_sdk(key)
+        await hub.count_api_call(1)  # generate_session is a REST call
+        await asyncio.to_thread(sdk.generate_session, api_secret=secret, session_token=token)
+        client = BreezeHistory(sdk, hub.count_api_call, hub.api_calls_today, reserve=args.reserve)
+    try:
+        rep = await backfill(db, code, start, end, feed_code=feed, spot_exchange=spot_ex, deriv_exchange=deriv_ex,
+                             strike_step=step, client=client, buffer=args.buffer, dry_run=args.dry_run)  # fmt: skip
+    finally:
+        if redis is not None:
+            await redis.aclose()
+    print(json.dumps(asdict(rep), indent=2, default=str))
+    return 0 if rep.stopped is None else 3
 
 
 def next_run(now: datetime, at: time) -> datetime:
@@ -98,10 +152,23 @@ async def _main(args: argparse.Namespace) -> int:
     db = Database(url, pool_size=2)
     try:
         if args.job == "import-history":
+            args.file = args.arg
             if not args.file:
                 log.error("usage: python -m ae_worker import-history FILE.duckdb")
                 return 2
             log.info("history imported", **await import_duckdb(db, args.file))
+            return 0
+        if args.job == "backfill":
+            return await run_backfill(db, args)
+        if args.job == "smc-report":
+            end = date.fromisoformat(args.to) if args.to else datetime.now(IST).date() - timedelta(days=1)
+            unds = [u.strip().upper() for u in (args.arg or "NIFTY,BANKNIFTY,SENSEX").split(",")]
+            report = await smc_report(db, unds, [2, 3, 4], date.fromisoformat(args.from_), end)
+            text = json.dumps(report, indent=1, default=str)
+            if args.out:
+                await asyncio.to_thread(Path(args.out).write_text, text)
+            else:
+                print(text)
             return 0
         names = [args.job] if args.job else list(JOBS)
         ok = all([await _run_job(db, n) for n in names])
@@ -116,9 +183,20 @@ async def _main(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m ae_worker")
-    ap.add_argument("job", nargs="?", choices=[*sorted(JOBS), "import-history"], help="run one job and exit")
-    ap.add_argument("file", nargs="?", help="import-history: algo-trading-claude's market_data.duckdb")
+    ap.add_argument(
+        "job",
+        nargs="?",
+        choices=[*sorted(JOBS), "import-history", "backfill", "smc-report"],
+        help="run one job and exit",
+    )
+    ap.add_argument("arg", nargs="?", help="import-history: the DuckDB file; backfill: the underlying (NIFTY, ...)")
     ap.add_argument("--once", action="store_true", help="run every job once and exit")
+    ap.add_argument("--from", dest="from_", default="2025-01-01", help="backfill: first day (YYYY-MM-DD)")
+    ap.add_argument("--to", help="backfill: last day (default: yesterday)")
+    ap.add_argument("--dry-run", action="store_true", help="backfill: plan and count calls, fetch nothing")
+    ap.add_argument("--reserve", type=int, default=500, help="backfill: Breeze calls left for the live feed")
+    ap.add_argument("--buffer", type=int, default=4, help="backfill: strikes beyond each day's index range")
+    ap.add_argument("--out", help="smc-report: write the JSON report to this file")
     return asyncio.run(_main(ap.parse_args(argv)))
 
 

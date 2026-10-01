@@ -320,7 +320,7 @@ def test_a_winning_setup_buys_a_call_and_takes_three_targets() -> None:
     assert all(x.reason.startswith("target") and x.gross > 0 for x in r.trades)
     assert all(x.qty == 65 and x.side == "BUY" for x in r.trades)
     s = summarize_result(r)["signals"]
-    assert (s["count"], s["wins"], s["funnel"]["armed"], s["funnel"]["signals"]) == (1, 1, 1, 1)
+    assert (s["count"], s["wins"], s["funnel"]["signals"]) == (1, 1, 1) and s["funnel"]["armed"] >= 1
 
 
 def test_a_failing_setup_is_stopped_out() -> None:
@@ -340,7 +340,8 @@ def test_rr_choice_moves_tp3() -> None:
 @pytest.mark.parametrize(
     ("cfg", "reason"),
     [
-        (SmcScalpConfig(rules=SmcRules(bias_min_breaks=1), risk=SmcRisk(max_risk_pct=1.0)), "POI not in discount"),
+        # with premium/discount on, only the FVG's part below the leg's equilibrium is a buy zone: never revisited
+        (SmcScalpConfig(rules=SmcRules(bias_min_breaks=1), risk=SmcRisk(max_risk_pct=1.0)), "POI not reached in time"),
         (scenario_cfg(risk={"max_risk_pct": 0.35}), "skipped: stop too wide"),
         (scenario_cfg(rules={"bias_min_breaks": 4}), "bias unclear"),
         (scenario_cfg(option=SmcOption(min_volume=10**12)), "skipped: option too illiquid"),

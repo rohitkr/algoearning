@@ -82,6 +82,8 @@ class SmcScalpRunner(Runner):
         out: list[Intent] = []
         t = rules.hhmm(m.now)
         if t >= self.cfg.session.exit:
+            if self.s.get("setup"):
+                self._count("setup open at the exit time")
             self.s["setup"], self.s["pending"] = None, None
             if self.open_positions():
                 return self.exit_all(f"exit time {self.cfg.session.exit}")
@@ -144,6 +146,9 @@ class SmcScalpRunner(Runner):
             *smc.day_pools(smc.bars_of(prior_day), smc.bars_of(bars), rl.opening_range_minutes),
             *smc.swing_pools(sb, [s for s in st.swings if s.confirmed < k], rl.equal_level_pct, tf.setup),
         ]
+        if rl.internal_liquidity:  # the entry timeframe's swings too (inducement inside the setup leg)
+            eb = smc.resample(bars, tf.entry)
+            pools += smc.swing_pools(eb, smc.swings(eb, rl.swing_entry), rl.equal_level_pct, tf.entry)
         sweep = smc.find_sweep(sb, pools, k - rl.sweep_lookback, k, brk.dir, rl.sweep_min_pct, rl.sweep_reclaim)
         if sweep is None:
             self._reject("no liquidity sweep", brk)
@@ -162,13 +167,27 @@ class SmcScalpRunner(Runner):
             else:
                 self.s["poi_wait"] = _iso(brk.ts)
             return
-        eq = bias.equilibrium
+        if rl.pd_range == "bias":
+            eq = bias.equilibrium
+        else:  # the impulse leg: from the sweep's extreme to the furthest price reached since
+            leg = sb[sweep.i : k + 1]
+            far = max(b.high for b in leg) if brk.dir == "up" else min(b.low for b in leg)
+            eq = (sweep.extreme + far) / 2
         if rl.premium_discount and eq is not None:
-            zones = [z for z in zones if (z.hi <= eq if brk.dir == "up" else z.lo >= eq)]
+            all_zones = zones
+            # only the discount part of a long's POI (premium part of a short's) is a place to buy
+            if brk.dir == "up":
+                zones = [smc.Zone(z.kind, z.dir, z.lo, min(z.hi, eq), z.i) for z in zones if z.lo < eq]
+            else:
+                zones = [smc.Zone(z.kind, z.dir, max(z.lo, eq), z.hi, z.i) for z in zones if z.hi > eq]
             if not zones:
-                self._reject("POI not in discount" if brk.dir == "up" else "POI not in premium", brk)
+                where = ", ".join(f"{z.kind} {z.lo:.2f}-{z.hi:.2f}" for z in all_zones)
+                self._reject("POI not in discount" if brk.dir == "up" else "POI not in premium", brk,
+                             detail=f"{where}; equilibrium {eq:.2f}")  # fmt: skip
                 return
         armed = sb[k].ts + timedelta(minutes=tf.setup)
+        if self.s.get("setup"):
+            self._count("replaced by a newer setup")
         self.s["setup"] = {
             "dir": brk.dir,
             "zones": [z.to_dict() for z in zones],
@@ -177,7 +196,8 @@ class SmcScalpRunner(Runner):
             "break": {"kind": brk.kind, "level": round(brk.level, 2), "ts": _iso(brk.ts)},
             "displacement": {"ts": _iso(sb[disp_i].ts),
                              "body_atr": round(abs(sb[disp_i].close - sb[disp_i].open) / (atrs[disp_i] or 1), 2)},
-            "bias": {"trend": bias.trend, "strong": _r(bias.strong), "weak": _r(bias.weak), "eq": _r(eq),
+            "equilibrium": _r(eq),
+            "bias": {"trend": bias.trend, "strong": _r(bias.strong), "weak": _r(bias.weak), "eq": _r(bias.equilibrium),
                      "streak": bias.streak, "last": bias.last.kind if bias.last else None},
             "armed": _iso(armed),
             "expires": _iso(armed + timedelta(minutes=tf.setup * rl.poi_max_age)),
@@ -200,8 +220,16 @@ class SmcScalpRunner(Runner):
             later = sb[z.i + 1 : k + 1]
             return all((b.low > z.lo) if d == "up" else (b.high < z.hi) for b in later)
 
-        fv = [z for z in fv if fresh(z)]
-        obs = [ob] if ob is not None and fresh(ob) else []
+        # inside the impulse leg: formed after the sweep, on the near side of its extreme
+        def inside(z: smc.Zone) -> bool:
+            return z.i - 2 >= sweep.i and ((z.lo >= sweep.extreme) if d == "up" else (z.hi <= sweep.extreme))
+
+        fv = [z for z in fv if fresh(z) and inside(z)]
+        obs = (
+            [ob]
+            if ob is not None and fresh(ob) and ((ob.lo >= sweep.extreme) if d == "up" else (ob.hi <= sweep.extreme))
+            else []
+        )
         if rl.poi == "fvg":
             return fv
         if rl.poi == "ob":
@@ -238,7 +266,10 @@ class SmcScalpRunner(Runner):
         hi = max(z["hi"] for z in setup["zones"])
         if (b.close < setup["sweep"]["extreme"]) if up else (b.close > setup["sweep"]["extreme"]):
             return self._cancel("closed beyond the sweep")
-        if (b.close < lo) if up else (b.close > hi):
+        # the POI fails when a setup-timeframe candle closes through it (a 1-minute poke through is only noise)
+        armed = _ts(setup["armed"])
+        closes = [x.close for x in smc.resample([x for x in bars if x.ts >= armed], self.cfg.timeframes.setup)]
+        if any((c < lo) if up else (c > hi) for c in closes):
             return self._cancel("closed through the POI")
         if not setup["tapped"]:
             if _iso(b.ts) >= setup["expires"]:
@@ -253,16 +284,27 @@ class SmcScalpRunner(Runner):
         if len(since_tap) > self.cfg.rules.confirm_bars:
             return self._cancel("no entry confirmation after the tap")
         seg = [x for x in eb if x.ts > _ts(setup["break"]["ts"])]
-        ref = self._confirm_ref(seg, up)
+        ref = self._confirm_ref(seg, up, tapped)
         if ref is None or not ((b.close > ref) if up else (b.close < ref)):
             return []
         setup["confirm"] = {"level": round(ref, 2), "ts": _iso(b.ts)}
         return self._signal(m, setup)
 
-    def _confirm_ref(self, seg: list[smc.Bar], up: bool) -> float | None:
-        """The pullback's last confirmed swing (high for longs): a close beyond it is the entry CHoCH."""
-        sw = [s for s in smc.swings(seg, self.cfg.rules.swing_entry) if s.high == up and s.confirmed < len(seg)]
-        return sw[-1].price if sw else None
+    def _confirm_ref(self, seg: list[smc.Bar], up: bool, tapped: datetime) -> float | None:
+        """The level whose close-through is the entry CHoCH: the last confirmed swing high (longs) of the pullback,
+        i.e. formed after the top of the move that broke structure; when the pullback made none (a straight drop
+        into the POI), the high of the candle that tapped it."""
+        if not seg:
+            return None
+        top = max(range(len(seg)), key=lambda i: seg[i].high if up else -seg[i].low)
+        pull = seg[top + 1 :]
+        sw = [s for s in smc.swings(pull, self.cfg.rules.swing_entry) if s.high == up and s.confirmed < len(pull)]
+        if sw:
+            return sw[-1].price
+        tap = next((x for x in seg if x.ts == tapped), None)
+        if tap is None:
+            return None
+        return tap.high if up else tap.low
 
     def _cancel(self, why: str) -> list[Intent]:
         self.s["setup"] = None
@@ -324,16 +366,27 @@ class SmcScalpRunner(Runner):
         return None
 
     def _room(self, m: Market, entry: float, up: bool) -> float | None:
-        """Distance to the nearest opposing liquidity (buy-side above for longs), None when there is none: previous
-        day and opening range extremes and the setup timeframe's confirmed swings beyond the entry."""
+        """Distance to the nearest external opposing liquidity (buy-side above for longs), None when there is none:
+        previous day and opening range extremes, equal highs/lows of the setup timeframe and the bias timeframe's
+        weak high/low. Internal pullback swings are not targets, so they do not count."""
         bars = smc.bars_of(m.spot_bars)
         prior = m.prior_spot_bars
         prior_day = smc.bars_of([b for b in prior if b.ts.date() == prior[-1].ts.date()]) if prior else []
         rl = self.cfg.rules
         levels = [p.price for p in smc.day_pools(prior_day, bars, rl.opening_range_minutes) if p.high == up]
         st = smc.structure(smc.resample([*prior_day, *bars], self.cfg.timeframes.setup), rl.swing_setup)
-        levels += [s.price for s in st.swings if s.high == up]
-        gaps = [(lv - entry) if up else (entry - lv) for lv in levels]
+        levels += [max(a.price, b.price) if up else min(a.price, b.price)
+                   for a, b in smc.equal_levels(st.swings, rl.equal_level_pct) if a.high == up]  # fmt: skip
+        bias = self._bias(m, list(m.spot_bars))
+        if bias.weak is not None and bias.trend == ("up" if up else "down"):
+            levels.append(bias.weak)
+        seen = [b.high for b in bars] if up else [b.low for b in bars]
+        taken = (max(seen) if up else min(seen)) if seen else None  # a level the day already traded through is gone
+        gaps = [
+            (lv - entry) if up else (entry - lv)
+            for lv in levels
+            if taken is None or ((lv > taken) if up else (lv < taken)) or lv == bias.weak
+        ]
         return min((g for g in gaps if g > 0), default=None)
 
     def _expiry(self, m: Market) -> Any:
@@ -497,13 +550,13 @@ def explain(setup: Mapping[str, Any], cfg: SmcScalpConfig) -> str:
     zones = ", ".join(f"{z['kind']} {z['lo']:.2f}-{z['hi']:.2f}" for z in setup["zones"])
     side = "discount" if up else "premium"
     parts = [
-        f"{tf.bias}m {'bullish' if up else 'bearish'} structure ({b['streak']} breaks, last {b['last']}; "
-        f"strong {'low' if up else 'high'} {b['strong']}, equilibrium {b['eq']})",
+        f"{tf.bias}m {'bullish' if up else 'bearish'} structure ({b['streak']} break(s), last {b['last']}; "
+        f"strong {'low' if up else 'high'} {b['strong']}, weak {'high' if up else 'low'} {b['weak']})",
         f"{'sell' if up else 'buy'}-side liquidity swept: {setup['sweep']['pool']} {setup['sweep']['level']} "
         f"(to {setup['sweep']['extreme']})",
         f"{tf.setup}m displacement ({setup['displacement']['body_atr']}x ATR) and {setup['break']['kind']} "
         f"through {setup['break']['level']}",
-        f"POI {zones}" + (f" in {side}" if cfg.rules.premium_discount else ""),
+        f"POI {zones}" + (f" in {side} (equilibrium {setup.get('equilibrium')})" if cfg.rules.premium_discount else ""),
         f"{tf.entry}m CHoCH through {setup['confirm']['level']} after the tap",
     ]
     return " · ".join(parts)

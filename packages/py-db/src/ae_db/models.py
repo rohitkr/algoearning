@@ -317,6 +317,7 @@ class HistoryCandle(Base):
     low: Mapped[float] = mapped_column(Float)
     close: Mapped[float] = mapped_column(Float)
     volume: Mapped[int] = mapped_column(BigInteger, default=0)
+    oi: Mapped[int | None] = mapped_column(BigInteger)  # open interest at the minute's close (options, when known)
 
 
 class BacktestRun(UUIDPk, Timestamps, Base):

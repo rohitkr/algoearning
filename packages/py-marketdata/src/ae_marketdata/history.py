@@ -29,6 +29,7 @@ LEGACY_INDEX = {
     "NIFSEL": "MIDCPNIFTY",
     "SENSEX": "SENSEX",
 }
+_HAS_OI = "SELECT 1 FROM information_schema.columns WHERE table_name = 'history_candles' AND column_name = 'oi'"
 LEGACY_RIGHT = {"CALL": "CE", "PUT": "PE", "CE": "CE", "PE": "PE"}
 
 
@@ -53,20 +54,24 @@ async def load_history(db: Database, underlying: str, start: date, end: date) ->
     lo = datetime.combine(start, time(0), tzinfo=IST)
     hi = datetime.combine(end + timedelta(days=1), time(0), tzinfo=IST)
     h = MemoryHistory()
+    hc = HistoryCandle
     async with db.system_session() as s:
-        q = select(HistoryCandle).where(HistoryCandle.key == underlying, HistoryCandle.ts >= lo, HistoryCandle.ts < hi)
-        h.add_spot(
-            underlying, (Candle(_ist(c.ts), c.open, c.high, c.low, c.close) for c in (await s.execute(q)).scalars())
-        )
+        q = select(hc.ts, hc.open, hc.high, hc.low, hc.close).where(hc.key == underlying, hc.ts >= lo, hc.ts < hi)
+        h.add_spot(underlying, (Candle(_ist(ts), o, hi_, lo_, c) for ts, o, hi_, lo_, c in (await s.execute(q)).all()))
+        # open interest arrived with migration 0012: read it only where the column exists (a worker may run first)
+        has_oi = bool((await s.execute(text(_HAS_OI))).first())
+        cols = [hc.key, hc.ts, hc.open, hc.high, hc.low, hc.close, hc.volume, *([hc.oi] if has_oi else [])]
         oq = (
-            select(HistoryCandle)
-            .where(HistoryCandle.key.like(f"{underlying}:%"), HistoryCandle.ts >= lo, HistoryCandle.ts < hi)
-            .order_by(HistoryCandle.key, HistoryCandle.ts)
+            select(*cols)
+            .where(hc.key.like(f"{underlying}:%"), hc.ts >= lo, hc.ts < hi)
+            .order_by(hc.key, hc.ts)
             .execution_options(yield_per=20000)
         )
         by_key: dict[str, list[Candle]] = {}
-        async for c in await s.stream_scalars(oq):
-            by_key.setdefault(c.key, []).append(Candle(_ist(c.ts), c.open, c.high, c.low, c.close))
+        async for row in await s.stream(oq):
+            r: Any = row
+            oi = r[7] if has_oi else None
+            by_key.setdefault(r[0], []).append(Candle(_ist(r[1]), r[2], r[3], r[4], r[5], r[6] or 0, oi))
         for key, candles in by_key.items():
             h.add_option(key, candles)
         # expiries that exist in the data even when a contract has no bars in the range (positions carried in)
