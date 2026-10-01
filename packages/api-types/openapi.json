@@ -3718,6 +3718,7 @@
             "discriminator": {
               "mapping": {
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "smc_scalp": "#/components/schemas/SmcScalpConfig",
                 "time_based": "#/components/schemas/TimeBasedConfig",
                 "zero_dte": "#/components/schemas/ZeroDteConfig"
               },
@@ -3732,6 +3733,9 @@
               },
               {
                 "$ref": "#/components/schemas/ZeroDteConfig"
+              },
+              {
+                "$ref": "#/components/schemas/SmcScalpConfig"
               }
             ],
             "title": "Config"
@@ -4083,6 +4087,17 @@
               }
             ]
           },
+          "expectancy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectancy"
+          },
           "from_date": {
             "format": "date",
             "title": "From Date",
@@ -4090,6 +4105,11 @@
           },
           "losses": {
             "title": "Losses",
+            "type": "integer"
+          },
+          "max_consecutive_losses": {
+            "default": 0,
+            "title": "Max Consecutive Losses",
             "type": "integer"
           },
           "max_drawdown": {
@@ -4473,6 +4493,409 @@
         "title": "RunOut",
         "type": "object"
       },
+      "SmcOption": {
+        "additionalProperties": false,
+        "description": "Which option to buy for a signal: bullish buys a call, bearish a put.",
+        "properties": {
+          "expiry": {
+            "default": "nearest",
+            "enum": [
+              "nearest",
+              "next"
+            ],
+            "title": "Expiry",
+            "type": "string"
+          },
+          "expiry_day_cutoff": {
+            "anyOf": [
+              {
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "12:00",
+            "title": "Expiry Day Cutoff"
+          },
+          "max_spread_pct": {
+            "default": 1.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 20.0,
+            "title": "Max Spread Pct",
+            "type": "number"
+          },
+          "min_oi": {
+            "default": 50000,
+            "minimum": 0.0,
+            "title": "Min Oi",
+            "type": "integer"
+          },
+          "min_volume": {
+            "default": 10000,
+            "minimum": 0.0,
+            "title": "Min Volume",
+            "type": "integer"
+          },
+          "strike": {
+            "$ref": "#/components/schemas/Strike"
+          }
+        },
+        "title": "SmcOption",
+        "type": "object"
+      },
+      "SmcRisk": {
+        "additionalProperties": false,
+        "properties": {
+          "breakeven_at_tp1": {
+            "default": true,
+            "title": "Breakeven At Tp1",
+            "type": "boolean"
+          },
+          "cooldown_minutes": {
+            "default": 15,
+            "maximum": 240.0,
+            "minimum": 0.0,
+            "title": "Cooldown Minutes",
+            "type": "integer"
+          },
+          "lots": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Lots",
+            "type": "integer"
+          },
+          "max_losses_per_day": {
+            "default": 2,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Max Losses Per Day",
+            "type": "integer"
+          },
+          "max_risk_pct": {
+            "default": 0.35,
+            "exclusiveMinimum": 0.0,
+            "maximum": 3.0,
+            "title": "Max Risk Pct",
+            "type": "number"
+          },
+          "max_trades_per_day": {
+            "default": 2,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Max Trades Per Day",
+            "type": "integer"
+          },
+          "min_risk_pct": {
+            "default": 0.05,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Min Risk Pct",
+            "type": "number"
+          },
+          "premium_stop_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 40,
+            "title": "Premium Stop Pct"
+          },
+          "rr": {
+            "default": 2,
+            "enum": [
+              2,
+              3,
+              4
+            ],
+            "title": "Rr",
+            "type": "integer"
+          },
+          "sl_buffer_pct": {
+            "default": 0.03,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Sl Buffer Pct",
+            "type": "number"
+          },
+          "trail_at_tp2": {
+            "default": true,
+            "title": "Trail At Tp2",
+            "type": "boolean"
+          },
+          "tranches": {
+            "default": true,
+            "title": "Tranches",
+            "type": "boolean"
+          }
+        },
+        "title": "SmcRisk",
+        "type": "object"
+      },
+      "SmcRules": {
+        "additionalProperties": false,
+        "description": "The thresholds that make each concept objective (see ae_core.trading.smc).",
+        "properties": {
+          "atr_period": {
+            "default": 14,
+            "maximum": 50.0,
+            "minimum": 5.0,
+            "title": "Atr Period",
+            "type": "integer"
+          },
+          "bias_min_breaks": {
+            "default": 1,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Bias Min Breaks",
+            "type": "integer"
+          },
+          "confirm_bars": {
+            "default": 15,
+            "maximum": 60.0,
+            "minimum": 2.0,
+            "title": "Confirm Bars",
+            "type": "integer"
+          },
+          "displacement_atr": {
+            "default": 1.0,
+            "maximum": 5.0,
+            "minimum": 0.5,
+            "title": "Displacement Atr",
+            "type": "number"
+          },
+          "equal_level_pct": {
+            "default": 0.03,
+            "maximum": 0.5,
+            "minimum": 0.0,
+            "title": "Equal Level Pct",
+            "type": "number"
+          },
+          "fvg_min_atr": {
+            "default": 0.25,
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Fvg Min Atr",
+            "type": "number"
+          },
+          "internal_liquidity": {
+            "default": true,
+            "title": "Internal Liquidity",
+            "type": "boolean"
+          },
+          "min_room_r": {
+            "default": 1.0,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Min Room R",
+            "type": "number"
+          },
+          "ob_zone": {
+            "default": "body",
+            "enum": [
+              "body",
+              "range"
+            ],
+            "title": "Ob Zone",
+            "type": "string"
+          },
+          "opening_range_minutes": {
+            "default": 15,
+            "maximum": 60.0,
+            "minimum": 5.0,
+            "title": "Opening Range Minutes",
+            "type": "integer"
+          },
+          "pd_range": {
+            "default": "setup",
+            "enum": [
+              "setup",
+              "bias"
+            ],
+            "title": "Pd Range",
+            "type": "string"
+          },
+          "poi": {
+            "default": "either",
+            "enum": [
+              "fvg",
+              "ob",
+              "either",
+              "both"
+            ],
+            "title": "Poi",
+            "type": "string"
+          },
+          "poi_max_age": {
+            "default": 24,
+            "maximum": 48.0,
+            "minimum": 2.0,
+            "title": "Poi Max Age",
+            "type": "integer"
+          },
+          "premium_discount": {
+            "default": true,
+            "title": "Premium Discount",
+            "type": "boolean"
+          },
+          "sweep_lookback": {
+            "default": 12,
+            "maximum": 24.0,
+            "minimum": 2.0,
+            "title": "Sweep Lookback",
+            "type": "integer"
+          },
+          "sweep_min_pct": {
+            "default": 0.01,
+            "maximum": 0.5,
+            "minimum": 0.0,
+            "title": "Sweep Min Pct",
+            "type": "number"
+          },
+          "sweep_reclaim": {
+            "default": 2,
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Sweep Reclaim",
+            "type": "integer"
+          },
+          "swing_bias": {
+            "default": 2,
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Swing Bias",
+            "type": "integer"
+          },
+          "swing_entry": {
+            "default": 2,
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Swing Entry",
+            "type": "integer"
+          },
+          "swing_setup": {
+            "default": 2,
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Swing Setup",
+            "type": "integer"
+          }
+        },
+        "title": "SmcRules",
+        "type": "object"
+      },
+      "SmcScalpConfig": {
+        "additionalProperties": false,
+        "description": "Intraday options buying on Smart Money Concepts read from the index: a clear bias on the bias timeframe, a\nliquidity sweep, displacement and BOS/CHoCH on the setup timeframe leaving an order block or FVG, and a tap of\nit confirmed by a CHoCH on the entry timeframe. Stop beyond the sweep, TP1/TP2/TP3 in R (ADR 0018).",
+        "properties": {
+          "kind": {
+            "const": "smc_scalp",
+            "default": "smc_scalp",
+            "title": "Kind",
+            "type": "string"
+          },
+          "option": {
+            "$ref": "#/components/schemas/SmcOption"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/SmcRisk"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/SmcRules"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SmcSession"
+          },
+          "timeframes": {
+            "$ref": "#/components/schemas/SmcTimeframes"
+          },
+          "underlying": {
+            "default": "NIFTY",
+            "enum": [
+              "NIFTY",
+              "BANKNIFTY",
+              "FINNIFTY",
+              "MIDCPNIFTY",
+              "SENSEX"
+            ],
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "title": "SmcScalpConfig",
+        "type": "object"
+      },
+      "SmcSession": {
+        "additionalProperties": false,
+        "properties": {
+          "exit": {
+            "default": "15:10",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Exit",
+            "type": "string"
+          },
+          "last_entry": {
+            "default": "14:30",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Last Entry",
+            "type": "string"
+          },
+          "start": {
+            "default": "09:30",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "title": "SmcSession",
+        "type": "object"
+      },
+      "SmcTimeframes": {
+        "additionalProperties": false,
+        "description": "Minutes per candle: bias (structure, premium/discount), setup (sweep, displacement, BOS/CHoCH, OB/FVG) and\nentry (the tap and its confirmation). All are built from the index's 1-minute candles.",
+        "properties": {
+          "bias": {
+            "default": 15,
+            "enum": [
+              15,
+              30,
+              60
+            ],
+            "title": "Bias",
+            "type": "integer"
+          },
+          "entry": {
+            "default": 1,
+            "enum": [
+              1,
+              2,
+              3
+            ],
+            "title": "Entry",
+            "type": "integer"
+          },
+          "setup": {
+            "default": 5,
+            "enum": [
+              3,
+              5,
+              10
+            ],
+            "title": "Setup",
+            "type": "integer"
+          }
+        },
+        "title": "SmcTimeframes",
+        "type": "object"
+      },
       "StrategyCatalogOut": {
         "description": "Everything the builder needs: instruments, starting points and limits.",
         "properties": {
@@ -4509,6 +4932,7 @@
             "discriminator": {
               "mapping": {
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "smc_scalp": "#/components/schemas/SmcScalpConfig",
                 "time_based": "#/components/schemas/TimeBasedConfig",
                 "zero_dte": "#/components/schemas/ZeroDteConfig"
               },
@@ -4523,6 +4947,9 @@
               },
               {
                 "$ref": "#/components/schemas/ZeroDteConfig"
+              },
+              {
+                "$ref": "#/components/schemas/SmcScalpConfig"
               }
             ],
             "title": "Config"
@@ -4593,6 +5020,7 @@
             "discriminator": {
               "mapping": {
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "smc_scalp": "#/components/schemas/SmcScalpConfig",
                 "time_based": "#/components/schemas/TimeBasedConfig",
                 "zero_dte": "#/components/schemas/ZeroDteConfig"
               },
@@ -4607,6 +5035,9 @@
               },
               {
                 "$ref": "#/components/schemas/ZeroDteConfig"
+              },
+              {
+                "$ref": "#/components/schemas/SmcScalpConfig"
               }
             ],
             "title": "Config"
@@ -4636,7 +5067,8 @@
             "enum": [
               "time_based",
               "range_breakout",
-              "zero_dte"
+              "zero_dte",
+              "smc_scalp"
             ],
             "title": "Kind",
             "type": "string"
@@ -4692,6 +5124,7 @@
                 "discriminator": {
                   "mapping": {
                     "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                    "smc_scalp": "#/components/schemas/SmcScalpConfig",
                     "time_based": "#/components/schemas/TimeBasedConfig",
                     "zero_dte": "#/components/schemas/ZeroDteConfig"
                   },
@@ -4706,6 +5139,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ZeroDteConfig"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SmcScalpConfig"
                   }
                 ]
               },

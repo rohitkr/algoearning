@@ -3,6 +3,7 @@
 import type {
   ConfigValidation,
   RangeBreakoutConfig,
+  SmcScalpConfig,
   Strategy,
   StrategyCatalog,
   StrategyConfig,
@@ -33,6 +34,7 @@ import {
 
 import { Check, Field, NumberField, SelectField, TimeField, inputClass } from "./fields";
 import { LegEditor } from "./leg-editor";
+import { SmcParams } from "./smc-params";
 
 type Errs = Record<string, string>;
 type Proven = RangeBreakoutConfig | ZeroDteConfig;
@@ -297,7 +299,11 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold">{p.name}</span>
-                  {p.config.kind !== "time_based" && <StatusPill tone="info">Proven</StatusPill>}
+                  {p.config.kind === "smc_scalp" ? (
+                    <StatusPill tone="info">SMC</StatusPill>
+                  ) : (
+                    p.config.kind !== "time_based" && <StatusPill tone="info">Proven</StatusPill>
+                  )}
                 </span>
                 <span className="mt-1 block text-xs text-muted">{p.description}</span>
               </button>
@@ -524,6 +530,17 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                 />
               </Card>
             </>
+          ) : config.kind === "smc_scalp" ? (
+            <SmcParams
+              config={config}
+              defaults={
+                presets.find((p) => p.config.kind === "smc_scalp")?.config as SmcScalpConfig | undefined
+              }
+              hours={hours}
+              errs={errs}
+              warns={warns}
+              onChange={update}
+            />
           ) : (
             <Card>
               <h2 className="mb-4 font-semibold">Parameters</h2>

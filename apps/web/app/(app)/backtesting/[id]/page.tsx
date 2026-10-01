@@ -8,6 +8,7 @@ import { notFound } from "next/navigation";
 import { DeleteBacktest } from "@/components/backtesting/delete-backtest";
 import { DailyPnlBars, EquityCurve } from "@/components/reports/pnl-charts";
 import { AutoRefresh } from "@/components/runs/auto-refresh";
+import { SignalCard, type SmcSignal } from "@/components/smc/signal-card";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 
@@ -28,6 +29,20 @@ type Trade = {
   net: number;
 };
 type Day = { day: string; pnl: number; trades: number; cumulative: number };
+type Signals = {
+  count: number;
+  wins: number;
+  losses: number;
+  win_rate: number | null;
+  avg_win: number | null;
+  avg_loss: number | null;
+  profit_factor: number | null;
+  expectancy: number | null;
+  max_consecutive_losses: number;
+  avg_holding_minutes: number | null;
+  funnel: Record<string, number>;
+  list: (SmcSignal & { time: string })[];
+};
 type Summary = Record<string, number | null | { day: string; pnl: number }>;
 
 const dt = new Intl.DateTimeFormat("en-IN", {
@@ -63,7 +78,9 @@ export default async function BacktestPage({ params }: { params: Promise<{ id: s
     trades: Trade[];
     trades_total: number;
     warnings: string[];
+    signals?: Signals | null;
   } | null;
+  const sig = res?.signals;
   const s = res?.summary;
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
@@ -134,7 +151,69 @@ export default async function BacktestPage({ params }: { params: Promise<{ id: s
             <Tile label="Max drawdown" sub={`${s.trading_days} trading days of ${s.days_replayed} replayed`}>
               <Pnl value={n(s.max_drawdown)} />
             </Tile>
+            <Tile label="Expectancy" sub="average net P&L per trade">
+              <Pnl value={n(s.expectancy)} />
+            </Tile>
+            <Tile label="Max consecutive losses">{n(s.max_consecutive_losses) ?? "–"}</Tile>
+            <Tile label="Average holding time">
+              {n(s.avg_holding_minutes) == null ? "–" : `${s.avg_holding_minutes} min`}
+            </Tile>
+            <Tile label="Charges" sub="as a share of gross profit">
+              {n(s.charges_pct_of_gross) == null ? "–" : `${s.charges_pct_of_gross}%`}
+            </Tile>
           </div>
+          {sig && (
+            <Card className="flex flex-col gap-4">
+              <div>
+                <CardTitle>Signals</CardTitle>
+                <p className="text-sm text-muted">
+                  Each signal&apos;s tranches counted as one trade idea. Win rate here is per signal; the
+                  tiles above count every tranche.
+                </p>
+              </div>
+              <dl className="grid grid-cols-2 gap-3 text-sm tabular-nums sm:grid-cols-4">
+                {(
+                  [
+                    ["Signals", sig.count],
+                    ["Win rate", pct(sig.win_rate)],
+                    ["Profit factor", sig.profit_factor ?? "–"],
+                    ["Expectancy", sig.expectancy == null ? "–" : formatNumber(sig.expectancy)],
+                    ["Average win", sig.avg_win == null ? "–" : formatNumber(sig.avg_win)],
+                    ["Average loss", sig.avg_loss == null ? "–" : formatNumber(sig.avg_loss)],
+                    ["Max consecutive losses", sig.max_consecutive_losses],
+                    [
+                      "Average holding",
+                      sig.avg_holding_minutes == null ? "–" : `${sig.avg_holding_minutes} min`,
+                    ],
+                  ] as const
+                ).map(([k, v]) => (
+                  <div key={k}>
+                    <dt className="text-xs text-muted">{k}</dt>
+                    <dd className="font-semibold">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+              {Object.keys(sig.funnel).length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted">Why setups did or did not become trades</p>
+                  <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                    {Object.entries(sig.funnel)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([k, v]) => (
+                        <li key={k}>
+                          <StatusPill>
+                            {k} · {v}
+                          </StatusPill>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+              {sig.list.slice(0, 50).map((x) => (
+                <SignalCard key={x.time} s={x} when={dt.format(new Date(x.time))} />
+              ))}
+            </Card>
+          )}
           {res.daily.length > 0 && (
             <div className="grid gap-4 lg:grid-cols-2">
               <Card>

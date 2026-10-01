@@ -110,4 +110,34 @@ describe("StrategyBuilder", () => {
     fireEvent.change(screen.getByLabelText("Hedge wing"), { target: { value: "" } });
     expect(screen.getByText(/, unhedged\./)).toBeTruthy();
   });
+
+  it("edits the SMC scalper's settings and saves them", async () => {
+    render(<StrategyBuilder catalog={catalog} />);
+    fireEvent.click(screen.getByRole("radio", { name: /SMC options scalper \(NIFTY\)/ }));
+    expect(legs()).toHaveLength(0);
+    expect(screen.getByRole("heading", { name: "Timeframes" })).toBeTruthy();
+    expect((screen.getByLabelText("Bias") as HTMLSelectElement).value).toBe("15");
+    expect(screen.getByText(/TP1 1R, TP2 1.5R, TP3 2R, a tranche at each/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("radio", { name: "1:3" }));
+    expect(screen.getByText(/TP1 1R, TP2 2R, TP3 3R/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Strikes from ATM"), { target: { value: "-1" } });
+    expect(screen.getByText(/Buy 1 lot \(65 qty\) of the ITM 1 call/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Displacement body"), { target: { value: "1.5" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+    await flush();
+    const saved = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies")!.body as {
+      config: {
+        kind: string;
+        risk: { rr: number };
+        option: { strike: { offset: number } };
+        rules: { displacement_atr: number };
+      };
+    };
+    expect(saved.config.kind).toBe("smc_scalp");
+    expect(saved.config.risk.rr).toBe(3);
+    expect(saved.config.option.strike.offset).toBe(-1);
+    expect(saved.config.rules.displacement_atr).toBe(1.5);
+  });
 });

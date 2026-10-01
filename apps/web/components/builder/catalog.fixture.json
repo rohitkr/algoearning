@@ -348,6 +348,207 @@
         "itm_points": 100,
         "hedge_width": null
       }
+    },
+    {
+      "id": "smc_scalp_nifty",
+      "name": "SMC options scalper (NIFTY)",
+      "description": "Buys a call or put on a liquidity sweep, displacement and BOS/CHoCH from an order block or FVG, with the 15m trend; stop beyond the sweep, targets at 1R / 1.5R / 2R.",
+      "config": {
+        "kind": "smc_scalp",
+        "underlying": "NIFTY",
+        "timeframes": {
+          "bias": 15,
+          "setup": 5,
+          "entry": 1
+        },
+        "rules": {
+          "swing_bias": 2,
+          "swing_setup": 2,
+          "swing_entry": 2,
+          "bias_min_breaks": 1,
+          "atr_period": 14,
+          "displacement_atr": 1.0,
+          "fvg_min_atr": 0.25,
+          "sweep_min_pct": 0.01,
+          "sweep_reclaim": 2,
+          "sweep_lookback": 12,
+          "equal_level_pct": 0.03,
+          "opening_range_minutes": 15,
+          "internal_liquidity": true,
+          "poi": "either",
+          "ob_zone": "body",
+          "poi_max_age": 24,
+          "confirm_bars": 15,
+          "premium_discount": true,
+          "pd_range": "setup",
+          "min_room_r": 1.0
+        },
+        "option": {
+          "strike": {
+            "mode": "atm",
+            "offset": 0,
+            "premium": null
+          },
+          "expiry": "nearest",
+          "expiry_day_cutoff": "12:00",
+          "min_volume": 10000,
+          "min_oi": 50000,
+          "max_spread_pct": 1.0
+        },
+        "risk": {
+          "lots": 1,
+          "rr": 2,
+          "tranches": true,
+          "sl_buffer_pct": 0.03,
+          "min_risk_pct": 0.05,
+          "max_risk_pct": 0.35,
+          "premium_stop_pct": 40.0,
+          "breakeven_at_tp1": true,
+          "trail_at_tp2": true,
+          "max_trades_per_day": 2,
+          "max_losses_per_day": 2,
+          "cooldown_minutes": 15
+        },
+        "session": {
+          "start": "09:30",
+          "last_entry": "14:30",
+          "exit": "15:10"
+        }
+      }
+    },
+    {
+      "id": "smc_scalp_banknifty",
+      "name": "SMC options scalper (BANKNIFTY)",
+      "description": "Buys a call or put on a liquidity sweep, displacement and BOS/CHoCH from an order block or FVG, with the 15m trend; stop beyond the sweep, targets at 1R / 1.5R / 2R.",
+      "config": {
+        "kind": "smc_scalp",
+        "underlying": "BANKNIFTY",
+        "timeframes": {
+          "bias": 15,
+          "setup": 5,
+          "entry": 1
+        },
+        "rules": {
+          "swing_bias": 2,
+          "swing_setup": 2,
+          "swing_entry": 2,
+          "bias_min_breaks": 1,
+          "atr_period": 14,
+          "displacement_atr": 1.0,
+          "fvg_min_atr": 0.25,
+          "sweep_min_pct": 0.01,
+          "sweep_reclaim": 2,
+          "sweep_lookback": 12,
+          "equal_level_pct": 0.03,
+          "opening_range_minutes": 15,
+          "internal_liquidity": true,
+          "poi": "either",
+          "ob_zone": "body",
+          "poi_max_age": 24,
+          "confirm_bars": 15,
+          "premium_discount": true,
+          "pd_range": "setup",
+          "min_room_r": 1.0
+        },
+        "option": {
+          "strike": {
+            "mode": "atm",
+            "offset": 0,
+            "premium": null
+          },
+          "expiry": "nearest",
+          "expiry_day_cutoff": "12:00",
+          "min_volume": 10000,
+          "min_oi": 50000,
+          "max_spread_pct": 1.0
+        },
+        "risk": {
+          "lots": 1,
+          "rr": 2,
+          "tranches": true,
+          "sl_buffer_pct": 0.03,
+          "min_risk_pct": 0.05,
+          "max_risk_pct": 0.35,
+          "premium_stop_pct": 40.0,
+          "breakeven_at_tp1": true,
+          "trail_at_tp2": true,
+          "max_trades_per_day": 2,
+          "max_losses_per_day": 2,
+          "cooldown_minutes": 15
+        },
+        "session": {
+          "start": "09:30",
+          "last_entry": "14:30",
+          "exit": "15:10"
+        }
+      }
+    },
+    {
+      "id": "smc_scalp_sensex",
+      "name": "SMC options scalper (SENSEX)",
+      "description": "Buys a call or put on a liquidity sweep, displacement and BOS/CHoCH from an order block or FVG, with the 15m trend; stop beyond the sweep, targets at 1R / 1.5R / 2R.",
+      "config": {
+        "kind": "smc_scalp",
+        "underlying": "SENSEX",
+        "timeframes": {
+          "bias": 15,
+          "setup": 5,
+          "entry": 1
+        },
+        "rules": {
+          "swing_bias": 2,
+          "swing_setup": 2,
+          "swing_entry": 2,
+          "bias_min_breaks": 1,
+          "atr_period": 14,
+          "displacement_atr": 1.0,
+          "fvg_min_atr": 0.25,
+          "sweep_min_pct": 0.01,
+          "sweep_reclaim": 2,
+          "sweep_lookback": 12,
+          "equal_level_pct": 0.03,
+          "opening_range_minutes": 15,
+          "internal_liquidity": true,
+          "poi": "either",
+          "ob_zone": "body",
+          "poi_max_age": 24,
+          "confirm_bars": 15,
+          "premium_discount": true,
+          "pd_range": "setup",
+          "min_room_r": 1.0
+        },
+        "option": {
+          "strike": {
+            "mode": "atm",
+            "offset": 0,
+            "premium": null
+          },
+          "expiry": "nearest",
+          "expiry_day_cutoff": "12:00",
+          "min_volume": 10000,
+          "min_oi": 50000,
+          "max_spread_pct": 1.0
+        },
+        "risk": {
+          "lots": 1,
+          "rr": 2,
+          "tranches": true,
+          "sl_buffer_pct": 0.03,
+          "min_risk_pct": 0.05,
+          "max_risk_pct": 0.35,
+          "premium_stop_pct": 40.0,
+          "breakeven_at_tp1": true,
+          "trail_at_tp2": true,
+          "max_trades_per_day": 2,
+          "max_losses_per_day": 2,
+          "cooldown_minutes": 15
+        },
+        "session": {
+          "start": "09:30",
+          "last_entry": "14:30",
+          "exit": "15:10"
+        }
+      }
     }
   ],
   "limits": {

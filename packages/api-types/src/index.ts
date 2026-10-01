@@ -18,6 +18,7 @@ export type StrategyConfig = Strategy["config"];
 export type TimeBasedConfig = Schemas["TimeBasedConfig"];
 export type RangeBreakoutConfig = Schemas["RangeBreakoutConfig"];
 export type ZeroDteConfig = Schemas["ZeroDteConfig"];
+export type SmcScalpConfig = Schemas["SmcScalpConfig"];
 export type StrategyLeg = Schemas["Leg"];
 export type LegStrike = Schemas["Strike"];
 export type LegThreshold = Schemas["Threshold"];

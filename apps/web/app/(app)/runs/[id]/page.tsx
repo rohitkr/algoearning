@@ -8,6 +8,7 @@ import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/runs/auto-refresh";
 import { StopRunButton } from "@/components/runs/run-actions";
 import { ModePill, RunStatusPill, fmt } from "@/components/runs/run-bits";
+import { SignalCard, type SmcSignal, isSmcSignal } from "@/components/smc/signal-card";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 
@@ -18,7 +19,7 @@ const td = "px-3 py-2.5 whitespace-nowrap";
 const num = (v: number | null | undefined) => (v == null ? "–" : formatNumber(v));
 
 function describe(detail: Record<string, unknown>): string {
-  const skip = new Set(["trade_id"]);
+  const skip = new Set(["trade_id", "setup", "reason_steps"]);
   return Object.entries(detail)
     .filter(([k, v]) => !skip.has(k) && v != null && v !== "")
     .map(([k, v]) => `${k.replaceAll("_", " ")}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`)
@@ -34,6 +35,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   if (!r.ok) return <StatusPill tone="danger">Could not load the run: {r.error.message}</StatusPill>;
   const { run, positions, events } = r.data;
   const active = ["pending", "running", "stopping"].includes(run.status);
+  const signals = events.filter((e) => isSmcSignal(e.event));
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
       {active && <AutoRefresh />}
@@ -134,6 +136,15 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           </div>
         )}
       </Card>
+
+      {signals.length > 0 && (
+        <Card className="flex flex-col gap-3">
+          <CardTitle>Signals</CardTitle>
+          {signals.slice(0, 20).map((e) => (
+            <SignalCard key={e.id} s={e.detail as SmcSignal} when={fmt(e.ts)} />
+          ))}
+        </Card>
+      )}
 
       <Card className="p-0">
         <div className="px-5 pt-4 pb-2">

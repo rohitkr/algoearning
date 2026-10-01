@@ -2359,7 +2359,7 @@ export interface components {
         /** PresetOut */
         PresetOut: {
             /** Config */
-            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"];
+            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
             /** Description */
             description: string;
             /** Id */
@@ -2526,6 +2526,8 @@ export interface components {
             /** Avg Win */
             avg_win: number | null;
             best_day: components["schemas"]["ReportDay"] | null;
+            /** Expectancy */
+            expectancy?: number | null;
             /**
              * From Date
              * Format: date
@@ -2533,6 +2535,11 @@ export interface components {
             from_date: string;
             /** Losses */
             losses: number;
+            /**
+             * Max Consecutive Losses
+             * @default 0
+             */
+            max_consecutive_losses: number;
             /** Max Drawdown */
             max_drawdown: number;
             /** Profit Factor */
@@ -2660,6 +2667,279 @@ export interface components {
             unrealized_pnl: number;
         };
         /**
+         * SmcOption
+         * @description Which option to buy for a signal: bullish buys a call, bearish a put.
+         */
+        SmcOption: {
+            /**
+             * Expiry
+             * @default nearest
+             * @enum {string}
+             */
+            expiry: "nearest" | "next";
+            /**
+             * Expiry Day Cutoff
+             * @default 12:00
+             */
+            expiry_day_cutoff: string | null;
+            /**
+             * Max Spread Pct
+             * @default 1
+             */
+            max_spread_pct: number;
+            /**
+             * Min Oi
+             * @default 50000
+             */
+            min_oi: number;
+            /**
+             * Min Volume
+             * @default 10000
+             */
+            min_volume: number;
+            strike?: components["schemas"]["Strike"];
+        };
+        /** SmcRisk */
+        SmcRisk: {
+            /**
+             * Breakeven At Tp1
+             * @default true
+             */
+            breakeven_at_tp1: boolean;
+            /**
+             * Cooldown Minutes
+             * @default 15
+             */
+            cooldown_minutes: number;
+            /**
+             * Lots
+             * @default 1
+             */
+            lots: number;
+            /**
+             * Max Losses Per Day
+             * @default 2
+             */
+            max_losses_per_day: number;
+            /**
+             * Max Risk Pct
+             * @default 0.35
+             */
+            max_risk_pct: number;
+            /**
+             * Max Trades Per Day
+             * @default 2
+             */
+            max_trades_per_day: number;
+            /**
+             * Min Risk Pct
+             * @default 0.05
+             */
+            min_risk_pct: number;
+            /**
+             * Premium Stop Pct
+             * @default 40
+             */
+            premium_stop_pct: number | null;
+            /**
+             * Rr
+             * @default 2
+             * @enum {integer}
+             */
+            rr: 2 | 3 | 4;
+            /**
+             * Sl Buffer Pct
+             * @default 0.03
+             */
+            sl_buffer_pct: number;
+            /**
+             * Trail At Tp2
+             * @default true
+             */
+            trail_at_tp2: boolean;
+            /**
+             * Tranches
+             * @default true
+             */
+            tranches: boolean;
+        };
+        /**
+         * SmcRules
+         * @description The thresholds that make each concept objective (see ae_core.trading.smc).
+         */
+        SmcRules: {
+            /**
+             * Atr Period
+             * @default 14
+             */
+            atr_period: number;
+            /**
+             * Bias Min Breaks
+             * @default 1
+             */
+            bias_min_breaks: number;
+            /**
+             * Confirm Bars
+             * @default 15
+             */
+            confirm_bars: number;
+            /**
+             * Displacement Atr
+             * @default 1
+             */
+            displacement_atr: number;
+            /**
+             * Equal Level Pct
+             * @default 0.03
+             */
+            equal_level_pct: number;
+            /**
+             * Fvg Min Atr
+             * @default 0.25
+             */
+            fvg_min_atr: number;
+            /**
+             * Internal Liquidity
+             * @default true
+             */
+            internal_liquidity: boolean;
+            /**
+             * Min Room R
+             * @default 1
+             */
+            min_room_r: number;
+            /**
+             * Ob Zone
+             * @default body
+             * @enum {string}
+             */
+            ob_zone: "body" | "range";
+            /**
+             * Opening Range Minutes
+             * @default 15
+             */
+            opening_range_minutes: number;
+            /**
+             * Pd Range
+             * @default setup
+             * @enum {string}
+             */
+            pd_range: "setup" | "bias";
+            /**
+             * Poi
+             * @default either
+             * @enum {string}
+             */
+            poi: "fvg" | "ob" | "either" | "both";
+            /**
+             * Poi Max Age
+             * @default 24
+             */
+            poi_max_age: number;
+            /**
+             * Premium Discount
+             * @default true
+             */
+            premium_discount: boolean;
+            /**
+             * Sweep Lookback
+             * @default 12
+             */
+            sweep_lookback: number;
+            /**
+             * Sweep Min Pct
+             * @default 0.01
+             */
+            sweep_min_pct: number;
+            /**
+             * Sweep Reclaim
+             * @default 2
+             */
+            sweep_reclaim: number;
+            /**
+             * Swing Bias
+             * @default 2
+             */
+            swing_bias: number;
+            /**
+             * Swing Entry
+             * @default 2
+             */
+            swing_entry: number;
+            /**
+             * Swing Setup
+             * @default 2
+             */
+            swing_setup: number;
+        };
+        /**
+         * SmcScalpConfig
+         * @description Intraday options buying on Smart Money Concepts read from the index: a clear bias on the bias timeframe, a
+         *     liquidity sweep, displacement and BOS/CHoCH on the setup timeframe leaving an order block or FVG, and a tap of
+         *     it confirmed by a CHoCH on the entry timeframe. Stop beyond the sweep, TP1/TP2/TP3 in R (ADR 0018).
+         */
+        SmcScalpConfig: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "smc_scalp";
+            option?: components["schemas"]["SmcOption"];
+            risk?: components["schemas"]["SmcRisk"];
+            rules?: components["schemas"]["SmcRules"];
+            session?: components["schemas"]["SmcSession"];
+            timeframes?: components["schemas"]["SmcTimeframes"];
+            /**
+             * Underlying
+             * @default NIFTY
+             * @enum {string}
+             */
+            underlying: "NIFTY" | "BANKNIFTY" | "FINNIFTY" | "MIDCPNIFTY" | "SENSEX";
+        };
+        /** SmcSession */
+        SmcSession: {
+            /**
+             * Exit
+             * @default 15:10
+             */
+            exit: string;
+            /**
+             * Last Entry
+             * @default 14:30
+             */
+            last_entry: string;
+            /**
+             * Start
+             * @default 09:30
+             */
+            start: string;
+        };
+        /**
+         * SmcTimeframes
+         * @description Minutes per candle: bias (structure, premium/discount), setup (sweep, displacement, BOS/CHoCH, OB/FVG) and
+         *     entry (the tap and its confirmation). All are built from the index's 1-minute candles.
+         */
+        SmcTimeframes: {
+            /**
+             * Bias
+             * @default 15
+             * @enum {integer}
+             */
+            bias: 15 | 30 | 60;
+            /**
+             * Entry
+             * @default 1
+             * @enum {integer}
+             */
+            entry: 1 | 2 | 3;
+            /**
+             * Setup
+             * @default 5
+             * @enum {integer}
+             */
+            setup: 3 | 5 | 10;
+        };
+        /**
          * StrategyCatalogOut
          * @description Everything the builder needs: instruments, starting points and limits.
          */
@@ -2673,7 +2953,7 @@ export interface components {
         /** StrategyIn */
         StrategyIn: {
             /** Config */
-            config?: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"];
+            config?: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
             /** Description */
             description?: string | null;
             /** Name */
@@ -2693,7 +2973,7 @@ export interface components {
         /** StrategyOut */
         StrategyOut: {
             /** Config */
-            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"];
+            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
             /**
              * Created At
              * Format: date-time
@@ -2710,7 +2990,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "time_based" | "range_breakout" | "zero_dte";
+            kind: "time_based" | "range_breakout" | "zero_dte" | "smc_scalp";
             /** Name */
             name: string;
             /** Schema Version */
@@ -2731,7 +3011,7 @@ export interface components {
         /** StrategyPatch */
         StrategyPatch: {
             /** Config */
-            config?: (components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"]) | null;
+            config?: (components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"]) | null;
             /** Description */
             description?: string | null;
             /** Name */

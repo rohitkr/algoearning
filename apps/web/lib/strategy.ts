@@ -4,6 +4,7 @@ import type {
   Instrument,
   LegStrike,
   LegThreshold,
+  SmcScalpConfig,
   StrategyConfig,
   StrategyLeg,
   TimeBasedConfig,
@@ -13,6 +14,7 @@ export const KIND_LABEL: Record<StrategyConfig["kind"], string> = {
   time_based: "Time based",
   range_breakout: "Range breakout",
   zero_dte: "Expiry-day straddle",
+  smc_scalp: "SMC options scalping",
 };
 
 export const EXPIRY_LABEL: Record<StrategyLeg["expiry"], string> = {
@@ -95,6 +97,7 @@ export function describeConfig(c: StrategyConfig, instruments: Instrument[]): st
     if (r?.exit_all_on_leg_sl) lines.push("When any leg's stop-loss hits, exit every leg.");
     return lines;
   }
+  if (c.kind === "smc_scalp") return describeSmc(c, inst);
   const lots = `${c.lots} lot${c.lots === 1 ? "" : "s"}${inst ? ` (${c.lots * inst.lot_size} qty)` : ""}`;
   const hedge = c.hedge_width ? `, hedged ${c.hedge_width} points further out` : ", unhedged";
   if (c.kind === "range_breakout")
@@ -113,6 +116,21 @@ export function describeConfig(c: StrategyConfig, instruments: Instrument[]): st
   ];
 }
 
+function describeSmc(c: SmcScalpConfig, inst: Instrument | undefined): string[] {
+  const tf = { bias: 15, setup: 5, entry: 1, ...c.timeframes };
+  const r = { lots: 1, rr: 2, tranches: true, max_trades_per_day: 2, max_losses_per_day: 2, ...c.risk };
+  const s = { start: "09:30", last_entry: "14:30", exit: "15:10", ...c.session };
+  const o = c.option;
+  const lots = `${r.lots} lot${r.lots === 1 ? "" : "s"}${inst ? ` (${r.lots * inst.lot_size} qty)` : ""}`;
+  return [
+    `Bias from ${c.underlying}'s ${tf.bias}m structure; no trade while it is unclear.`,
+    `Setup on ${tf.setup}m: a liquidity sweep, displacement and a BOS/CHoCH with the bias, leaving an order block or fair value gap.`,
+    `Entry on ${tf.entry}m: a tap of that zone confirmed by a CHoCH. Buy ${lots} of the ${strikeLabel(o?.strike)} call (bullish) or put (bearish), ${o?.expiry === "next" ? "the expiry after the nearest" : "nearest expiry"}.`,
+    `Stop beyond the sweep; TP1 1R, TP2 ${(1 + r.rr) / 2}R, TP3 ${r.rr}R${r.tranches ? ", a tranche at each" : ""}.`,
+    `Entries ${s.start}–${s.last_entry}, at most ${r.max_trades_per_day} a day and ${r.max_losses_per_day} losers; exit by ${s.exit}.`,
+  ];
+}
+
 /** One line for the strategies list: "NIFTY · 2 legs · 09:20–15:15". */
 export function configSummary(c: StrategyConfig): string {
   if (c.kind === "time_based") {
@@ -120,6 +138,10 @@ export function configSummary(c: StrategyConfig): string {
     return `${c.underlying} · ${n} leg${n === 1 ? "" : "s"} · ${c.timing?.entry ?? "09:20"}–${c.timing?.exit ?? "15:15"}`;
   }
   if (c.kind === "range_breakout") return `${c.underlying} · range ${c.range_start}–${c.range_end}`;
+  if (c.kind === "smc_scalp") {
+    const tf = c.timeframes;
+    return `${c.underlying} · SMC ${tf?.bias ?? 15}/${tf?.setup ?? 5}/${tf?.entry ?? 1}m · 1:${c.risk?.rr ?? 2} · ${c.session?.start ?? "09:30"}–${c.session?.last_entry ?? "14:30"}`;
+  }
   return `${c.underlying} · expiry days · ${c.first_entry}–${c.last_entry}`;
 }
 

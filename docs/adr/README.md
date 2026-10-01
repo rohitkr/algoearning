@@ -22,3 +22,4 @@ supersedes the old one, never by editing history.
 | 0015 | [Live execution on Zerodha](0015-live-execution.md)                                    | Accepted                     |
 | 0016 | [Notifications: an outbox, email and Telegram, chosen per user](0016-notifications.md) | Accepted                     |
 | 0017 | [Backtesting: the live runners, replayed over stored history](0017-backtesting.md)     | Accepted                     |
+| 0018 | [SMC options scalping: objective rules, options bought](0018-smc-options-scalping.md)  | Proposed                     |
