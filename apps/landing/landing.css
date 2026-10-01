@@ -1,4 +1,5 @@
-/* AlgoEarning landing page (algoearning.com). Dark only; colours follow the app's dark tokens (packages/ui). */
+/* AlgoEarning landing page (algoearning.com). Dark by default, with light and system themes (see the script in
+   index.html: <html data-theme="dark|light">). Colours follow the app's tokens (packages/ui). */
 :root {
   --bg: #0b0c10;
   --bg-2: #101218;
@@ -12,9 +13,65 @@
   --primary-text: #82a6fa;
   --profit: #34c46a;
   --loss: #f26d6d;
+  --border-strong: #3a3e4a;
+  --nav-bg: rgb(11 12 16 / 0.72);
+  --nav-border: rgb(42 45 54 / 0.6);
+  --chip-bg: rgb(22 23 28 / 0.7);
+  --grid-line: rgb(255 255 255 / 0.03);
+  --card-fade: rgb(22 23 28 / 0.5);
+  --glow-blue: rgb(47 99 224 / 0.28);
+  --glow-green: rgb(52 196 106 / 0.12);
+  --tint: rgb(47 99 224 / 0.14);
+  --tint-border: rgb(130 166 250 / 0.25);
+  --grad-from: #82a6fa;
+  --grad-to: #34c46a;
   --radius: 14px;
   --shadow: 0 24px 60px -20px rgb(0 0 0 / 0.6);
   color-scheme: dark;
+}
+
+/* light theme: the app's light tokens */
+html[data-theme="light"] {
+  --bg: #f6f7fb;
+  --bg-2: #eef1f7;
+  --surface: #ffffff;
+  --surface-2: #f0f2f7;
+  --border: #e2e5ee;
+  --border-strong: #c9cedb;
+  --fg: #0f172a;
+  --muted: #566074;
+  --primary: #2459e0;
+  --primary-hover: #1d4bc2;
+  --primary-text: #2459e0;
+  --profit: #137a3a;
+  --loss: #c62828;
+  --nav-bg: rgb(246 247 251 / 0.8);
+  --nav-border: rgb(226 229 238 / 0.9);
+  --chip-bg: rgb(255 255 255 / 0.8);
+  --grid-line: rgb(15 23 42 / 0.05);
+  --card-fade: #ffffff;
+  --glow-blue: rgb(36 89 224 / 0.16);
+  --glow-green: rgb(19 122 58 / 0.08);
+  --tint: rgb(36 89 224 / 0.08);
+  --tint-border: rgb(36 89 224 / 0.25);
+  --grad-from: #2459e0;
+  --grad-to: #137a3a;
+  --shadow: 0 24px 60px -24px rgb(15 23 42 / 0.25);
+  color-scheme: light;
+}
+
+/* the product picture stays a dark screenshot in both themes */
+.mock {
+  --bg-2: #101218;
+  --surface: #16171c;
+  --surface-2: #1d1f26;
+  --border: #2a2d36;
+  --fg: #eef0f5;
+  --muted: #9aa3b4;
+  --primary-text: #82a6fa;
+  --profit: #34c46a;
+  --loss: #f26d6d;
+  color: var(--fg);
 }
 
 * {
@@ -113,7 +170,7 @@ p {
   color: var(--fg);
 }
 .btn-ghost:hover {
-  border-color: #3a3e4a;
+  border-color: var(--border-strong);
   background: var(--surface);
 }
 
@@ -122,10 +179,10 @@ p {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgb(11 12 16 / 0.72);
+  background: var(--nav-bg);
   backdrop-filter: saturate(160%) blur(14px);
   -webkit-backdrop-filter: saturate(160%) blur(14px);
-  border-bottom: 1px solid rgb(42 45 54 / 0.6);
+  border-bottom: 1px solid var(--nav-border);
 }
 .nav-inner {
   display: flex;
@@ -179,8 +236,8 @@ p {
   inset: -200px 0 auto;
   height: 720px;
   background:
-    radial-gradient(600px 320px at 22% 30%, rgb(47 99 224 / 0.28), transparent 70%),
-    radial-gradient(520px 300px at 80% 20%, rgb(52 196 106 / 0.12), transparent 70%);
+    radial-gradient(600px 320px at 22% 30%, var(--glow-blue), transparent 70%),
+    radial-gradient(520px 300px at 80% 20%, var(--glow-green), transparent 70%);
   pointer-events: none;
 }
 .hero::after {
@@ -188,8 +245,8 @@ p {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgb(255 255 255 / 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(255 255 255 / 0.03) 1px, transparent 1px);
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%);
   -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%);
@@ -210,7 +267,7 @@ p {
   padding: 6px 12px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgb(22 23 28 / 0.7);
+  background: var(--chip-bg);
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
@@ -230,7 +287,7 @@ h1 {
   font-weight: 700;
 }
 .grad {
-  background: linear-gradient(90deg, #82a6fa, #34c46a);
+  background: linear-gradient(90deg, var(--grad-from), var(--grad-to));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -465,13 +522,13 @@ h3 {
   padding: 24px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: linear-gradient(180deg, var(--surface), rgb(22 23 28 / 0.5));
+  background: linear-gradient(180deg, var(--surface), var(--card-fade));
   transition:
     border-color 0.2s,
     transform 0.2s;
 }
 .card:hover {
-  border-color: #3a3e4a;
+  border-color: var(--border-strong);
   transform: translateY(-2px);
 }
 .card p {
@@ -486,8 +543,8 @@ h3 {
   height: 40px;
   margin-bottom: 16px;
   border-radius: 10px;
-  background: rgb(47 99 224 / 0.14);
-  border: 1px solid rgb(130 166 250 / 0.25);
+  background: var(--tint);
+  border: 1px solid var(--tint-border);
 }
 .icon svg {
   width: 20px;
@@ -582,9 +639,9 @@ h3 {
   gap: 16px;
   padding: 56px 24px;
   text-align: center;
-  border: 1px solid rgb(130 166 250 / 0.25);
+  border: 1px solid var(--tint-border);
   border-radius: 20px;
-  background: radial-gradient(500px 200px at 50% 0%, rgb(47 99 224 / 0.3), transparent 70%), var(--surface);
+  background: radial-gradient(500px 200px at 50% 0%, var(--glow-blue), transparent 70%), var(--surface);
 }
 .cta-inner h2 {
   margin: 0;
@@ -678,4 +735,31 @@ h3 {
   .card:hover {
     transform: none;
   }
+}
+
+/* -- theme switch ------------------------------------------------------------------------------------ */
+.theme-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.theme-btn:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.theme-btn svg {
+  width: 18px;
+  height: 18px;
+  display: none;
+}
+html[data-choice="dark"] .theme-btn .i-dark,
+html[data-choice="light"] .theme-btn .i-light,
+html[data-choice="system"] .theme-btn .i-system {
+  display: block;
 }

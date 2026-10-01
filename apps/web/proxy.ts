@@ -13,6 +13,7 @@ import { NextResponse } from "next/server";
 // the address bar and confirms. If the admin is signed out, Clerk's sign-in returns to that same URL afterwards.
 // "/" is the dashboard for a signed-in user and the landing page (apps/landing, copied to public/landing.html by
 // scripts/sync-landing.mjs) for everyone else, so app.algoearning.com and algoearning.com show the same page.
+// /dashboard sends a signed-out visitor to that landing page; /sign-in and /sign-up send a signed-in one onwards.
 export default clerkMiddleware(async (auth, req) => {
   const token = req.nextUrl.searchParams.get("apisession");
   if (token && req.nextUrl.pathname !== "/monitor/market-data") {
@@ -21,18 +22,24 @@ export default clerkMiddleware(async (auth, req) => {
     url.search = `?apisession=${encodeURIComponent(token)}`;
     return NextResponse.redirect(url);
   }
-  if (req.nextUrl.pathname !== "/") return;
+  const { pathname } = req.nextUrl;
+  if (!["/", "/dashboard", "/sign-in", "/sign-up"].includes(pathname)) return;
   const url = req.nextUrl.clone();
-  if ((req.headers.get("host") ?? "").startsWith("monitor.")) {
+  if (pathname === "/" && (req.headers.get("host") ?? "").startsWith("monitor.")) {
     url.pathname = "/monitor";
     return NextResponse.rewrite(url);
   }
-  if ((await auth()).userId) {
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+  const signedIn = Boolean((await auth()).userId);
+  if (pathname === "/" && !signedIn) {
+    url.pathname = "/landing.html";
+    return NextResponse.rewrite(url);
   }
-  url.pathname = "/landing.html";
-  return NextResponse.rewrite(url);
+  // signed in, "/" and the sign-in pages lead to the dashboard; signed out, the dashboard leads to the landing page.
+  // Other pages still go through sign-in and back, so links from alerts keep working.
+  if (signedIn === (pathname === "/dashboard")) return;
+  url.pathname = signedIn ? "/dashboard" : "/";
+  url.search = "";
+  return NextResponse.redirect(url);
 });
 
 export const config = {

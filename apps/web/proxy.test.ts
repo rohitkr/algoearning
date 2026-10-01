@@ -39,9 +39,27 @@ describe("proxy", () => {
     expect(r.headers.get("x-middleware-rewrite")).toBe("http://monitor.algoearning.com/monitor");
   });
 
+  it("shows the landing page instead of sign-in when a signed-out visitor opens the dashboard", async () => {
+    await import("./proxy");
+    const r = (await handler(signedOut, req("/dashboard", "app.algoearning.com"))) as Response;
+    expect(r.status).toBe(307);
+    expect(r.headers.get("location")).toBe("http://app.algoearning.com/");
+  });
+
+  it("sends a signed-in user from the sign-in and sign-up pages to the dashboard", async () => {
+    await import("./proxy");
+    for (const page of ["/sign-in", "/sign-up"]) {
+      const r = (await handler(signedIn, req(page))) as Response;
+      expect(r.headers.get("location")).toBe("http://localhost:3000/dashboard");
+    }
+  });
+
   it("leaves every other page alone", async () => {
     await import("./proxy");
     expect(await handler(signedOut, req("/monitor/market-data?apisession=1"))).toBeUndefined();
     expect(await handler(signedIn, req("/dashboard"))).toBeUndefined();
+    expect(await handler(signedOut, req("/sign-in"))).toBeUndefined();
+    expect(await handler(signedOut, req("/sign-in/factor-one"))).toBeUndefined();
+    expect(await handler(signedOut, req("/runs/abc"))).toBeUndefined(); // sign-in and back, for links from alerts
   });
 });
