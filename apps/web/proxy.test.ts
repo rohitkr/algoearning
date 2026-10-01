@@ -20,29 +20,29 @@ describe("proxy", () => {
     expect(r.headers.get("location")).toBe("http://localhost:3000/monitor/market-data?apisession=57212559");
   });
 
-  it("sends a signed-in user from / to the alpha dashboard", async () => {
+  it("sends a signed-in user from / to the testing dashboard", async () => {
     await import("./proxy");
     const r = (await handler(signedIn, req("/", "app.algoearning.com"))) as Response;
     expect(r.status).toBe(307);
-    expect(r.headers.get("location")).toBe("http://app.algoearning.com/alpha-testing-dashboard");
+    expect(r.headers.get("location")).toBe("http://app.algoearning.com/testing-dashboard");
   });
 
-  it("shows the dashboard at the alpha entry when signed in, keeping the address", async () => {
+  it("shows the dashboard at the testing entry when signed in, keeping the address", async () => {
     await import("./proxy");
-    const r = (await handler(signedIn, req("/alpha-testing-dashboard", "app.algoearning.com"))) as Response;
+    const r = (await handler(signedIn, req("/testing-dashboard", "app.algoearning.com"))) as Response;
     expect(r.headers.get("x-middleware-rewrite")).toBe("http://app.algoearning.com/dashboard");
   });
 
-  it("sends a signed-out visitor at the alpha entry to sign-in and back", async () => {
+  it("sends a signed-out visitor at the testing entry to sign-in and back", async () => {
     await import("./proxy");
-    const r = (await handler(signedOut, req("/alpha-testing-dashboard", "app.algoearning.com"))) as Response;
+    const r = (await handler(signedOut, req("/testing-dashboard", "app.algoearning.com"))) as Response;
     expect(r.status).toBe(307);
     expect(r.headers.get("location")).toBe(
-      "http://app.algoearning.com/sign-in?redirect_url=%2Falpha-testing-dashboard",
+      "http://app.algoearning.com/sign-in?redirect_url=%2Ftesting-dashboard",
     );
   });
 
-  it("shows the closed-alpha splash at / when signed out, keeping the address", async () => {
+  it("shows the product page at / when signed out, keeping the address", async () => {
     await import("./proxy");
     const r = (await handler(signedOut, req("/"))) as Response;
     expect(r.headers.get("x-middleware-rewrite")).toBe("http://localhost:3000/landing.html");
@@ -54,18 +54,50 @@ describe("proxy", () => {
     expect(r.headers.get("x-middleware-rewrite")).toBe("http://monitor.algoearning.com/monitor");
   });
 
-  it("shows the splash instead of sign-in when a signed-out visitor opens the dashboard", async () => {
+  it("shows the product page instead of sign-in when a signed-out visitor opens the dashboard", async () => {
     await import("./proxy");
     const r = (await handler(signedOut, req("/dashboard", "app.algoearning.com"))) as Response;
     expect(r.status).toBe(307);
     expect(r.headers.get("location")).toBe("http://app.algoearning.com/");
   });
 
-  it("sends a signed-in user from the sign-in and sign-up pages to the alpha dashboard", async () => {
+  it("sends a signed-in user from the sign-in and sign-up pages to the testing dashboard", async () => {
     await import("./proxy");
     for (const page of ["/sign-in", "/sign-up"]) {
       const r = (await handler(signedIn, req(page))) as Response;
-      expect(r.headers.get("location")).toBe("http://localhost:3000/alpha-testing-dashboard");
+      expect(r.headers.get("location")).toBe("http://localhost:3000/testing-dashboard");
+    }
+  });
+
+  it("shows the product page at /test too", async () => {
+    await import("./proxy");
+    const r = (await handler(signedOut, req("/test"))) as Response;
+    expect(r.headers.get("x-middleware-rewrite")).toBe("http://localhost:3000/landing.html");
+  });
+
+  it("sends the old /alpha-testing-dashboard link to the new one", async () => {
+    await import("./proxy");
+    const r = (await handler(signedIn, req("/alpha-testing-dashboard"))) as Response;
+    expect(r.headers.get("location")).toBe("http://localhost:3000/testing-dashboard");
+  });
+
+  it("asks for the master password on every page when one is set", async () => {
+    await import("./proxy");
+    vi.stubEnv("APP_GATE_PASSWORD", "open-sesame");
+    try {
+      const ask = (await handler(signedIn, req("/runs/abc"))) as Response;
+      expect(ask.status).toBe(401);
+      expect(ask.headers.get("www-authenticate")).toContain("Basic");
+      const withPassword = (pw: string) => {
+        const r = req("/test");
+        r.headers.set("authorization", `Basic ${btoa(`team:${pw}`)}`);
+        return r;
+      };
+      expect(((await handler(signedOut, withPassword("wrong"))) as Response).status).toBe(401);
+      const ok = (await handler(signedOut, withPassword("open-sesame"))) as Response;
+      expect(ok.headers.get("x-middleware-rewrite")).toBe("http://localhost:3000/landing.html");
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 

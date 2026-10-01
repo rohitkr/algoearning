@@ -80,6 +80,8 @@ EOF
 # (scripts/home-host.sh deploy) after changing them. The Clerk keys come from .env.local. Never commit this file.
 NEXT_PUBLIC_API_URL=https://api.$DOMAIN
 API_URL=http://127.0.0.1:8000
+# Master password for the whole site (the browser asks for it, any username). Unset = the site is open to anyone.
+APP_GATE_PASSWORD=
 EOF
     chmod 600 apps/web/.env.production.local
     ok "created apps/web/.env.production.local"
@@ -139,6 +141,8 @@ cmd_build() {
   ok "done"
   step "Building the web app for production (NEXT_PUBLIC_API_URL from apps/web/.env.production.local)"
   [ -f apps/web/.env.production.local ] || die "run scripts/home-host.sh setup first"
+  grep -Eq '^APP_GATE_PASSWORD=.+' apps/web/.env.production.local ||
+    warn "APP_GATE_PASSWORD is not set in apps/web/.env.production.local: the site will be open to anyone"
   pnpm --filter @algoearning/web build
   # the standalone server serves its own copy of the static files (as in infra/docker/web.Dockerfile)
   rm -rf apps/web/.next/standalone/apps/web/.next/static apps/web/.next/standalone/apps/web/public

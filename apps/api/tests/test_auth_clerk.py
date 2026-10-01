@@ -179,10 +179,11 @@ def test_webhook_syncs_users_and_ignores_replays(ctx: tuple[TestClient, list[str
     assert r.status_code == 403 and r.json()["error"]["code"] == "forbidden"
 
 
-def test_closed_alpha_refuses_new_accounts_but_lets_existing_ones_in(clean_db: str) -> None:
+def test_closed_registration_refuses_new_accounts_but_lets_existing_ones_in(clean_db: str) -> None:
     app = create_app(
         Settings(
-            app_env="production",
+            app_env="test",
+            registration_open=False,
             database_url=clean_db,
             clerk_publishable_key=PK,
             clerk_webhook_secret=WHSEC,

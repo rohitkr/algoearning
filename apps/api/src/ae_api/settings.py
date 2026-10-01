@@ -21,7 +21,7 @@
 | APP_ENCRYPTION_KEY    |                | base64 32-byte master key for broker credentials       |
 | API_PUBLIC_URL        | http://localhost:8000 | how browsers/brokers reach this API (callbacks) |
 | BREEZE_API_KEY        |                | ICICI Breeze app key: the platform price feed (phase 10) |
-| REGISTRATION_OPEN     | false in prod  | whether a new sign-in may create an account (closed alpha) |
+| REGISTRATION_OPEN     | true           | false: only accounts we already have may sign in    |
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = Field(default=None, repr=False)  # likewise
     telegram_bot_username: str | None = None  # for the "Connect Telegram" link
     breeze_api_key: str | None = None  # only for Monitor's login link; the feed process holds the secret
-    registration_open: bool | None = None  # see accepts_new_users
+    registration_open: bool = True
 
     @property
     def web_url(self) -> str:
@@ -89,8 +89,8 @@ class Settings(BaseSettings):
 
     @property
     def accepts_new_users(self) -> bool:
-        """Closed alpha: outside development and test, only accounts we already have may sign in."""
-        return self.app_env in ("development", "test") if self.registration_open is None else self.registration_open
+        """REGISTRATION_OPEN=false closes sign-up: a sign-in we have no account for is refused (403)."""
+        return self.registration_open
 
 
 @lru_cache

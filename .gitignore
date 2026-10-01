@@ -31,7 +31,7 @@ __pycache__/
 # the Breeze SDK writes its own logs to ./logs (may contain session details)
 logs/
 
-# copied from apps/landing by apps/web/scripts/sync-landing.mjs
+# copied from apps/web/landing by apps/web/scripts/sync-landing.mjs
 apps/web/public/landing.html
 apps/web/public/landing.css
 apps/web/public/favicon.svg

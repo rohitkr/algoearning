@@ -11,13 +11,42 @@ import { NextResponse } from "next/server";
 // ICICI's Breeze login redirects the browser to the app's root with ?apisession=<token> (the Redirect URL registered
 // for the Breeze app). Forward it to Monitor's market-data page, which saves the session, removes the token from
 // the address bar and confirms. If the admin is signed out, Clerk's sign-in returns to that same URL afterwards.
-// Closed alpha: "/" shows the "closed to the public" splash (apps/landing, copied to public/landing.html by
-// scripts/sync-landing.mjs) to anyone signed out, so app.algoearning.com and algoearning.com show the same page and
-// nothing links to sign-in. The team's entry is ALPHA_HOME: signed out it opens sign-in and comes back, signed in it
-// shows the dashboard. A signed-in user at "/" or a sign-in page goes there; a signed-out one at /dashboard goes "/".
-// Sign-up is closed (its page shows the banner; the API refuses accounts it doesn't already have).
-const ALPHA_HOME = "/alpha-testing-dashboard";
+// Test environment: when APP_GATE_PASSWORD is set (production on the Mac), every page asks for that master password
+// in the browser's sign-in pop-up (HTTP Basic auth, any username) before anything else, so app.algoearning.com is
+// closed to the public; algoearning.com itself only shows the closed-alpha splash (apps/landing).
+// Behind the password, "/" (and /test) is the product page (apps/web/landing, copied to public/landing.html by
+// scripts/sync-landing.mjs) for anyone signed out, and HOME is the app's entry: signed out it opens sign-in and
+// comes back, signed in it shows the dashboard. A signed-in user at "/", /test or a sign-in page goes to HOME; a
+// signed-out one at /dashboard goes to "/".
+const HOME = "/testing-dashboard";
+const LANDING = ["/", "/test"];
+
+function sameText(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i); // no early exit: constant time
+  return diff === 0;
+}
+
+function passwordOk(header: string | null, password: string): boolean {
+  if (!header?.startsWith("Basic ")) return false;
+  let decoded = "";
+  try {
+    decoded = atob(header.slice(6).trim());
+  } catch {
+    return false;
+  }
+  return sameText(decoded.slice(decoded.indexOf(":") + 1), password);
+}
+
 export default clerkMiddleware(async (auth, req) => {
+  const password = process.env.APP_GATE_PASSWORD;
+  if (password && !passwordOk(req.headers.get("authorization"), password)) {
+    return new NextResponse("Internal Alpha Test Environment. Closed to the public.", {
+      status: 401,
+      headers: { "WWW-Authenticate": 'Basic realm="AlgoEarning test", charset="UTF-8"' },
+    });
+  }
   const token = req.nextUrl.searchParams.get("apisession");
   if (token && req.nextUrl.pathname !== "/monitor/market-data") {
     const url = req.nextUrl.clone();
@@ -26,30 +55,37 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(url);
   }
   const { pathname } = req.nextUrl;
-  if (![ALPHA_HOME, "/", "/dashboard", "/sign-in", "/sign-up"].includes(pathname)) return;
+  if (
+    ![HOME, "/alpha-testing-dashboard", ...LANDING, "/dashboard", "/sign-in", "/sign-up"].includes(pathname)
+  )
+    return;
   const url = req.nextUrl.clone();
   if (pathname === "/" && (req.headers.get("host") ?? "").startsWith("monitor.")) {
     url.pathname = "/monitor";
     return NextResponse.rewrite(url);
   }
+  if (pathname === "/alpha-testing-dashboard") {
+    url.pathname = HOME; // the earlier name of the entry
+    return NextResponse.redirect(url);
+  }
   const signedIn = Boolean((await auth()).userId);
-  if (pathname === ALPHA_HOME) {
+  if (pathname === HOME) {
     if (signedIn) {
       url.pathname = "/dashboard";
       return NextResponse.rewrite(url);
     }
     url.pathname = "/sign-in";
-    url.search = `?redirect_url=${encodeURIComponent(ALPHA_HOME)}`;
+    url.search = `?redirect_url=${encodeURIComponent(HOME)}`;
     return NextResponse.redirect(url);
   }
-  if (pathname === "/" && !signedIn) {
+  if (LANDING.includes(pathname) && !signedIn) {
     url.pathname = "/landing.html";
     return NextResponse.rewrite(url);
   }
-  // signed in, "/" and the sign-in pages lead to the dashboard; signed out, the dashboard leads to the splash.
-  // Other pages still go through sign-in and back, so links from alerts keep working.
+  // signed in, the landing and sign-in pages lead to the dashboard; signed out, the dashboard leads to the landing
+  // page. Other pages still go through sign-in and back, so links from alerts keep working.
   if (signedIn === (pathname === "/dashboard")) return;
-  url.pathname = signedIn ? ALPHA_HOME : "/";
+  url.pathname = signedIn ? HOME : "/";
   url.search = "";
   return NextResponse.redirect(url);
 });
@@ -60,5 +96,6 @@ export const config = {
     "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt)).*)",
     "/(api|trpc)(.*)",
     "/__clerk/:path*",
+    "/landing.html", // the product page sits behind the password too
   ],
 };

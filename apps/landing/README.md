@@ -4,13 +4,11 @@ A static page: `index.html`, `landing.css`, `favicon.svg`, `robots.txt`. It has 
 dependencies, so it stays up even when the Mac that runs the app (`app.algoearning.com`) is asleep.
 
 During the internal alpha it is only a splash ("Internal Alpha Test Environment. Closed to the public.") with no
-links to the app, and robots.txt keeps search engines out. The team signs in at
-`https://app.algoearning.com/alpha-testing-dashboard`. The full marketing page is in git history (before the alpha
-gate commit).
+links to the app, and robots.txt keeps search engines out.
 
-The same page is also the home page of `app.algoearning.com` for signed-out visitors. The web app copies these
-files into `apps/web/public` when it builds (`apps/web/scripts/sync-landing.mjs`), so a change here appears there
-after the next `scripts/home-host.sh deploy`.
+app.algoearning.com does not use these files. It sits behind a master password (`APP_GATE_PASSWORD` in
+`apps/web/.env.production.local`), and its home page is the full product page in `apps/web/landing`, copied into
+`apps/web/public` at build time (`apps/web/scripts/sync-landing.mjs`).
 
 Preview it locally:
 
