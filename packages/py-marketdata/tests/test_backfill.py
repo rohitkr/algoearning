@@ -57,6 +57,7 @@ def test_plan_skips_stored_days_and_groups_consecutive_ones() -> None:
 def test_index_runs_bridge_weekends() -> None:
     runs = index_runs([date(2026, 9, 18), date(2026, 9, 21), date(2026, 9, 30)])
     assert runs == [(date(2026, 9, 18), date(2026, 9, 21), 2), (date(2026, 9, 30), date(2026, 9, 30), 1)]
+    assert len(index_runs(weekdays(date(2026, 9, 1), date(2026, 9, 30)), max_days=10)) == 3
 
 
 def test_rows_keep_session_minutes_volume_and_oi() -> None:

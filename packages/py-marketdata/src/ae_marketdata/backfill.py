@@ -146,11 +146,12 @@ def plan(underlying: str, wanted: dict[tuple[date, int, str], list[date]], tradi
     return out
 
 
-def index_runs(missing: Sequence[date]) -> list[tuple[date, date, int]]:
-    """Missing index days grouped into runs of consecutive weekdays: (first, last, days)."""
+def index_runs(missing: Sequence[date], max_days: int = 10) -> list[tuple[date, date, int]]:
+    """Missing index days grouped into runs of consecutive weekdays (at most `max_days` each, so every run is
+    stored as soon as it is fetched): (first, last, days)."""
     out: list[tuple[date, date, int]] = []
     for d in sorted(missing):
-        if out and (d - out[-1][1]).days <= 3:
+        if out and (d - out[-1][1]).days <= 3 and out[-1][2] < max_days:
             a, _, n = out[-1]
             out[-1] = (a, d, n + 1)
         else:
@@ -258,6 +259,14 @@ def to_rows(key: str, raw: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+async def _insert_all(db: Database, rows: list[dict[str, Any]], batch: int = 5000) -> int:
+    """Postgres takes at most 65,535 parameters per statement: insert in batches."""
+    n = 0
+    for i in range(0, len(rows), batch):
+        n += await _insert(db, rows[i : i + batch])
+    return n
+
+
 # -- the job ----------------------------------------------------------------------------------------------------
 @dataclass
 class Report:
@@ -336,7 +345,7 @@ async def backfill(
         try:
             for a, b, _ in runs:
                 raw = await client.candles(params, datetime.combine(a, SESSION[0]), datetime.combine(b, SESSION[1]))
-                rep.rows += await _insert(db, to_rows(underlying, raw))
+                rep.rows += await _insert_all(db, to_rows(underlying, raw))
         except BudgetExhausted as exc:
             rep.stopped, rep.calls_made = str(exc), client.calls
             return rep
@@ -368,7 +377,7 @@ async def backfill(
             raw = await client.candles(
                 params, datetime.combine(f.first, SESSION[0]), datetime.combine(f.last, SESSION[1])
             )
-            rep.rows += await _insert(db, to_rows(f.key, raw))
+            rep.rows += await _insert_all(db, to_rows(f.key, raw))
             if n % 50 == 0:
                 log.info("backfill progress", underlying=underlying, done=n, of=len(fetches), calls=client.calls)
     except BudgetExhausted as exc:
