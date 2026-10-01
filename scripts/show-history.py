@@ -14,8 +14,6 @@ import os
 
 import psycopg
 
-IST = "Asia/Kolkata"
-
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -29,9 +27,9 @@ def main() -> None:
         if not a.key:
             print(f"{'underlying':<11}{'kind':<8}{'from':<12}{'to':<12}{'days':>6}{'contracts':>11}{'candles':>12}")
             for u, kind, lo, hi, days, keys, n in c.execute(
-                f"""SELECT split_part(key, ':', 1), CASE WHEN key LIKE '%:%' THEN 'options' ELSE 'index' END,
-                    min((ts AT TIME ZONE '{IST}')::date), max((ts AT TIME ZONE '{IST}')::date),
-                    count(DISTINCT (ts AT TIME ZONE '{IST}')::date), count(DISTINCT key), count(*)
+                """SELECT split_part(key, ':', 1), CASE WHEN key LIKE '%:%' THEN 'options' ELSE 'index' END,
+                    min((ts AT TIME ZONE 'Asia/Kolkata')::date), max((ts AT TIME ZONE 'Asia/Kolkata')::date),
+                    count(DISTINCT (ts AT TIME ZONE 'Asia/Kolkata')::date), count(DISTINCT key), count(*)
                     FROM history_candles GROUP BY 1, 2 ORDER BY 1, 2"""
             ):
                 print(f"{u:<11}{kind:<8}{lo!s:<12}{hi!s:<12}{days:>6}{keys:>11}{n:>12,}")
@@ -40,8 +38,8 @@ def main() -> None:
             ap.error("give a day (YYYY-MM-DD)")
         if a.options:
             rows = c.execute(
-                f"""SELECT key, count(*), sum(volume), max(oi) FROM history_candles
-                    WHERE key LIKE %s AND (ts AT TIME ZONE '{IST}')::date = %s GROUP BY key ORDER BY key""",
+                """SELECT key, count(*), sum(volume), max(oi) FROM history_candles
+                    WHERE key LIKE %s AND (ts AT TIME ZONE 'Asia/Kolkata')::date = %s GROUP BY key ORDER BY key""",
                 (f"{a.key}:%", a.day),
             ).fetchall()
             print(f"{'contract':<32}{'candles':>8}{'volume':>14}{'OI':>12}")
@@ -50,8 +48,8 @@ def main() -> None:
             print(f"{len(rows)} contracts")
             return
         rows = c.execute(
-            f"""SELECT to_char(ts AT TIME ZONE '{IST}', 'HH24:MI'), open, high, low, close, volume, oi
-                FROM history_candles WHERE key = %s AND (ts AT TIME ZONE '{IST}')::date = %s ORDER BY ts LIMIT %s""",
+            """SELECT to_char(ts AT TIME ZONE 'Asia/Kolkata', 'HH24:MI'), open, high, low, close, volume, oi
+                FROM history_candles WHERE key = %s AND (ts AT TIME ZONE 'Asia/Kolkata')::date = %s ORDER BY ts LIMIT %s""",
             (a.key, a.day, a.limit),
         ).fetchall()
         print(f"{'time':<7}{'open':>11}{'high':>11}{'low':>11}{'close':>11}{'volume':>12}{'OI':>12}")
