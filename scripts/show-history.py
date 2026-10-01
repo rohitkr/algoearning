@@ -49,7 +49,8 @@ def main() -> None:
             return
         rows = c.execute(
             """SELECT to_char(ts AT TIME ZONE 'Asia/Kolkata', 'HH24:MI'), open, high, low, close, volume, oi
-                FROM history_candles WHERE key = %s AND (ts AT TIME ZONE 'Asia/Kolkata')::date = %s ORDER BY ts LIMIT %s""",
+                FROM history_candles WHERE key = %s AND (ts AT TIME ZONE 'Asia/Kolkata')::date = %s
+                ORDER BY ts LIMIT %s""",
             (a.key, a.day, a.limit),
         ).fetchall()
         print(f"{'time':<7}{'open':>11}{'high':>11}{'low':>11}{'close':>11}{'volume':>12}{'OI':>12}")
