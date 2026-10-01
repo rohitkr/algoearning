@@ -14,12 +14,10 @@ import { NextResponse } from "next/server";
 // Test environment: when APP_GATE_PASSWORD is set (production on the Mac), every page asks for that master password
 // in the browser's sign-in pop-up (HTTP Basic auth, any username) before anything else, so app.algoearning.com is
 // closed to the public; algoearning.com itself only shows the closed-alpha splash (apps/landing).
-// Behind the password, "/" (and /test) is the product page (apps/web/landing, copied to public/landing.html by
-// scripts/sync-landing.mjs) for anyone signed out, and HOME is the app's entry: signed out it opens sign-in and
-// comes back, signed in it shows the dashboard. A signed-in user at "/", /test or a sign-in page goes to HOME; a
-// signed-out one at /dashboard goes to "/".
+// Behind the password everything starts at HOME: "/" goes there, and it shows the product page (apps/web/landing,
+// copied to public/landing.html by scripts/sync-landing.mjs) to anyone signed out and the dashboard to anyone signed
+// in. The sign-in pages send a signed-in user there too, and /dashboard sends a signed-out one there.
 const HOME = "/testing-dashboard";
-const LANDING = ["/", "/test"];
 
 function sameText(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -55,37 +53,26 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(url);
   }
   const { pathname } = req.nextUrl;
-  if (
-    ![HOME, "/alpha-testing-dashboard", ...LANDING, "/dashboard", "/sign-in", "/sign-up"].includes(pathname)
-  )
+  if (![HOME, "/", "/alpha-testing-dashboard", "/dashboard", "/sign-in", "/sign-up"].includes(pathname))
     return;
   const url = req.nextUrl.clone();
   if (pathname === "/" && (req.headers.get("host") ?? "").startsWith("monitor.")) {
     url.pathname = "/monitor";
     return NextResponse.rewrite(url);
   }
-  if (pathname === "/alpha-testing-dashboard") {
-    url.pathname = HOME; // the earlier name of the entry
+  if (pathname === "/" || pathname === "/alpha-testing-dashboard") {
+    url.pathname = HOME; // also the entry's earlier name
     return NextResponse.redirect(url);
   }
   const signedIn = Boolean((await auth()).userId);
   if (pathname === HOME) {
-    if (signedIn) {
-      url.pathname = "/dashboard";
-      return NextResponse.rewrite(url);
-    }
-    url.pathname = "/sign-in";
-    url.search = `?redirect_url=${encodeURIComponent(HOME)}`;
-    return NextResponse.redirect(url);
-  }
-  if (LANDING.includes(pathname) && !signedIn) {
-    url.pathname = "/landing.html";
+    url.pathname = signedIn ? "/dashboard" : "/landing.html";
     return NextResponse.rewrite(url);
   }
-  // signed in, the landing and sign-in pages lead to the dashboard; signed out, the dashboard leads to the landing
-  // page. Other pages still go through sign-in and back, so links from alerts keep working.
+  // signed in, the sign-in pages lead to HOME; signed out, so does the dashboard. Other pages still go through
+  // sign-in and back, so links from alerts keep working.
   if (signedIn === (pathname === "/dashboard")) return;
-  url.pathname = signedIn ? HOME : "/";
+  url.pathname = HOME;
   url.search = "";
   return NextResponse.redirect(url);
 });
