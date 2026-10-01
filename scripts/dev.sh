@@ -85,6 +85,10 @@ else
 fi
 
 # -- 4. ports -------------------------------------------------------------------------------------------
+# the home production stack (scripts/home-host.sh) uses the same database: two engines would trade twice
+if launchctl print "gui/$(id -u)/com.algoearning.engine" >/dev/null 2>&1; then
+  die "the production services are running (scripts/home-host.sh status). Stop them first: scripts/home-host.sh stop"
+fi
 step "Checking ports $WEB_PORT and $API_PORT"
 for port in "$WEB_PORT" "$API_PORT"; do
   pids=$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)

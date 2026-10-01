@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help setup dev dev-fresh dev-api dev-web up down db-up db-down db-status migrate migration test test-py test-js lint lint-py lint-js typecheck format types build check
+.PHONY: home-status help setup dev dev-fresh dev-api dev-web up down db-up db-down db-status migrate migration test test-py test-js lint lint-py lint-js typecheck format types build check
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -38,6 +38,9 @@ migrate: ## Apply database migrations (DATABASE_URL, default: local dev database
 
 migration: ## Create a migration from model changes: make migration m="add foo"
 	DATABASE_URL=$${DATABASE_URL:-postgresql://algoearning:algoearning@localhost:5432/algoearning} $(ALEMBIC) revision --autogenerate -m "$(m)"
+
+home-status: ## Production on this Mac (Cloudflare Tunnel): scripts/home-host.sh, see docs/home-hosting.md
+	@scripts/home-host.sh status
 
 up: ## Start the full stack in Docker (web, api, engine, worker, Postgres, Redis)
 	docker compose -f infra/docker/compose.yml up --build
