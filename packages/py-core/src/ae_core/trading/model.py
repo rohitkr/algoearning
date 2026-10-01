@@ -52,6 +52,23 @@ class BarLike(Protocol):
     def close(self) -> float: ...
 
 
+@dataclass(frozen=True)
+class Quote:
+    """What the feed knows about a contract besides its last price (None: the source did not say)."""
+
+    bid: float | None = None
+    ask: float | None = None
+    volume: int | None = None  # quantity traded today
+    oi: int | None = None  # open interest
+
+    @property
+    def spread_pct(self) -> float | None:
+        """(ask - bid) / mid in %, None without a two-sided quote."""
+        if not self.bid or not self.ask or self.ask < self.bid:
+            return None
+        return (self.ask - self.bid) / ((self.ask + self.bid) / 2) * 100
+
+
 @dataclass
 class Market:
     """One moment of market data for a run's underlying, built by the engine from the price feed."""
@@ -64,6 +81,9 @@ class Market:
     expiries: Sequence[date]  # listed option expiries, sorted
     lot_size: int
     strike_step: int
+    # earlier sessions' 1-minute bars, oldest first: only for runners that ask (Runner.prior_days > 0)
+    prior_spot_bars: Sequence[BarLike] = ()
+    quotes: Mapping[str, Quote] = field(default_factory=dict)  # contract key -> bid/ask/volume/OI, when known
 
     def price(self, c: Contract | str) -> float | None:
         return self.prices.get(c if isinstance(c, str) else c.key)

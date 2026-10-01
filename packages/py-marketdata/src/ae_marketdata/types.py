@@ -73,6 +73,10 @@ class Tick:
     ltp: float
     ts: datetime
     prev_close: float | None = None
+    bid: float | None = None  # best bid / ask, quantity traded today and open interest, when the source sends them
+    ask: float | None = None
+    volume: int | None = None
+    oi: int | None = None
 
     def to_json(self) -> str:
         d = asdict(self)

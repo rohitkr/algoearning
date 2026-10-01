@@ -10,14 +10,15 @@ from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from ..strategy import AnyConfig, Leg, RangeBreakoutConfig, TimeBasedConfig, ZeroDteConfig
-from . import rules
+from ..strategy import AnyConfig, Leg, RangeBreakoutConfig, SmcScalpConfig, TimeBasedConfig, ZeroDteConfig
+from . import options, rules
 from .model import IST, Contract, Intent, Market, Position, Side
 from .rules import Right
 
 
 class Runner:
     kind = ""
+    prior_days = 0  # earlier sessions of index bars this runner needs in Market.prior_spot_bars
 
     def __init__(self, config: Any, multiplier: int = 1, state: Mapping[str, Any] | None = None) -> None:
         self.cfg = config
@@ -148,29 +149,10 @@ class TimeBasedRunner(Runner):
         expiry = rules.pick_expiry(m.expiries, m.now.date(), leg.expiry)
         if expiry is None:
             return f"no {leg.expiry.replace('_', ' ')} expiry listed"
-        if m.spot is None:
-            return "no index price yet"
-        right: Right = leg.option_type
-        if leg.strike.mode == "atm":
-            return Contract(
-                m.underlying, expiry, rules.offset_strike(m.spot, right, leg.strike.offset, m.strike_step), right
-            )
-        prices = {c.strike: m.price(c) for c in self._candidates(m, leg, expiry)}
-        known = {k: v for k, v in prices.items() if v is not None}
-        if len(known) < len(prices) // 2 or not known:
-            return "waiting for option prices to choose the strike"
-        strike = rules.closest_premium(known, float(leg.strike.premium or 0))
-        return Contract(m.underlying, expiry, int(strike or 0), right)
+        return options.pick(m, leg.option_type, leg.strike, expiry)
 
     def _candidates(self, m: Market, leg: Leg, expiry: date) -> list[Contract]:
-        if m.spot is None:
-            return []
-        return [
-            Contract(
-                m.underlying, expiry, rules.offset_strike(m.spot, leg.option_type, k, m.strike_step), leg.option_type
-            )
-            for k in range(-4, 16)
-        ]
+        return options.candidates(m, leg.option_type, expiry)
 
     def wanted(self, m: Market) -> set[str]:
         keys = super().wanted(m)
@@ -622,6 +604,10 @@ class ZeroDteRunner(Runner):
 
 
 def make_runner(config: AnyConfig, multiplier: int = 1, state: Mapping[str, Any] | None = None) -> Runner:
+    if isinstance(config, SmcScalpConfig):
+        from .smc_runner import SmcScalpRunner  # it builds on this module
+
+        return SmcScalpRunner(config, multiplier, state)
     if isinstance(config, TimeBasedConfig):
         return TimeBasedRunner(config, multiplier, state)
     if isinstance(config, RangeBreakoutConfig):

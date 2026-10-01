@@ -6,22 +6,27 @@ out; loading data, queueing and storage live elsewhere.
 
 How a minute is replayed (no look-ahead: at the start of a minute only earlier bars are known):
     step A   prices are the minute's OPEN; entries, timed exits and index-based rules decide here
-    step B   each open position's ADVERSE extreme of the minute (a short's high, a long's low): stop-losses and MTM
-             limits can fire; an exit fills at the stop level (or the open if it gapped through), never better
-    step C   the FAVOURABLE extreme: targets can fire, filled at the target level (or the open if it gapped)
+    step B   each open position's ADVERSE extreme of the minute (a short's high, a long's low), with the index at its
+             low and then at its high: stop-losses and MTM limits can fire; a premium stop fills at its level (or
+             the open if it gapped through), never better; an index stop at the option's adverse extreme
+    step C   the FAVOURABLE extreme, the index at its high and then its low: targets can fire; a premium target
+             fills at its level (or the open if it gapped), an index target at the option's close of the minute
 When both a stop and a target were reachable inside one minute, the stop is assumed to come first (conservative).
-Entries the runner produces in B and C are dropped (it re-decides at the next minute)."""
+Entries the runner produces in B and C are dropped (it re-decides at the next minute).
+
+Runners that read earlier sessions (Runner.prior_days) get them from the days before `start`, so the first day
+of a range trades like any other."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any, Protocol
 
-from .reports import ClosedTrade, Day, Summary, daily, summarize
+from .reports import ClosedTrade, Day, Summary, daily, max_losing_streak, summarize
 from .strategy import AnyConfig
-from .trading.model import IST, Intent, Market, Position
+from .trading.model import IST, Intent, Market, Position, Quote
 from .trading.runners import Runner, make_runner
 
 TICK = 0.05
@@ -34,6 +39,8 @@ class Candle:
     high: float
     low: float
     close: float
+    volume: int = 0
+    oi: int | None = None  # open interest at the minute's close, when stored
 
 
 class History(Protocol):
@@ -90,10 +97,15 @@ class BacktestTrade:
     reason: str
     gross: float
     charges: float
+    group: str | None = None  # positions entered together (one signal's tranches, a short and its wing)
 
     @property
     def net(self) -> float:
         return round(self.gross - self.charges, 2)
+
+    @property
+    def minutes(self) -> float:
+        return (self.exit_time - self.entry_time).total_seconds() / 60
 
 
 @dataclass
@@ -105,9 +117,11 @@ class BacktestResult:
     days_without_options: int = 0  # replayed, but no option prices existed: nothing option-based could trade
     gross_pnl: float = 0.0
     charges: float = 0.0
+    signals: list[dict[str, Any]] = field(default_factory=list)  # runners' signal notes (event "*_signal")
+    funnel: dict[str, int] = field(default_factory=dict)  # why setups did or did not become trades, counted
 
     def closed(self) -> list[ClosedTrade]:
-        return [ClosedTrade(t.exit_time.date(), t.net) for t in self.trades]
+        return [ClosedTrade(t.exit_time.date(), t.net) for t in sorted(self.trades, key=lambda t: t.exit_time)]
 
     def daily(self) -> list[Day]:
         return daily(self.closed())
@@ -121,6 +135,7 @@ def to_tick(px: float) -> float:
 
 
 def slip(price: float, side: str, pct: float) -> float:
+    """A fill `pct` % worse than `price` (at least one tick)."""
     if pct <= 0:
         return to_tick(price)
     s = max(TICK, price * pct / 100)
@@ -138,6 +153,12 @@ class _Prices:
         self.history, self.day = history, day
         self.bars: dict[str, Mapping[datetime, Candle]] = {}
         self.last: dict[str, float] = {}
+        self.volume: dict[str, int] = {}  # traded today before the current minute
+        self.oi: dict[str, int] = {}
+
+    def quote(self, key: str) -> Quote:
+        """What a quote would have said at the minute's open: volume so far, last open interest (no bid/ask)."""
+        return Quote(volume=self.volume.get(key, 0), oi=self.oi.get(key))
 
     def bar(self, key: str, ts: datetime) -> Candle | None:
         if key not in self.bars:
@@ -155,6 +176,20 @@ class _Prices:
         b = self.bar(key, ts)
         if b is not None:
             self.last[key] = b.close
+            self.volume[key] = self.volume.get(key, 0) + b.volume
+            if b.oi is not None:
+                self.oi[key] = b.oi
+
+    def seen(self, key: str, ts: datetime) -> None:
+        """Account for a contract's earlier minutes the first time it is looked at (volume and OI so far)."""
+        if key in self.volume:
+            return
+        self.bar(key, ts)  # loads the contract's day
+        before = [b for t, b in sorted(self.bars[key].items()) if t < ts]
+        self.volume[key] = sum(b.volume for b in before)
+        oi = [b.oi for b in before if b.oi is not None]
+        if oi:
+            self.oi[key] = oi[-1]
 
 
 def simulate(
@@ -167,14 +202,22 @@ def simulate(
     lot_size: int,
     strike_step: int,
     slippage_pct: float = 0.05,
+    spread_pct: float = 0.0,
     costs: Costs | None = None,
 ) -> BacktestResult:
+    """`spread_pct`: a modelled bid/ask spread (% of the premium); half of it is paid on every fill, on top of
+    the slippage (history has trades, not quotes)."""
     costs = costs or Costs()
     runner: Runner = make_runner(config, multiplier)
     u = config.underlying
     result = BacktestResult()
     expiries = history.expiries(u)
     days = history.days(u, start, end)
+    prior: list[list[Candle]] = []  # earlier sessions' index bars, for runners that read them
+    if runner.prior_days:
+        for d in history.days(u, start - timedelta(days=7 + 2 * runner.prior_days), start - timedelta(days=1)):
+            prior.append(list(history.spot(u, d)))
+        prior = prior[-runner.prior_days :]
     if not days:
         result.warnings.append(f"no {u} index data between {start} and {end}")
         return result
@@ -182,7 +225,7 @@ def simulate(
         result.warnings.append(f"no {u} option data at all: only index-based logic can run")
 
     def fill(intent: Intent, px: float, ts: datetime, m: Market) -> None:
-        price = slip(px, intent.side, slippage_pct)
+        price = slip(px, intent.side, slippage_pct + spread_pct / 2)
         pos = runner.fill(intent, price, ts, m)
         if pos is None:
             return
@@ -203,6 +246,7 @@ def simulate(
                     intent.reason,
                     pos.pnl(),
                     round(pending_charges.pop(pos.id, 0.0) + c, 2),
+                    pos.group,
                 )
             )
 
@@ -218,12 +262,17 @@ def simulate(
             result.days_without_options += 1
         prices = _Prices(history, day)
         live_expiries = [e for e in expiries if e >= day]
+        before = [c for d in prior for c in d]
         for i, bar in enumerate(spot):
             now = bar.ts
             done = list(spot[:i])
-            keys = runner.wanted(Market(now, u, bar.open, done, {}, live_expiries, lot_size, strike_step))
+            m0 = Market(now, u, bar.open, done, {}, live_expiries, lot_size, strike_step, before)
+            keys = runner.wanted(m0)
+            for k in keys:
+                prices.seen(k, now)
             opens = {k: p for k in keys if (p := prices.open(k, now)) is not None}
-            m = Market(now, u, bar.open, done, opens, live_expiries, lot_size, strike_step)
+            quotes = {k: prices.quote(k) for k in keys}
+            m = Market(now, u, bar.open, done, opens, live_expiries, lot_size, strike_step, before, quotes)
             # step A: the minute's open
             for intent in runner.step(m):
                 p = m.price(intent.contract)
@@ -231,14 +280,21 @@ def simulate(
                     runner.reject(intent, "no price for the contract in the data")
                 else:
                     fill(intent, p, now, m)
-            _extremes(runner, m, prices, now, fill, adverse=True)
-            _extremes(runner, m, prices, now, fill, adverse=False)
-            for k in keys:
+            # steps B and C: the index at both extremes (which came first is unknown; stops are tried first)
+            for spot_px in (bar.low, bar.high):
+                _extremes(runner, m, prices, now, fill, adverse=True, spot=spot_px)
+            for spot_px in (bar.high, bar.low):
+                _extremes(runner, m, prices, now, fill, adverse=False, spot=spot_px)
+            for k in keys | {p.contract.key for p in runner.positions if p.exit_time == now}:
                 prices.close(k, now)
             for note in runner.notes:
                 if note["event"] in _NOTED:
                     noted[note["event"]] = noted.get(note["event"], 0) + 1
+                if note["event"].endswith("_signal"):
+                    result.signals.append({"time": now.isoformat(), **note})
             runner.notes.clear()
+        if runner.prior_days:
+            prior = [*prior, list(spot)][-runner.prior_days :]
     for event, n in noted.items():
         result.warnings.append(f"{n} time(s): {_NOTED[event]}")
     if result.days_without_options:
@@ -270,6 +326,7 @@ def simulate(
         result.warnings.append(f"{pos.contract.label} was still open at the end: closed at its last price")
     result.gross_pnl = round(sum(t.gross for t in result.trades), 2)
     result.charges = round(sum(t.charges for t in result.trades), 2)
+    result.funnel = dict(runner.s.get("funnel", {}))
     return result
 
 
@@ -278,8 +335,11 @@ def _last_price(history: History, pos: Position, day: date) -> float | None:
     return bars[max(bars)].close if bars else None
 
 
-def _extremes(runner: Runner, m: Market, prices: _Prices, now: datetime, fill: Any, adverse: bool) -> None:
-    """Steps B (adverse) and C (favourable): only exits are taken, at the trigger level or the open if it gapped."""
+def _extremes(
+    runner: Runner, m: Market, prices: _Prices, now: datetime, fill: Any, adverse: bool, spot: float | None = None
+) -> None:
+    """Steps B (adverse) and C (favourable): only exits are taken, at the trigger level or the open if it gapped.
+    `spot` is the index price assumed for this pass (one of the minute's extremes)."""
     opens = runner.open_positions()
     if not opens:
         return
@@ -290,36 +350,36 @@ def _extremes(runner: Runner, m: Market, prices: _Prices, now: datetime, fill: A
             continue
         short = p.side == "SELL"
         ext[p.contract.key] = (b.high if short else b.low) if adverse else (b.low if short else b.high)
-    m2 = Market(now, m.underlying, m.spot, m.spot_bars, ext, m.expiries, m.lot_size, m.strike_step)
+    m2 = Market(now, m.underlying, m.spot if spot is None else spot, m.spot_bars, ext, m.expiries, m.lot_size,
+                m.strike_step, m.prior_spot_bars, m.quotes)  # fmt: skip
+    taken = _STOPS if adverse else _TARGETS
     for intent in runner.step(m2):
-        if intent.kind != "exit" or (intent.reason not in _TRIGGERED and not intent.reason.startswith("strategy")):
+        if intent.kind != "exit" or not (intent.reason in taken[0] or intent.reason.startswith(taken[1])):
             runner.reject(intent, "decided again next minute")
             runner.notes.pop()  # an internal retry, not something to tell the user
             continue
         pos = runner.position(intent.position_id)
         opened = m.price(intent.contract)
-        level = pos.sl if adverse and pos is not None else pos.target if pos is not None else None
         extreme = ext.get(intent.contract.key)
-        px: float | None
-        if level is not None and pos is not None and pos.sl_basis == "premium" and opened is not None and adverse:
-            px = max(level, opened) if pos.side == "SELL" else min(level, opened)
-        elif (
-            level is not None
-            and pos is not None
-            and not adverse
-            and opened is not None
-            and pos.target_basis == "premium"
-        ):
-            px = min(level, opened) if pos.side == "SELL" else max(level, opened)
-        else:
-            px = extreme if extreme is not None else opened
+        px: float | None = extreme if extreme is not None else opened
+        if pos is not None and opened is not None and intent.reason.startswith(("stop-loss", "target")):
+            if adverse and pos.sl_basis == "premium" and pos.sl is not None:
+                px = max(pos.sl, opened) if pos.side == "SELL" else min(pos.sl, opened)
+            elif not adverse and pos.target_basis == "premium" and pos.target is not None:
+                px = min(pos.target, opened) if pos.side == "SELL" else max(pos.target, opened)
+            elif not adverse and pos.target_basis == "underlying":
+                bar = prices.bar(intent.contract.key, now)
+                px = bar.close if bar is not None else opened
         if px is None:
             runner.reject(intent, "no price for the contract in the data")
         else:
             fill(intent, px, now, m2)
 
 
-_TRIGGERED = ("stop-loss", "target")
+# exits taken inside a minute (exact reasons, reason prefixes): stops and strategy-wide limits on the adverse pass,
+# targets and strategy-wide limits on the favourable one
+_STOPS = (("stop-loss",), ("stop-loss:", "strategy"))
+_TARGETS = (("target",), ("target ", "strategy"))
 # runner notes worth telling the user about, counted (not listed per day), with their plain meaning
 _NOTED = {
     "no_trade_day": "a day was skipped: too few index bars in the strategy's range window",
@@ -351,7 +411,12 @@ def summarize_result(r: BacktestResult) -> dict[str, Any]:
             "days_without_options": r.days_without_options,
             "best_day": None if s.best_day is None else {"day": s.best_day.day.isoformat(), "pnl": s.best_day.pnl},
             "worst_day": None if s.worst_day is None else {"day": s.worst_day.day.isoformat(), "pnl": s.worst_day.pnl},
+            "expectancy": s.expectancy,
+            "max_consecutive_losses": s.max_consecutive_losses,
+            "avg_holding_minutes": round(sum(t.minutes for t in r.trades) / len(r.trades), 1) if r.trades else None,
+            "charges_pct_of_gross": round(r.charges / r.gross_pnl * 100, 1) if r.gross_pnl > 0 else None,
         },
+        "signals": signal_stats(r),
         "daily": [
             {"day": d.day.isoformat(), "pnl": d.pnl, "trades": d.trades, "cumulative": d.cumulative} for d in r.daily()
         ],
@@ -369,11 +434,50 @@ def summarize_result(r: BacktestResult) -> dict[str, Any]:
                 "gross": t.gross,
                 "charges": t.charges,
                 "net": t.net,
+                "group": t.group,
             }
             for t in r.trades[:5000]
         ],
         "trades_total": len(r.trades),
         "warnings": r.warnings,
+    }
+
+
+def signal_stats(r: BacktestResult) -> dict[str, Any] | None:
+    """Per signal (all the positions entered together count as one trade idea): only for runners that emit
+    signals. Lists the signals with their outcome, and why setups did not become trades."""
+    if not r.signals and not r.funnel:
+        return None
+    by_group: dict[str, list[BacktestTrade]] = {}
+    for t in r.trades:
+        by_group.setdefault(t.group or t.entry_time.isoformat(), []).append(t)
+    nets = [round(sum(t.net for t in ts), 2) for ts in by_group.values()]
+    holding = [max(t.exit_time for t in ts) - min(t.entry_time for t in ts) for ts in by_group.values()]
+    wins = [n for n in nets if n > 0]
+    losses = [n for n in nets if n < 0]
+    signals = []
+    for sig in r.signals[:2000]:
+        gid = f"SMC-{datetime.fromisoformat(sig['time']):%Y%m%d%H%M}"
+        ts = by_group.get(gid, [])
+        signals.append(
+            {k: v for k, v in sig.items() if k not in ("event", "setup")}
+            | {"net": round(sum(t.net for t in ts), 2) if ts else None, "exits": [t.reason for t in ts]}
+        )
+    return {
+        "count": len(nets),
+        "wins": len(wins),
+        "losses": len(losses),
+        "win_rate": round(len(wins) / len(nets), 4) if nets else None,
+        "avg_win": round(sum(wins) / len(wins), 2) if wins else None,
+        "avg_loss": round(sum(losses) / len(losses), 2) if losses else None,
+        "profit_factor": round(sum(wins) / -sum(losses), 2) if losses else None,
+        "expectancy": round(sum(nets) / len(nets), 2) if nets else None,
+        "max_consecutive_losses": max_losing_streak(nets),
+        "avg_holding_minutes": round(sum(h.total_seconds() for h in holding) / 60 / len(holding), 1)
+        if holding
+        else None,
+        "funnel": r.funnel,
+        "list": signals,
     }
 
 

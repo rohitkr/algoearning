@@ -6,7 +6,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from ae_core.strategy import AnyConfig, TimeBasedConfig, check, parse
+from ae_core.strategy import AnyConfig, check, max_order_lots, parse
 from ae_db.enums import BrokerAccountStatus, RunStatus, StrategyStatus, TradingMode
 from ae_db.models import (
     BrokerAccount,
@@ -90,9 +90,7 @@ def run_out(r: StrategyRun, open_positions: int = 0) -> RunOut:
 
 
 def _max_lots(config: AnyConfig) -> int:
-    if isinstance(config, TimeBasedConfig):
-        return max(leg.lots for leg in config.legs)
-    return config.lots
+    return max_order_lots(config)
 
 
 @router.post("/v1/strategies/{strategy_id}/deploy", response_model=RunOut, status_code=status.HTTP_201_CREATED)

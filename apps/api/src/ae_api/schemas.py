@@ -626,6 +626,8 @@ class ReportSummary(BaseModel):
     best_day: ReportDay | None
     worst_day: ReportDay | None
     trading_days: int
+    expectancy: float | None = None  # average P&L per trade
+    max_consecutive_losses: int = 0
 
 
 class StrategyPerformance(BaseModel):

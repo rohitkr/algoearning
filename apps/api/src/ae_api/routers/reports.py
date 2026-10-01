@@ -123,6 +123,8 @@ async def summary(
         best_day=_report_day(r.best_day),
         worst_day=_report_day(r.worst_day),
         trading_days=r.trading_days,
+        expectancy=r.expectancy,
+        max_consecutive_losses=r.max_consecutive_losses,
     )
 
 

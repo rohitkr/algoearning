@@ -7,6 +7,7 @@ A config is one of three kinds, told apart by `kind`:
                     strike rule, stop-loss, target, trailing stop and re-entry, plus strategy-wide MTM limits
     range_breakout  the proven positional 2h range breakout seller (algo-trading-claude, RangeBreakoutParams)
     zero_dte        the proven expiry-day ITM straddle seller (algo-trading-claude, ZeroDteParams)
+    smc_scalp       intraday options buyer on Smart Money Concepts read from the index (ADR 0018)
 
 Validation has two layers: the Pydantic models check types and bounds; `check()` checks rules that span
 fields (entry before exit, weekly expiry only where the exchange lists one, trailing needs a stop-loss, ...).
@@ -182,10 +183,91 @@ class ZeroDteConfig(_Model):
     hedge_width: int | None = Field(default=None, gt=0, le=5000)
 
 
-StrategyConfig = Annotated[TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig, Field(discriminator="kind")]
-StrategyKind = Literal["time_based", "range_breakout", "zero_dte"]
-_ADAPTER: TypeAdapter[TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig] = TypeAdapter(StrategyConfig)
-AnyConfig = TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig
+# -- SMC options scalping (ADR 0018) ------------------------------------------------------------------------------
+class SmcTimeframes(_Model):
+    """Minutes per candle: bias (structure, premium/discount), setup (sweep, displacement, BOS/CHoCH, OB/FVG) and
+    entry (the tap and its confirmation). All are built from the index's 1-minute candles."""
+
+    bias: Literal[15, 30, 60] = 15
+    setup: Literal[3, 5, 10] = 5
+    entry: Literal[1, 2, 3] = 1
+
+
+class SmcRules(_Model):
+    """The thresholds that make each concept objective (see ae_core.trading.smc)."""
+
+    swing_bias: int = Field(default=2, ge=1, le=5)  # candles each side of a swing, bias timeframe
+    swing_setup: int = Field(default=2, ge=1, le=5)
+    swing_entry: int = Field(default=2, ge=1, le=5)
+    bias_min_breaks: int = Field(default=2, ge=1, le=4)  # consecutive breaks needed for a clear bias
+    atr_period: int = Field(default=14, ge=5, le=50)
+    displacement_atr: float = Field(default=1.5, ge=0.5, le=5)  # body >= this x ATR (setup timeframe)
+    fvg_min_atr: float = Field(default=0.25, ge=0, le=3)
+    sweep_min_pct: float = Field(default=0.02, ge=0, le=0.5)  # how far beyond the pool, % of price
+    sweep_reclaim: int = Field(default=2, ge=1, le=5)  # candles allowed to close back inside
+    sweep_lookback: int = Field(default=6, ge=2, le=24)  # setup candles between the sweep and the break
+    equal_level_pct: float = Field(default=0.03, ge=0, le=0.5)  # equal highs/lows tolerance, % of price
+    opening_range_minutes: int = Field(default=15, ge=5, le=60)
+    poi: Literal["fvg", "ob", "either", "both"] = "either"  # where to enter: FVG, order block, either, overlap
+    ob_zone: Literal["body", "range"] = "body"
+    poi_max_age: int = Field(default=12, ge=2, le=48)  # setup candles the POI waits for a tap
+    confirm_bars: int = Field(default=10, ge=2, le=60)  # entry candles from the tap to the confirming CHoCH
+    premium_discount: bool = True  # longs only in discount, shorts only in premium (bias dealing range)
+    min_room_r: float = Field(default=1.5, ge=0, le=10)  # opposing liquidity at least this many R away
+
+
+class SmcOption(_Model):
+    """Which option to buy for a signal: bullish buys a call, bearish a put."""
+
+    strike: Strike = Field(default_factory=Strike)  # atm + offset (positive = OTM, negative = ITM) or premium
+    expiry: Literal["nearest", "next"] = "nearest"
+    expiry_day_cutoff: HHMM | None = "12:00"  # on expiry day, from this time use the next expiry
+    min_volume: int = Field(default=10_000, ge=0)  # contracts traded today (quantity)
+    min_oi: int = Field(default=50_000, ge=0)
+    max_spread_pct: float = Field(default=1.0, gt=0, le=20)  # (ask - bid) / mid, %
+
+
+class SmcRisk(_Model):
+    lots: int = Field(default=1, ge=1, le=MAX_LOTS)
+    rr: Literal[2, 3, 4] = 2  # TP3 in R; TP1 = 1R, TP2 halfway between
+    tranches: bool = True  # split the lots over TP1 / TP2 / TP3 (with fewer than 3 lots: the later targets)
+    sl_buffer_pct: float = Field(default=0.03, ge=0, le=1)  # beyond the sweep extreme, % of price
+    min_risk_pct: float = Field(default=0.05, ge=0, le=2)  # a tighter stop is noise for an option: no trade
+    max_risk_pct: float = Field(default=0.35, gt=0, le=3)  # a wider stop is too much risk: no trade
+    premium_stop_pct: float | None = Field(default=40, gt=0, le=100)  # also exit when the premium falls this much
+    breakeven_at_tp1: bool = True
+    trail_at_tp2: bool = True  # at TP2 the stop moves to TP1
+    max_trades_per_day: int = Field(default=2, ge=1, le=20)
+    max_losses_per_day: int = Field(default=2, ge=1, le=20)
+    cooldown_minutes: int = Field(default=15, ge=0, le=240)
+
+
+class SmcSession(_Model):
+    start: HHMM = "09:30"  # first entry (the opening range must be over)
+    last_entry: HHMM = "14:30"
+    exit: HHMM = "15:10"
+
+
+class SmcScalpConfig(_Model):
+    """Intraday options buying on Smart Money Concepts read from the index: a clear bias on the bias timeframe, a
+    liquidity sweep, displacement and BOS/CHoCH on the setup timeframe leaving an order block or FVG, and a tap of
+    it confirmed by a CHoCH on the entry timeframe. Stop beyond the sweep, TP1/TP2/TP3 in R (ADR 0018)."""
+
+    kind: Literal["smc_scalp"] = "smc_scalp"
+    underlying: Underlying = "NIFTY"
+    timeframes: SmcTimeframes = Field(default_factory=SmcTimeframes)
+    rules: SmcRules = Field(default_factory=SmcRules)
+    option: SmcOption = Field(default_factory=SmcOption)
+    risk: SmcRisk = Field(default_factory=SmcRisk)
+    session: SmcSession = Field(default_factory=SmcSession)
+
+
+StrategyConfig = Annotated[
+    TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig, Field(discriminator="kind")
+]
+StrategyKind = Literal["time_based", "range_breakout", "zero_dte", "smc_scalp"]
+AnyConfig = TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig
+_ADAPTER: TypeAdapter[AnyConfig] = TypeAdapter(StrategyConfig)
 
 
 # -- validation ------------------------------------------------------------------------------------------------
@@ -206,7 +288,7 @@ def parse(raw: Any) -> AnyConfig:
 
 def parse_issues(exc: ValidationError) -> list[Issue]:
     """Pydantic errors as Issues, without the union tag Pydantic puts first (("time_based", "legs", 0, ...))."""
-    kinds = {"time_based", "range_breakout", "zero_dte"}
+    kinds = {"time_based", "range_breakout", "zero_dte", "smc_scalp"}
     out = []
     for e in exc.errors():
         loc = tuple(e["loc"])
@@ -280,6 +362,8 @@ def check(c: AnyConfig, instruments: Instruments) -> list[Issue]:
         if c.risk.exit_all_on_leg_sl and not any(leg.stop_loss for leg in c.legs):
             issues.append(Issue(("risk", "exit_all_on_leg_sl"), "no leg has a stop-loss"))
         return issues
+    if isinstance(c, SmcScalpConfig):
+        return issues + _check_smc(c, inst)
 
     if not inst.weekly_expiry:
         issues.append(Issue(("underlying",), f"this strategy trades weekly expiries; {c.underlying} has none"))
@@ -300,6 +384,30 @@ def check(c: AnyConfig, instruments: Instruments) -> list[Issue]:
     return issues
 
 
+def _check_smc(c: SmcScalpConfig, inst: Instrument) -> list[Issue]:
+    issues: list[Issue] = []
+    ss = c.session
+    for k in ("start", "last_entry", "exit"):
+        issues += _hours(inst, getattr(ss, k), ("session", k))
+    if ss.start > ss.last_entry:
+        issues.append(Issue(("session", "last_entry"), f"must not be before the first entry ({ss.start})"))
+    if ss.last_entry >= ss.exit:
+        issues.append(Issue(("session", "exit"), "must be after the last entry time"))
+    tf = c.timeframes
+    if not tf.entry < tf.setup < tf.bias:
+        issues.append(Issue(("timeframes", "setup"), "timeframes must grow: entry < setup < bias"))
+    elif tf.bias % tf.setup or tf.setup % tf.entry:
+        issues.append(Issue(("timeframes", "bias"), "each timeframe must be a multiple of the one below it"))
+    r = c.risk
+    if r.min_risk_pct >= r.max_risk_pct:
+        issues.append(Issue(("risk", "max_risk_pct"), "must be above the minimum risk"))
+    if c.option.strike.mode == "premium" and c.option.strike.premium is None:
+        issues.append(Issue(("option", "strike", "premium"), "enter the premium to look for"))
+    if c.option.expiry == "next" and c.option.expiry_day_cutoff is not None:
+        issues.append(Issue(("option", "expiry_day_cutoff"), "only applies to the nearest expiry; clear it"))
+    return issues
+
+
 def plan_warnings(c: AnyConfig, max_lots_per_order: int | None) -> list[Issue]:
     """What the user's plan will not let this config do. Saving is allowed; deploying is not (phase 9)."""
     if max_lots_per_order is None:
@@ -311,7 +419,29 @@ def plan_warnings(c: AnyConfig, max_lots_per_order: int | None) -> list[Issue]:
             for i, leg in enumerate(c.legs)
             if leg.lots > max_lots_per_order
         ]
+    if isinstance(c, SmcScalpConfig):
+        # tranches are separate orders, but the plan limit is about one order's size: the largest tranche
+        return [Issue(("risk", "lots"), msg, "plan_limit")] if max_order_lots(c) > max_lots_per_order else []
     return [Issue(("lots",), msg, "plan_limit")] if c.lots > max_lots_per_order else []
+
+
+def max_order_lots(c: AnyConfig) -> int:
+    """The most lots this config puts in one order."""
+    if isinstance(c, TimeBasedConfig):
+        return max(leg.lots for leg in c.legs)
+    if isinstance(c, SmcScalpConfig):
+        return max(smc_tranches(c.risk.lots, c.risk.tranches))
+    return c.lots
+
+
+def smc_tranches(lots: int, split: bool) -> list[int]:
+    """Lots for TP1, TP2, TP3 (0 = no tranche). Unsplit, or with fewer than 3 lots, the later targets get them."""
+    if not split:
+        return [0, 0, lots]
+    if lots < 3:
+        return [0, 1, 1] if lots == 2 else [0, 0, 1]
+    base, extra = divmod(lots, 3)
+    return [base, base + (1 if extra == 2 else 0), base + (1 if extra >= 1 else 0)]
 
 
 def migrate(schema_version: int, raw: dict[str, Any]) -> dict[str, Any]:
@@ -319,6 +449,9 @@ def migrate(schema_version: int, raw: dict[str, Any]) -> dict[str, Any]:
     if schema_version != SCHEMA_VERSION:
         raise ValueError(f"unknown strategy schema version {schema_version}")
     return raw
+
+
+SMC_PRESET_UNDERLYINGS: tuple[Underlying, ...] = ("NIFTY", "BANKNIFTY", "SENSEX")
 
 
 # -- presets ---------------------------------------------------------------------------------------------------
@@ -385,6 +518,16 @@ PRESETS: tuple[Preset, ...] = (
         "Expiry-day ITM straddle",
         "Proven 0DTE seller: sell ITM call and put on expiry day at the best recent entry time.",
         ZeroDteConfig(),
+    ),
+    *(
+        Preset(
+            f"smc_scalp_{u.lower()}",
+            f"SMC options scalper ({u})",
+            "Buys a call or put on a liquidity sweep, displacement and BOS/CHoCH from an order block or FVG, "
+            "with the 15m trend; stop beyond the sweep, targets at 1R / 1.5R / 2R.",
+            SmcScalpConfig(underlying=u),
+        )
+        for u in SMC_PRESET_UNDERLYINGS
     ),
 )
 

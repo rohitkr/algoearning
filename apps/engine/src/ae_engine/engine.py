@@ -25,10 +25,11 @@ import httpx
 import structlog
 from ae_brokers.base import BrokerError
 from ae_brokers.kite import ContractBook, KiteClient
+from ae_core.backtest import Candle
 from ae_core.notifications import FROM_ENGINE, compose
 from ae_core.secrets import SecretBox
 from ae_core.strategy import migrate, parse
-from ae_core.trading.model import IST, Contract, Intent, Market, Position
+from ae_core.trading.model import IST, Contract, Intent, Market, Position, Quote
 from ae_core.trading.risk import RiskContext, RiskSettings, breach, check_entry
 from ae_core.trading.runners import Runner, make_runner
 from ae_db.entitlements import load_entitlements
@@ -36,6 +37,7 @@ from ae_db.enums import BrokerAccountStatus, OrderKind, RunStatus, Side, Trading
 from ae_db.models import (
     BrokerAccount,
     BrokerSession,
+    HistoryCandle,
     Instrument,
     Notification,
     Order,
@@ -79,7 +81,11 @@ def _symbol(p: Position) -> str:
 def _kind(intent: Intent) -> OrderKind:
     if intent.kind == "entry":
         return OrderKind.ENTRY
-    return {"stop-loss": OrderKind.SL, "target": OrderKind.TARGET}.get(intent.reason, OrderKind.EXIT)
+    if intent.reason == "stop-loss" or intent.reason.startswith("stop-loss:"):
+        return OrderKind.SL
+    if intent.reason == "target" or intent.reason.startswith("target "):
+        return OrderKind.TARGET
+    return OrderKind.EXIT
 
 
 def _d(v: float | None) -> Decimal | None:
@@ -125,6 +131,7 @@ class Engine:
         self.recover: set[uuid.UUID] = set()  # live runs whose in-flight orders must be looked up after a restart
         self.reconciled: dict[uuid.UUID, datetime] = {}
         self.mismatch: dict[tuple[uuid.UUID, str], int] = defaultdict(int)
+        self.prior: dict[tuple[str, date], list[Any]] = {}  # earlier sessions' index bars, loaded once a day
 
     # -- one pass --------------------------------------------------------------------------------------------------
     async def tick(self) -> int:
@@ -198,15 +205,21 @@ class Engine:
             ent = await load_entitlements(s, user_id, self.grace)
             runners = {r.id: self._runner(r) for r in runs}
             markets = await self._markets({self._underlying(r) for r in runs}, insts, now)
+            for r in runs:
+                m = markets.get(self._underlying(r))
+                if m is not None and runners[r.id].prior_days and len(m.prior_spot_bars) == 0:
+                    m.prior_spot_bars = await self._prior_bars(m.underlying, now.date(), runners[r.id].prior_days)
             # prices for every contract any of this user's runners holds or wants
             for r in runs:
                 m = markets.get(self._underlying(r))
                 if m is not None:
                     wanted |= runners[r.id].wanted(m)
-            prices = {k: t.ltp for k, t in (await self.hub.last(wanted)).items()}
+            ticks = await self.hub.last(wanted)
+            prices = {k: t.ltp for k, t in ticks.items()}
+            quotes = {k: Quote(t.bid, t.ask, t.volume, t.oi) for k, t in ticks.items()}
             self.prices.update(prices)
             for m in markets.values():
-                m.prices = prices
+                m.prices, m.quotes = prices, quotes
 
             def day_pnl() -> float:
                 total = 0.0
@@ -255,6 +268,36 @@ class Engine:
                 except Exception:
                     log.exception("reconciliation failed", broker_account_id=str(acc_id))
         return wanted | {self._underlying(r) for r in runs}
+
+    async def _prior_bars(self, underlying: str, today: date, sessions: int) -> list[Any]:
+        """The index's 1-minute bars of the last `sessions` trading days before today: from the history store
+        (archived every evening), else from the feed's bars still in Redis. Loaded once a day."""
+        key = (underlying, today)
+        if key in self.prior:
+            return self.prior[key]
+        lo = datetime.combine(today - timedelta(days=7 + 2 * sessions), datetime.min.time(), tzinfo=IST)
+        hi = datetime.combine(today, datetime.min.time(), tzinfo=IST)
+        async with self.db.system_session() as s:
+            q = select(HistoryCandle).where(
+                HistoryCandle.key == underlying, HistoryCandle.ts >= lo, HistoryCandle.ts < hi
+            )
+            rows = [
+                Candle(c.ts.astimezone(IST), c.open, c.high, c.low, c.close) for c in (await s.execute(q)).scalars()
+            ]
+        by_day: dict[date, list[Any]] = defaultdict(list)
+        for c in sorted(rows, key=lambda c: c.ts):
+            by_day[c.ts.date()].append(c)
+        for back in range(1, 8):
+            d = today - timedelta(days=back)
+            if d not in by_day:
+                bars = await self.hub.bars(underlying, d)
+                if bars:
+                    by_day[d] = list(bars)
+        days = sorted(by_day)[-sessions:]
+        for k in [k for k in self.prior if k[1] != today]:
+            del self.prior[k]
+        self.prior[key] = [b for d in days for b in by_day[d]]
+        return self.prior[key]
 
     def _underlying(self, r: StrategyRun) -> str:
         return str(r.config_snapshot.get("underlying", "NIFTY"))

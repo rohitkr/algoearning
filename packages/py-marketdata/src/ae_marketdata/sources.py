@@ -83,7 +83,9 @@ class SimulatedSource:
         for k in sorted(self.keys, key=lambda x: x.id):
             s = self.spot[k.underlying]
             if k.is_option:
-                ticks.append(Tick(k.id, self.option_price(k, s, now.date()), now))
+                px = self.option_price(k, s, now.date())
+                half = max(0.05, round(px * 0.002, 2))  # a tight two-sided quote, like a liquid weekly option
+                ticks.append(Tick(k.id, px, now, bid=max(0.05, px - half), ask=px + half, volume=500_000, oi=2_000_000))
             else:
                 ticks.append(Tick(k.id, s, now, self.prev_close[k.underlying]))
         return ticks
@@ -115,6 +117,19 @@ def breeze_expiry(d: date) -> str:
 
 def _num(v: Any) -> float:
     return float(v)
+
+
+def _opt(v: Any) -> float | None:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f > 0 else None
+
+
+def _opt_int(v: Any) -> int | None:
+    f = _opt(v)
+    return None if f is None else int(f)
 
 
 class BreezeSource:
@@ -273,7 +288,17 @@ class BreezeSource:
         if key_id is None or last in (None, ""):
             return None
         prev = d.get("close", d.get("previous_close"))
-        return Tick(key_id, _num(last), datetime.now(IST), _num(prev) if prev not in (None, "", 0) else None)
+        return Tick(
+            key_id,
+            _num(last),
+            datetime.now(IST),
+            _num(prev) if prev not in (None, "", 0) else None,
+            # best bid / offer, total traded quantity and open interest of the exchange quote (verify field names)
+            bid=_opt(d.get("bPrice")),
+            ask=_opt(d.get("sPrice")),
+            volume=_opt_int(d.get("ttq")),
+            oi=_opt_int(d.get("OI")),
+        )
 
     async def stop(self) -> None:
         await self._disconnect()

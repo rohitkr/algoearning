@@ -39,6 +39,8 @@ class Summary:
     best_day: Day | None
     worst_day: Day | None
     trading_days: int
+    expectancy: float | None = None  # average P&L per trade
+    max_consecutive_losses: int = 0  # longest run of losing trades, in the order given (closing order)
 
 
 def daily(trades: Iterable[ClosedTrade]) -> list[Day]:
@@ -62,6 +64,14 @@ def max_drawdown(days: Iterable[Day]) -> float:
     return round(worst, 2)
 
 
+def max_losing_streak(pnls: Iterable[float]) -> int:
+    run = worst = 0
+    for p in pnls:
+        run = run + 1 if p < 0 else 0
+        worst = max(worst, run)
+    return worst
+
+
 def summarize(trades: Iterable[ClosedTrade]) -> Summary:
     ts = list(trades)
     wins = [t.pnl for t in ts if t.pnl > 0]
@@ -81,4 +91,6 @@ def summarize(trades: Iterable[ClosedTrade]) -> Summary:
         best_day=max(days, key=lambda d: d.pnl) if days else None,
         worst_day=min(days, key=lambda d: d.pnl) if days else None,
         trading_days=len(days),
+        expectancy=round(sum(t.pnl for t in ts) / len(ts), 2) if ts else None,
+        max_consecutive_losses=max_losing_streak(t.pnl for t in ts),
     )

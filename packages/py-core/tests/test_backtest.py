@@ -122,3 +122,25 @@ def test_days_without_option_data_are_reported() -> None:
     assert r.days_replayed == 2 and r.days_without_options == 1
     assert "1 of 2 days have no option prices" in r.warnings[0]
     assert summarize_result(r)["summary"]["days_without_options"] == 1
+
+
+def test_an_index_stop_fires_on_the_minute_extreme_and_fills_at_the_option_extreme() -> None:
+    h = MemoryHistory()
+    t0 = ts("09:15")
+    dip = ts("10:00")
+    h.add_spot(
+        "NIFTY",
+        [
+            Candle(t, 25000, 25001, 24900 if t == dip else 24999, 25000)
+            for t in (t0 + timedelta(minutes=i) for i in range(375))
+        ],
+    )
+    h.add_option(KEY, [Candle(ts("09:20"), *flat(100)), Candle(dip, 100, 101, 80, 95), Candle(ts("15:15"), *flat(99))])
+    config = parse({
+        "kind": "time_based",
+        "timing": {"entry": "09:20", "exit": "15:15", "days": ["TUE"]},
+        "legs": [{"id": "L1", "action": "BUY", "option_type": "CE",
+                  "stop_loss": {"unit": "percent", "value": 0.2, "basis": "underlying"}}],
+    })  # fmt: skip
+    (t,) = run(config, h).trades
+    assert (t.exit_time, t.exit_price, t.reason) == (dip, 80, "stop-loss")  # the open (25000) never reached it
