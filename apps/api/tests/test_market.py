@@ -15,7 +15,7 @@ from ae_api.settings import Settings
 from ae_brokers.zerodha import ZerodhaAdapter
 from ae_core.secrets import new_master_key
 from ae_marketdata.hub import Hub
-from ae_marketdata.types import Tick
+from ae_marketdata.types import IST, Tick
 from fastapi.testclient import TestClient
 from redis.asyncio import Redis
 from sqlalchemy import create_engine, text
@@ -158,7 +158,8 @@ def test_admin_kite_session_for_the_platform_feed(api: TestClient) -> None:
     kite = r.json()["logins"][1]
     assert kite["account"] == "AB1234"
     expires = datetime.fromisoformat(kite["session_expires_at"])
-    assert kite["provider"] == "kite" and expires.hour == 0 and expires.minute == 30  # 06:00 IST, in UTC
+    ist = expires.astimezone(IST)  # the database may answer in any time zone
+    assert kite["provider"] == "kite" and (ist.hour, ist.minute) == (6, 0)
     log = api.get("/v1/admin/audit?action=admin.market_data.kite_session", headers=ADMIN).json()["items"]
     assert len(log) == 1 and "acc-1" not in str(log) and "AB1234" in str(log)  # which Kite account, never the token
 
