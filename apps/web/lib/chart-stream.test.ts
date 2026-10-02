@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { sanitize } from "../components/charts/chart-board";
+import { ALL_ON } from "../components/charts/controls";
 import { LAYOUTS, MAX_CHARTS, placement, resizeTracks, template } from "../components/charts/layouts";
 import { parseSse, upsertCandle } from "./chart-stream";
 
@@ -47,7 +48,7 @@ describe("sanitize the saved board", () => {
       {
         layout: "4",
         charts: [
-          { id: "a", key: "NIFTY", timeframe: 15 },
+          { id: "a", key: "NIFTY", timeframe: 15, layers: { ...ALL_ON, fvg: false } },
           { id: "b", key: "FINNIFTY", timeframe: 5 },
           { id: "c", key: "SENSEX", timeframe: 7 },
         ],
@@ -58,9 +59,12 @@ describe("sanitize the saved board", () => {
     );
     expect(b.layout).toBe("4");
     expect(b.charts).toHaveLength(4);
-    expect(b.charts[0]).toEqual({ id: "a", key: "NIFTY", timeframe: 15 });
-    expect(b.charts[1]).toEqual({ id: "c1", key: "SENSEX", timeframe: 5 });
+    expect(b.charts[0]).toEqual({ id: "a", key: "NIFTY", timeframe: 15, layers: { ...ALL_ON, fvg: false } });
+    expect(b.charts[1]).toEqual({ id: "c1", key: "SENSEX", timeframe: 5, layers: ALL_ON });
     expect(b.charts[2]?.id).toBe("c2");
+    // a board saved before overlays were remembered keeps its charts, with every overlay on
+    const old = sanitize({ layout: "1", charts: [{ id: "x", key: "SENSEX", timeframe: 1 }] }, options);
+    expect(old.charts[0]).toEqual({ id: "x", key: "SENSEX", timeframe: 1, layers: ALL_ON });
     expect(b.cols).toEqual([2, 1]);
     expect(b.rows).toEqual([1, 1]);
   });

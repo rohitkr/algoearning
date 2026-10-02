@@ -2,7 +2,7 @@
 
 import type { ChartCandle, ChartOptions, ChartSnapshot, SmcOverlay } from "@algoearning/api-types";
 import { formatNumber } from "@algoearning/shared";
-import { StatusPill, cn } from "@algoearning/ui";
+import { StatusPill, Tooltip, cn, type StatusTone } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
 import {
   CandlestickSeries,
@@ -16,35 +16,20 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from "lightweight-charts";
-import { Layers } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { followChart, upsertCandle, type ChartMessage, type StreamState } from "@/lib/chart-stream";
 
 import { IST_OFFSET_S, SMC_PALETTE, frameColors } from "./chart-theme";
-import { SmcPrimitive, type SmcLayers } from "./smc-primitive";
+import { ALL_ON, OverlayMenu, TimeframePicker, type Layer, type LayerSet } from "./controls";
+import { SmcPrimitive } from "./smc-primitive";
 
 export interface ChartSpec {
   id: string;
   key: string;
   timeframe: number;
+  layers: LayerSet; // the SMC overlays drawn
 }
-
-type Layer = keyof SmcLayers | "levels";
-const LAYERS: { id: Layer; label: string; hint: string }[] = [
-  { id: "ob", label: "Order blocks", hint: "Last opposing candle before a break of structure" },
-  { id: "fvg", label: "FVG", hint: "Fair value gaps" },
-  { id: "structure", label: "BOS / CHoCH", hint: "Breaks of structure and changes of character" },
-  { id: "liquidity", label: "Liquidity", hint: "Equal highs and lows, until swept" },
-  { id: "levels", label: "Key levels", hint: "Previous day high/low and the nearest swing high/low" },
-];
-const ALL_ON: Record<Layer, boolean> = {
-  ob: true,
-  fvg: true,
-  structure: true,
-  liquidity: true,
-  levels: true,
-};
 
 const toBar = (c: ChartCandle): CandlestickData<UTCTimestamp> => ({
   time: (c.time + IST_OFFSET_S) as UTCTimestamp,
@@ -54,80 +39,41 @@ const toBar = (c: ChartCandle): CandlestickData<UTCTimestamp> => ({
   close: c.close,
 });
 
-function statusPill(state: StreamState, status: ChartSnapshot["status"] | null, detail: string | null) {
-  if (state === "failed") return <StatusPill tone="danger">{detail ?? "Unavailable"}</StatusPill>;
+function streamStatus(
+  state: StreamState,
+  status: ChartSnapshot["status"] | null,
+  detail: string | null,
+): { tone: StatusTone; text: string } {
+  if (state === "failed") return { tone: "danger", text: detail ?? "Unavailable" };
   if (state !== "open")
-    return <StatusPill tone="neutral">{state === "retrying" ? "Reconnecting" : "Connecting"}</StatusPill>;
-  if (status === "live") return <StatusPill tone="success">Live</StatusPill>;
-  if (status === "simulated") return <StatusPill tone="warning">Simulated</StatusPill>;
-  return <StatusPill tone="neutral">No live prices</StatusPill>;
+    return { tone: "neutral", text: state === "retrying" ? "Reconnecting" : "Connecting" };
+  if (status === "live") return { tone: "success", text: "Live" };
+  if (status === "simulated") return { tone: "warning", text: "Simulated" };
+  return { tone: "neutral", text: "No live prices" };
 }
 
-/** The overlays a chart draws, switched on and off from a small menu so the chart keeps its height. */
-function OverlayMenu({
-  layers,
-  onToggle,
-}: {
-  layers: Record<Layer, boolean>;
-  onToggle: (id: Layer) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: PointerEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node))
-        setOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", close);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", close);
-    };
-  }, [open]);
-  const on = LAYERS.filter((l) => layers[l.id]).length;
+const DOT: Record<StatusTone, string> = {
+  success: "bg-profit",
+  danger: "bg-loss",
+  warning: "bg-warning",
+  info: "bg-primary",
+  neutral: "bg-muted",
+};
+
+/** The stream's status: a pill, or just its coloured dot when the chart is narrow (a failure always says why). */
+function StreamStatus({ tone, text }: { tone: StatusTone; text: string }) {
+  if (tone === "danger") return <StatusPill tone={tone}>{text}</StatusPill>;
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-haspopup="true"
-        onClick={() => setOpen((o) => !o)}
-        className="flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs font-medium text-muted hover:text-foreground"
-      >
-        <Layers className="size-3.5" aria-hidden />
-        SMC
-        <span className="tabular-nums">
-          {on}/{LAYERS.length}
+    <>
+      <span className="hidden @2xl:inline-flex">
+        <StatusPill tone={tone}>{text}</StatusPill>
+      </span>
+      <Tooltip label={text}>
+        <span role="status" aria-label={text} className="flex size-6 items-center justify-center @2xl:hidden">
+          <span className={cn("size-2 rounded-full", DOT[tone])} />
         </span>
-      </button>
-      {open && (
-        <div
-          role="group"
-          aria-label="Overlays"
-          className="absolute right-0 z-20 mt-1 w-60 rounded-lg border border-border bg-surface p-1 shadow-card"
-        >
-          {LAYERS.map((l) => (
-            <label
-              key={l.id}
-              className="flex items-start gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface-2"
-            >
-              <input
-                type="checkbox"
-                checked={layers[l.id]}
-                onChange={() => onToggle(l.id)}
-                className="mt-0.5 accent-[var(--primary)]"
-              />
-              <span>
-                <span className="block font-medium">{l.label}</span>
-                <span className="block text-xs text-muted">{l.hint}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
+      </Tooltip>
+    </>
   );
 }
 
@@ -149,7 +95,7 @@ export function SmcChart({
   const candles = useRef<ChartCandle[]>([]);
   const priceLines = useRef<IPriceLine[]>([]);
   const overlayRef = useRef<SmcOverlay | null>(null);
-  const [layers, setLayers] = useState(ALL_ON);
+  const layers = spec.layers ?? ALL_ON;
   const layersRef = useRef(layers);
   const [state, setState] = useState<StreamState>("connecting");
   const [detail, setDetail] = useState<string | null>(null);
@@ -257,6 +203,19 @@ export function SmcChart({
     setLast({ price: close, change: prevDay ? ((close - prevDay.close) / prevDay.close) * 100 : null });
   }
 
+  // the overlays to draw, set here or for every chart from the toolbar
+  useEffect(() => {
+    layersRef.current = layers;
+    primitive.current?.setLayers({
+      fvg: layers.fvg,
+      ob: layers.ob,
+      structure: layers.structure,
+      liquidity: layers.liquidity,
+    });
+    drawLevels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- drawLevels reads refs only
+  }, [layers.fvg, layers.ob, layers.structure, layers.liquidity, layers.levels]);
+
   // the live stream for the chosen index and timeframe
   useEffect(() => {
     const ctrl = new AbortController();
@@ -332,17 +291,8 @@ export function SmcChart({
     onChange(next);
   }
 
-  function toggle(id: Layer) {
-    const next = { ...layers, [id]: !layers[id] };
-    setLayers(next);
-    layersRef.current = next;
-    primitive.current?.setLayers({
-      fvg: next.fvg,
-      ob: next.ob,
-      structure: next.structure,
-      liquidity: next.liquidity,
-    });
-    drawLevels();
+  function toggle(id: Layer, on: boolean) {
+    onChange({ ...spec, layers: { ...layers, [id]: on } });
   }
 
   const name = options.instruments.find((i) => i.code === spec.key)?.name ?? spec.key;
@@ -369,30 +319,16 @@ export function SmcChart({
             </option>
           ))}
         </select>
-        <div role="radiogroup" aria-label="Timeframe" className="flex rounded-lg bg-surface-2 p-0.5">
-          {options.timeframes.map((tf) => (
-            <button
-              key={tf}
-              type="button"
-              role="radio"
-              aria-checked={spec.timeframe === tf}
-              onClick={() => select({ ...spec, timeframe: tf })}
-              className={cn(
-                "h-7 rounded-md px-2.5 text-xs font-medium tabular-nums",
-                spec.timeframe === tf
-                  ? "bg-surface text-foreground shadow-card"
-                  : "text-muted hover:text-foreground",
-              )}
-            >
-              {tf}m
-            </button>
-          ))}
-        </div>
+        <TimeframePicker
+          timeframes={options.timeframes}
+          value={spec.timeframe}
+          onChange={(tf) => select({ ...spec, timeframe: tf })}
+        />
         {last && (
-          <span className="text-sm whitespace-nowrap tabular-nums">
+          <span className="hidden text-sm whitespace-nowrap tabular-nums @lg:inline">
             <span className="font-semibold">{formatNumber(last.price)}</span>
             {last.change != null && (
-              <span className={cn("ml-1.5 hidden text-xs @md:inline", tone)}>
+              <span className={cn("ml-1.5 hidden text-xs @xl:inline", tone)}>
                 {last.change >= 0 ? "+" : ""}
                 {last.change.toFixed(2)}%
               </span>
@@ -400,8 +336,8 @@ export function SmcChart({
           </span>
         )}
         <span className="ml-auto flex items-center gap-1">
-          <OverlayMenu layers={layers} onToggle={toggle} />
-          {statusPill(state, status, detail)}
+          <OverlayMenu layers={layers} onToggle={toggle} compact />
+          <StreamStatus {...streamStatus(state, status, detail)} />
         </span>
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-b-card">

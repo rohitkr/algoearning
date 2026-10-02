@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChartOptions } from "@algoearning/api-types";
-import { Tooltip, cn } from "@algoearning/ui";
+import { cn } from "@algoearning/ui";
 import {
   useEffect,
   useLayoutEffect,
@@ -12,6 +12,15 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
+import {
+  ALL_ON,
+  Dropdown,
+  LAYERS,
+  OverlayMenu,
+  TimeframePicker,
+  type Layer,
+  type LayerSet,
+} from "./controls";
 import {
   LAYOUTS,
   MAX_CHARTS,
@@ -44,8 +53,16 @@ function defaults(options: ChartOptions): BoardState {
     id: `c${n}`,
     key: codes[n % Math.max(codes.length, 1)] ?? "NIFTY",
     timeframe: tf,
+    layers: { ...ALL_ON },
   }));
   return { layout: "2c", charts, cols: equal(2), rows: equal(1) };
+}
+
+/** Saved overlay switches, or all on when they are missing or from an older version. */
+function pickLayers(v: unknown): LayerSet {
+  const r = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  if (!LAYERS.every((l) => typeof r[l.id] === "boolean")) return { ...ALL_ON };
+  return Object.fromEntries(LAYERS.map((l) => [l.id, r[l.id]])) as LayerSet;
 }
 
 const validSizes = (v: unknown, n: number): v is number[] =>
@@ -67,7 +84,12 @@ export function sanitize(saved: unknown, options: ChartOptions): BoardState {
       codes.has(c.key) &&
       typeof c.timeframe === "number" &&
       options.timeframes.includes(c.timeframe)
-      ? { id: c.id, key: c.key, timeframe: c.timeframe }
+      ? {
+          id: c.id,
+          key: c.key,
+          timeframe: c.timeframe,
+          layers: pickLayers(c.layers),
+        }
       : d;
   });
   return {
@@ -285,6 +307,20 @@ export function ChartBoard({ options }: { options: ChartOptions }) {
   const update = (n: number) => (spec: ChartSpec) =>
     save({ ...board, charts: board.charts.map((c, i) => (i === n ? spec : c)) });
 
+  // the toolbar sets every chart shown at once; each chart's own controls still change just that chart, and the
+  // toolbar then shows the charts disagree (no timeframe highlighted, a half-ticked overlay)
+  const setAll = (f: (c: ChartSpec) => ChartSpec) =>
+    save({ ...board, charts: board.charts.map((c, i) => (i < shown.length ? f(c) : c)) });
+  const commonTf = shown.every((c) => c.timeframe === shown[0]?.timeframe)
+    ? (shown[0]?.timeframe ?? null)
+    : null;
+  const commonLayers = Object.fromEntries(
+    LAYERS.map((l) => {
+      const on = shown.filter((c) => c.layers[l.id]).length;
+      return [l.id, on === shown.length ? true : on === 0 ? false : "mixed"];
+    }),
+  ) as Record<Layer, boolean | "mixed">;
+
   // the borders that can be dragged: one per pair of neighbouring tracks, cut where a chart spans across it
   const gutters: React.ReactNode[] = [];
   if (!phone) {
@@ -324,29 +360,45 @@ export function ChartBoard({ options }: { options: ChartOptions }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <span className="text-xs text-muted">Layout</span>
-        <div role="radiogroup" aria-label="Chart layout" className="flex rounded-lg bg-surface-2 p-0.5">
-          {LAYOUTS.map((l) => (
-            <Tooltip key={l.id} label={l.label}>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={board.layout === l.id}
-                aria-label={l.label}
-                onClick={() => pickLayout(l)}
-                className={cn(
-                  "flex h-8 w-9 items-center justify-center rounded-md",
-                  board.layout === l.id
-                    ? "bg-surface text-primary-text shadow-card"
-                    : "text-muted hover:text-foreground",
-                )}
-              >
-                <LayoutIcon layout={l} />
-              </button>
-            </Tooltip>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted">All charts</span>
+        <TimeframePicker
+          label="Timeframe for all charts"
+          timeframes={options.timeframes}
+          value={commonTf}
+          onChange={(tf) => setAll((c) => ({ ...c, timeframe: tf }))}
+        />
+        <OverlayMenu
+          title="SMC overlays for all charts"
+          layers={commonLayers}
+          onToggle={(id, on) => setAll((c) => ({ ...c, layers: { ...c.layers, [id]: on } }))}
+        />
+        <span className="ml-auto text-xs text-muted">Layout</span>
+        <Dropdown label={`Chart layout: ${layout.label}`} button={<LayoutIcon layout={layout} />}>
+          {(close) => (
+            <div role="radiogroup" aria-label="Chart layout" className="w-64">
+              {LAYOUTS.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={board.layout === l.id}
+                  onClick={() => {
+                    pickLayout(l);
+                    close();
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-2",
+                    board.layout === l.id ? "bg-surface-2 text-primary-text" : "text-foreground",
+                  )}
+                >
+                  <LayoutIcon layout={l} />
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </Dropdown>
       </div>
       <div
         ref={boxRef}

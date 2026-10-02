@@ -11,14 +11,8 @@ export default async function ChartsPage() {
   await requireUser();
   const options = await apiGet<ChartOptions>("/v1/charts/options");
   return (
-    <div className="mx-auto flex max-w-[1800px] flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Charts</h1>
-        <p className="text-sm text-muted">
-          Live index candles with Smart Money Concepts: order blocks, fair value gaps, breaks of structure,
-          changes of character, liquidity and key levels. Zones are recalculated every time a candle closes.
-        </p>
-      </div>
+    <div className="mx-auto flex max-w-[1800px] flex-col gap-3">
+      <h1 className="sr-only">Charts</h1>
       {options.ok ? (
         <ChartBoard options={options.data} />
       ) : (

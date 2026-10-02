@@ -30,8 +30,10 @@ each with its own index (Nifty 50, Sensex, Nifty Bank) and timeframe (1, 3, 5 or
 - **Screen.** Zones are canvas boxes and dashed lines drawn under the candles by a series primitive; bullish zones
   are green/cyan, bearish red/orange, in a shade per theme. Each overlay can be switched off. Layouts (1, 2 side by
   side or stacked, 3 side by side or one large + two, 4 in a grid) live in `components/charts/layouts.ts`; the
-  borders between charts drag to resize them, and the board fills the window below the page title. A new index or
-  timeframe resets the price axis to autoscale. The browser remembers the layout, sizes and charts. `CHART_CODES`
+  borders between charts drag to resize them, and the board fills the window below one toolbar row. That row sets
+  the timeframe and overlays of every chart shown at once and holds the layout menu; each chart's own controls still
+  change just that chart, and the toolbar then shows the charts disagree. A new index or timeframe resets the price
+  axis to autoscale. The browser remembers the layout, sizes and charts, with their overlays. `CHART_CODES`
   (API) is where to offer more indices.
 
 **Consequences.** The chart's zones are the library's and can differ from the strategy engine's own no-lookahead
