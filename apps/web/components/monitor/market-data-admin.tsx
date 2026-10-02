@@ -1,6 +1,6 @@
 "use client";
 
-import type { MarketDataAdmin } from "@algoearning/api-types";
+import type { FeedLogin, MarketDataAdmin } from "@algoearning/api-types";
 import { formatNumber } from "@algoearning/shared";
 import { Button, Card, CardTitle, StatusPill, cn } from "@algoearning/ui";
 import { ExternalLink } from "lucide-react";
@@ -12,35 +12,151 @@ import { inputClass } from "@/components/builder/fields";
 import { Table, fmtDateTime, td } from "./bits";
 import { useAdminAction } from "./use-admin-action";
 
+const PROVIDER: Record<string, string> = { breeze: "Breeze", kite: "Kite" };
+
 function feedTone(d: MarketDataAdmin): { tone: "success" | "warning" | "danger"; text: string } {
   const beat = d.updated_at ? Date.now() - new Date(d.updated_at).getTime() : Infinity;
   if (!d.source || beat > 60_000) return { tone: "danger", text: "Feed not running" };
   if (d.source === "simulated") return { tone: "warning", text: "Simulated prices" };
+  const name = PROVIDER[d.source] ?? d.source;
   if (!d.connected)
-    return { tone: "danger", text: d.session === "login needed" ? "Breeze login needed" : "Disconnected" };
-  return { tone: "success", text: "Live from Breeze" };
+    return { tone: "danger", text: d.session === "login needed" ? `${name} login needed` : "Disconnected" };
+  return { tone: "success", text: `Live from ${name}` };
 }
 
-/** Feed status, the daily Breeze login, and each index's last price. ICICI redirects the login back to this page
- * with ?apisession=...: the token is saved at once and removed from the address bar. */
-export function MarketDataPanel({ data, redirectToken }: { data: MarketDataAdmin; redirectToken?: string }) {
+/** How each provider's daily login works. Breeze sends the browser back with ?apisession=..., Kite with
+ * ?request_token=...&status=success (a request token works for a few minutes only). */
+const LOGIN = {
+  breeze: {
+    path: "/v1/admin/market-data/breeze-session",
+    field: "session_token",
+    placeholder: "Session token",
+    hint: (
+      <>
+        Log in with the platform&apos;s ICICI Direct account once each trading day. ICICI sends you back to
+        this app and the session is saved automatically (the Breeze app&apos;s redirect URL is the app&apos;s
+        address, e.g. http://localhost:3000). If it ever lands somewhere else, paste the{" "}
+        <code>apisession</code> value below.
+      </>
+    ),
+  },
+  kite: {
+    path: "/v1/admin/market-data/kite-session",
+    field: "request_token",
+    placeholder: "Request token",
+    hint: (
+      <>
+        Log in with the platform&apos;s own Zerodha account (not a user&apos;s) once each trading day; the
+        session lasts until 06:00 the next morning. Set the platform Kite app&apos;s redirect URL to this
+        page, e.g. https://app.algoearning.com/monitor/market-data, and the session is saved automatically. If
+        it lands somewhere else, paste the <code>request_token</code> value below within a few minutes.
+      </>
+    ),
+  },
+} as const;
+
+/** One provider's daily login: status, the login link, and a box to paste the token by hand. */
+function LoginCard({
+  login,
+  inUse,
+  run,
+  busy,
+  note,
+}: {
+  login: FeedLogin;
+  inUse: boolean;
+  run: ReturnType<typeof useAdminAction>["run"];
+  busy: string | null;
+  note: ReturnType<typeof useAdminAction>["note"];
+}) {
+  const [token, setToken] = useState("");
+  const how = LOGIN[login.provider];
+  const name = PROVIDER[login.provider];
+  const key = `session-${login.provider}`;
+  return (
+    <Card className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <CardTitle>
+          Daily {name} login
+          {!inUse && (
+            <span className="ml-2 text-xs font-normal text-muted">not the feed&apos;s source now</span>
+          )}
+        </CardTitle>
+        {login.session_expires_at && new Date(login.session_expires_at) > new Date() ? (
+          <StatusPill tone="success">Valid until {fmtDateTime(login.session_expires_at)}</StatusPill>
+        ) : (
+          <StatusPill tone={inUse ? "warning" : "neutral"}>Needed today</StatusPill>
+        )}
+      </div>
+      <p className="text-sm text-muted">{how.hint}</p>
+      <Button asChild variant="secondary" className="w-fit">
+        <a href={login.login_url} target="_blank" rel="noreferrer">
+          Log in to {name} <ExternalLink className="size-4" aria-hidden />
+        </a>
+      </Button>
+      <form
+        className="flex flex-wrap gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run(
+            key,
+            "PUT",
+            how.path,
+            { [how.field]: token },
+            `${name} session saved: the feed reconnects within seconds.`,
+          ).then(() => setToken(""));
+        }}
+      >
+        <input
+          aria-label={`${name} ${how.placeholder.toLowerCase()}`}
+          className={`${inputClass} max-w-xs flex-1`}
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          placeholder={how.placeholder}
+          autoComplete="off"
+          data-1p-ignore="true"
+          data-lpignore="true"
+        />
+        <Button type="submit" disabled={busy !== null || token.trim().length < 4}>
+          Save
+        </Button>
+      </form>
+      {note?.key === key && (
+        <p role="status" className={cn("text-sm", note.ok ? "text-profit" : "text-loss")}>
+          {note.text}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+/** Feed status, the daily provider login (Breeze, or the platform Kite account), and each index's last price.
+ * The provider's login redirects back to this page with its token, which is saved at once and removed from the
+ * address bar. */
+export function MarketDataPanel({
+  data,
+  redirect,
+}: {
+  data: MarketDataAdmin;
+  redirect?: { provider: "breeze" | "kite"; token: string };
+}) {
   const { run, busy, note } = useAdminAction();
   const router = useRouter();
-  const [token, setToken] = useState("");
   const sent = useRef(false);
   const s = feedTone(data);
 
   useEffect(() => {
-    if (!redirectToken || sent.current) return;
+    if (!redirect || sent.current) return;
     sent.current = true;
+    const how = LOGIN[redirect.provider];
     void run(
-      "session",
+      `session-${redirect.provider}`,
       "PUT",
-      "/v1/admin/market-data/breeze-session",
-      { session_token: redirectToken },
-      "Breeze session saved: the feed reconnects within seconds.",
+      how.path,
+      { [how.field]: redirect.token },
+      `${PROVIDER[redirect.provider]} session saved: the feed reconnects within seconds.`,
     ).then(() => router.replace("/monitor/market-data"));
-  }, [redirectToken, run, router]);
+  }, [redirect, run, router]);
 
   // the feed reports every few seconds: keep the page current
   useEffect(() => {
@@ -63,8 +179,12 @@ export function MarketDataPanel({ data, redirectToken }: { data: MarketDataAdmin
             <dd className="tabular-nums">
               {data.subscribed} of {data.wanted} wanted
             </dd>
-            <dt className="text-muted">Breeze API calls today</dt>
-            <dd className="tabular-nums">{data.api_calls_today} / 5,000</dd>
+            {data.source === "breeze" && (
+              <>
+                <dt className="text-muted">Breeze API calls today</dt>
+                <dd className="tabular-nums">{data.api_calls_today} / 5,000</dd>
+              </>
+            )}
             <dt className="text-muted">Last price received</dt>
             <dd>{fmtDateTime(data.last_event)}</dd>
             <dt className="text-muted">Feed heartbeat</dt>
@@ -78,68 +198,26 @@ export function MarketDataPanel({ data, redirectToken }: { data: MarketDataAdmin
           )}
         </Card>
 
-        <Card className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle>Daily Breeze login</CardTitle>
-            {data.session_expires_at && new Date(data.session_expires_at) > new Date() ? (
-              <StatusPill tone="success">Valid until {fmtDateTime(data.session_expires_at)}</StatusPill>
-            ) : (
-              <StatusPill tone="warning">Needed today</StatusPill>
-            )}
-          </div>
-          {data.login_url ? (
-            <>
-              <p className="text-sm text-muted">
-                Log in with the platform&apos;s ICICI Direct account once each trading day. ICICI sends you
-                back to this app and the session is saved automatically (the Breeze app&apos;s redirect URL is
-                the app&apos;s address, e.g. http://localhost:3000). If it ever lands somewhere else, paste
-                the <code>apisession</code> value below.
-              </p>
-              <Button asChild variant="secondary" className="w-fit">
-                <a href={data.login_url} target="_blank" rel="noreferrer">
-                  Log in to Breeze <ExternalLink className="size-4" aria-hidden />
-                </a>
-              </Button>
-              <form
-                className="flex flex-wrap gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void run(
-                    "session",
-                    "PUT",
-                    "/v1/admin/market-data/breeze-session",
-                    { session_token: token },
-                    "Breeze session saved: the feed reconnects within seconds.",
-                  ).then(() => setToken(""));
-                }}
-              >
-                <input
-                  aria-label="Breeze session token"
-                  className={`${inputClass} max-w-xs flex-1`}
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder="Session token"
-                  autoComplete="off"
-                  data-1p-ignore="true"
-                  data-lpignore="true"
-                />
-                <Button type="submit" disabled={busy !== null || token.trim().length < 4}>
-                  Save
-                </Button>
-              </form>
-            </>
-          ) : (
+        {data.logins.map((l) => (
+          <LoginCard
+            key={l.provider}
+            login={l}
+            inUse={data.source === l.provider || (!data.source && data.logins.length === 1)}
+            run={run}
+            busy={busy}
+            note={note}
+          />
+        ))}
+        {data.logins.length === 0 && (
+          <Card className="flex flex-col gap-3">
+            <CardTitle>Daily login</CardTitle>
             <p className="text-sm text-muted">
-              Set <code>BREEZE_API_KEY</code> and <code>BREEZE_API_SECRET</code> in <code>.env</code> to use
-              Breeze. Until then the feed runs on simulated prices.
+              Set <code>BREEZE_API_KEY</code> and <code>BREEZE_API_SECRET</code> (or the platform Kite
+              app&apos;s <code>KITE_FEED_API_KEY</code> and <code>KITE_FEED_API_SECRET</code>) in{" "}
+              <code>.env</code> for live prices. Until then the feed runs on simulated prices.
             </p>
-          )}
-          {note?.key === "session" && (
-            <p role="status" className={cn("text-sm", note.ok ? "text-profit" : "text-loss")}>
-              {note.text}
-            </p>
-          )}
-        </Card>
+          </Card>
+        )}
       </div>
 
       <Card className="p-0">

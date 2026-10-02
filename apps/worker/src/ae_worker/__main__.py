@@ -26,10 +26,12 @@ import structlog
 from ae_core.secrets import SecretBox, load_master_key
 from ae_db.models import Instrument
 from ae_db.session import Database
-from ae_marketdata.backfill import BreezeHistory, backfill
+from ae_marketdata.backfill import BreezeHistory, HistoryClient, backfill
 from ae_marketdata.history import archive_today, import_duckdb
 from ae_marketdata.hub import Hub
 from ae_marketdata.instruments import IST, refresh_instruments
+from ae_marketdata.kite_feed import KiteHistory
+from ae_marketdata.sources import choose_source
 from redis.asyncio import Redis
 from sqlalchemy import select
 
@@ -68,8 +70,37 @@ EVERY: dict[str, tuple[float, Callable[[Database], Awaitable[object]]]] = {
 }
 
 
+def history_provider() -> str:
+    """The provider the backfill fetches from: the feed's (choose_source); Breeze when the feed simulates."""
+    return "kite" if choose_source(os.environ) == "kite" else "breeze"
+
+
+async def _kite_history(db: Database, code: str) -> tuple[KiteHistory | None, str | None]:
+    """A KiteHistory for `code` with today's platform Kite session and instrument tokens, or why not."""
+    import httpx
+    from ae_marketdata.kite_feed import KiteCode, TokenBook
+    from ae_marketdata.session import KITE_SESSION, load_session
+
+    key, enc = os.environ.get("KITE_FEED_API_KEY", ""), os.environ.get("APP_ENCRYPTION_KEY", "")
+    if not (key and enc):
+        return None, "backfill from Kite needs KITE_FEED_API_KEY and APP_ENCRYPTION_KEY"
+    async with db.system_session() as s:
+        inst = (await s.execute(select(Instrument).where(Instrument.code == code))).scalar_one()
+        token, _ = await load_session(s, SecretBox({1: load_master_key(enc)}, 1), KITE_SESSION)
+        if not inst.kite_symbol:
+            return None, f"{code} has no Kite symbol"
+        codes = {code: KiteCode(inst.spot_exchange, inst.kite_symbol, code, inst.exchange)}
+    if not token:
+        return None, "no Kite session today: log in from Monitor > Market data first"
+    book = TokenBook()
+    async with httpx.AsyncClient() as c:
+        await book.load(codes, c, datetime.now(IST).date())
+    return KiteHistory(key, token, code, book), None
+
+
 async def run_backfill(db: Database, args: argparse.Namespace) -> int:
-    """Breeze history for one underlying (index, then options). Needs the day's Breeze session for real fetches."""
+    """History for one underlying (index, then options) from the price provider: Breeze, or the platform Kite app
+    (which only has contracts still listed: expired ones are skipped). Needs the day's session for real fetches."""
     code = str(args.arg or "").upper()
     async with db.system_session() as s:
         inst = (await s.execute(select(Instrument).where(Instrument.code == code))).scalar_one_or_none()
@@ -79,9 +110,16 @@ async def run_backfill(db: Database, args: argparse.Namespace) -> int:
         feed, spot_ex, deriv_ex, step = inst.feed_code or code, inst.spot_exchange, inst.exchange, inst.strike_step
     start = date.fromisoformat(args.from_)
     end = date.fromisoformat(args.to) if args.to else datetime.now(IST).date() - timedelta(days=1)
-    client = None
+    client: HistoryClient | None = None
+    kite: KiteHistory | None = None
     redis = None
-    if not args.dry_run:
+    if not args.dry_run and history_provider() == "kite":
+        kite, why = await _kite_history(db, code)
+        if kite is None:
+            log.error(why)
+            return 2
+        client = kite
+    elif not args.dry_run:
         from ae_marketdata.session import breeze_session
         from ae_marketdata.sources import _breeze_sdk
 
@@ -110,6 +148,8 @@ async def run_backfill(db: Database, args: argparse.Namespace) -> int:
     finally:
         if redis is not None:
             await redis.aclose()
+        if kite is not None:
+            await kite.aclose()
     print(json.dumps(asdict(rep), indent=2, default=str))
     return 0 if rep.stopped is None else 3
 

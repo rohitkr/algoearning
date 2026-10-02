@@ -25,3 +25,4 @@ supersedes the old one, never by editing history.
 | 0018 | [SMC options scalping: objective rules, options bought](0018-smc-options-scalping.md)     | Proposed                     |
 | 0019 | [Home hosting: this Mac behind a Cloudflare Tunnel](0019-home-hosting.md)                 | Accepted                     |
 | 0020 | [Live SMC charts: feed candles, `smartmoneyconcepts` zones, SSE](0020-live-smc-charts.md) | Accepted                     |
+| 0021 | [Second price provider: the platform Kite, Breeze default](0021-kite-price-provider.md)   | Accepted                     |

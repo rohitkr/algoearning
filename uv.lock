@@ -151,6 +151,7 @@ dependencies = [
     { name = "redis" },
     { name = "smartmoneyconcepts" },
     { name = "structlog" },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -165,6 +166,7 @@ requires-dist = [
     { name = "redis", specifier = ">=8.1" },
     { name = "smartmoneyconcepts", specifier = ">=0.0.27" },
     { name = "structlog", specifier = ">=26.1" },
+    { name = "websockets", specifier = ">=15" },
 ]
 
 [[package]]

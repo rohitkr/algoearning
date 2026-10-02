@@ -115,6 +115,7 @@ class Instrument(UUIDPk, Timestamps, Base):
         String(10), default="NSE", server_default="NSE"
     )  # where the index itself trades
     feed_code: Mapped[str | None] = mapped_column(String(20))  # the market-data feed's code (Breeze stock_code)
+    kite_symbol: Mapped[str | None] = mapped_column(String(40))  # the index's Kite tradingsymbol, for a Kite feed
     expiries: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")  # listed option expiries
     freeze_qty: Mapped[int] = mapped_column(Integer, default=1800, server_default="1800")  # max units per order
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

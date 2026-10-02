@@ -183,6 +183,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/market-data/kite-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Kite Session
+         * @description Turn the platform Kite login's request token (from Kite's redirect) into the day's session; the feed
+         *     reconnects with it when it runs on Kite.
+         */
+        put: operations["set_kite_session_v1_admin_market_data_kite_session_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/overview": {
         parameters: {
             query?: never;
@@ -1837,6 +1858,23 @@ export interface components {
             /** Ts */
             ts: string | null;
         };
+        /**
+         * FeedLogin
+         * @description A price provider whose keys are set, and its daily admin login.
+         */
+        FeedLogin: {
+            /** Login Url */
+            login_url: string;
+            /** Name */
+            name: string;
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "breeze" | "kite";
+            /** Session Expires At */
+            session_expires_at: string | null;
+        };
         /** GrantIn */
         GrantIn: {
             /** Days */
@@ -1952,6 +1990,11 @@ export interface components {
             /** Unchanged */
             unchanged: string[];
         };
+        /** KiteSessionIn */
+        KiteSessionIn: {
+            /** Request Token */
+            request_token: string;
+        };
         /** Leg */
         Leg: {
             /**
@@ -2035,12 +2078,10 @@ export interface components {
             instruments: components["schemas"]["FeedInstrument"][];
             /** Last Event */
             last_event: string | null;
-            /** Login Url */
-            login_url: string | null;
+            /** Logins */
+            logins: components["schemas"]["FeedLogin"][];
             /** Session */
             session: string | null;
-            /** Session Expires At */
-            session_expires_at: string | null;
             /** Source */
             source: string | null;
             /** Subscribed */
@@ -4144,6 +4185,84 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BreezeSessionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketDataAdmin"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_kite_session_v1_admin_market_data_kite_session_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KiteSessionIn"];
             };
         };
         responses: {

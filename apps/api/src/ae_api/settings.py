@@ -21,6 +21,8 @@
 | APP_ENCRYPTION_KEY    |                | base64 32-byte master key for broker credentials       |
 | API_PUBLIC_URL        | http://localhost:8000 | how browsers/brokers reach this API (callbacks) |
 | BREEZE_API_KEY        |                | ICICI Breeze app key: the platform price feed (phase 10) |
+| KITE_FEED_API_KEY     |                | the platform's own Kite Connect app, the other price-feed |
+| KITE_FEED_API_SECRET  |                | provider (ADR 0021): Monitor's daily login, token exchange |
 | REGISTRATION_OPEN     | true           | false: only accounts we already have may sign in    |
 """
 
@@ -58,6 +60,8 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = Field(default=None, repr=False)  # likewise
     telegram_bot_username: str | None = None  # for the "Connect Telegram" link
     breeze_api_key: str | None = None  # only for Monitor's login link; the feed process holds the secret
+    kite_feed_api_key: str | None = None  # the platform Kite app (not a user's): Monitor's login link
+    kite_feed_api_secret: str | None = Field(default=None, repr=False)  # turns its login into the day's session
     registration_open: bool = True
 
     @property

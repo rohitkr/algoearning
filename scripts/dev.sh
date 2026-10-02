@@ -162,7 +162,8 @@ pids+=($!)
 node apps/web/scripts/sync-landing.mjs  # the signed-out home page comes from apps/landing
 ( pnpm --filter @algoearning/web exec next dev --port "$WEB_PORT" 2>&1 | prefix "${blue}web ${reset}│ " ) &
 pids+=($!)
-# the platform price feed: Breeze when BREEZE_API_KEY/SECRET are set in .env, simulated prices otherwise
+# the platform price feed: Breeze when BREEZE_API_KEY/SECRET are set in .env, else the platform Kite app when
+# KITE_FEED_API_KEY is set, simulated prices otherwise (MARKET_DATA_SOURCE overrides; ADR 0021)
 ( uv run --env-file .env python -m ae_marketdata 2>&1 | prefix "${yellow}feed${reset}│ " ) &
 pids+=($!)
 # the worker: sends notifications, links Telegram, raises the engine-down alert, refreshes instruments daily

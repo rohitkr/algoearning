@@ -1909,6 +1909,47 @@
         "title": "FeedInstrument",
         "type": "object"
       },
+      "FeedLogin": {
+        "description": "A price provider whose keys are set, and its daily admin login.",
+        "properties": {
+          "login_url": {
+            "title": "Login Url",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "breeze",
+              "kite"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "session_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Expires At"
+          }
+        },
+        "required": [
+          "provider",
+          "name",
+          "login_url",
+          "session_expires_at"
+        ],
+        "title": "FeedLogin",
+        "type": "object"
+      },
       "GrantIn": {
         "additionalProperties": false,
         "properties": {
@@ -2270,6 +2311,22 @@
         "title": "InstrumentRefreshOut",
         "type": "object"
       },
+      "KiteSessionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "request_token": {
+            "maxLength": 200,
+            "minLength": 4,
+            "title": "Request Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_token"
+        ],
+        "title": "KiteSessionIn",
+        "type": "object"
+      },
       "Leg": {
         "additionalProperties": false,
         "properties": {
@@ -2514,16 +2571,12 @@
             ],
             "title": "Last Event"
           },
-          "login_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Login Url"
+          "logins": {
+            "items": {
+              "$ref": "#/components/schemas/FeedLogin"
+            },
+            "title": "Logins",
+            "type": "array"
           },
           "session": {
             "anyOf": [
@@ -2535,18 +2588,6 @@
               }
             ],
             "title": "Session"
-          },
-          "session_expires_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Expires At"
           },
           "source": {
             "anyOf": [
@@ -2584,8 +2625,7 @@
           "source",
           "connected",
           "session",
-          "session_expires_at",
-          "login_url",
+          "logins",
           "error",
           "wanted",
           "subscribed",
@@ -7130,6 +7170,98 @@
           }
         },
         "summary": "Set Breeze Session",
+        "tags": [
+          "market"
+        ]
+      }
+    },
+    "/v1/admin/market-data/kite-session": {
+      "put": {
+        "description": "Turn the platform Kite login's request token (from Kite's redirect) into the day's session; the feed\nreconnects with it when it runs on Kite.",
+        "operationId": "set_kite_session_v1_admin_market_data_kite_session_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KiteSessionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketDataAdmin"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Set Kite Session",
         "tags": [
           "market"
         ]

@@ -24,7 +24,7 @@ flowchart LR
   end
   CLERK[Clerk<br/>sign-in]
   KITE[Zerodha Kite<br/>orders]
-  BREEZE[ICICI Breeze<br/>market data]
+  BREEZE[ICICI Breeze or<br/>platform Kite: market data]
   RZP[Razorpay<br/>payments]
   TG[Email / Telegram]
 
@@ -52,7 +52,7 @@ Seven processes share one Postgres database and one Redis:
 | `web`    | Next.js 16 app: landing page, dashboard, strategy builder, runs, reports, the Monitor admin panel       | `apps/web`               |
 | `api`    | FastAPI. The only door to the data for browsers: auth, strategies, runs, brokers, billing, admin        | `apps/api`               |
 | `engine` | Steps every running strategy once a second, on paper or live on Zerodha                                 | `apps/engine`            |
-| `feed`   | One market-data feed for the whole platform: streams Breeze prices into Redis (or simulated prices)     | `packages/py-marketdata` |
+| `feed`   | One market-data feed for the whole platform: streams Breeze (or Kite) prices into Redis, or simulates   | `packages/py-marketdata` |
 | `worker` | Background jobs: sends notifications, runs backtests, refreshes instruments daily, checks the public IP | `apps/worker`            |
 | Postgres | All durable data. Every user-owned table has row-level security                                         | `packages/py-db`         |
 | Redis    | Live prices, the engine's single-runner lease, short-lived state such as login nonces                   | (no code of its own)     |
@@ -71,7 +71,7 @@ packages/
                       backtest.py, reports.py, billing.py, entitlements.py, notifications.py, secrets.py
   py-db/            ae_db: SQLAlchemy models, Alembic migrations, row-level security, repositories
   py-brokers/       ae_brokers: broker adapters (Zerodha/Kite today), instrument lists
-  py-marketdata/    ae_marketdata: the feed, the Redis price hub, history import and Breeze backfill
+  py-marketdata/    ae_marketdata: the feed, the Redis price hub, history import and backfill
   ui/               @algoearning/ui: theme tokens (light + dark) and shared React components
   shared/           @algoearning/shared: TypeScript helpers (number formatting, P&L maths)
   api-types/        @algoearning/api-types: TypeScript types generated from the API's OpenAPI spec
@@ -113,7 +113,8 @@ API key and that day's session. A Redis lease makes sure only one engine trades 
 by. Each run writes a heartbeat, and the worker alerts users when the heartbeat stops.
 
 **Market data (`packages/py-marketdata`).** One feed for the whole platform (ADRs 0006 and 0013). It streams
-from ICICI Breeze, or simulates prices when no Breeze keys are set, and publishes to Redis through `Hub`. The
+from ICICI Breeze by default, or from the platform's own Kite account (ADR 0021, `MARKET_DATA_SOURCE=kite`), or
+simulates prices when no keys are set, and publishes to Redis through `Hub`. The
 engine and the API only ever read Redis. Option contracts stream only while something asks for them. Each day's
 candles are archived to Postgres for backtesting. The Charts page's live candles and SMC zones are built from the
 same bars and ticks in the API (`ae_api/charts.py`) and streamed to the browser as server-sent events (ADR 0020).

@@ -49,6 +49,7 @@ export type PlanAdmin = Schemas["PlanAdminOut"];
 export type MarketSnapshot = Schemas["MarketSnapshot"];
 export type MarketQuote = Schemas["Quote"];
 export type MarketDataAdmin = Schemas["MarketDataAdmin"];
+export type FeedLogin = Schemas["FeedLogin"];
 export type Run = Schemas["RunOut"];
 export type RunDetail = Schemas["RunDetail"];
 export type RunPosition = Schemas["PositionOut"];

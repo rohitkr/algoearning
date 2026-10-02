@@ -462,12 +462,20 @@ class FeedInstrument(BaseModel):
     bars_today: int
 
 
+class FeedLogin(BaseModel):
+    """A price provider whose keys are set, and its daily admin login."""
+
+    provider: Literal["breeze", "kite"]
+    name: str
+    login_url: str
+    session_expires_at: datetime | None  # null or past: log in today
+
+
 class MarketDataAdmin(BaseModel):
-    source: str | None  # breeze | simulated | None (feed not running)
+    source: str | None  # breeze | kite | simulated | None (feed not running)
     connected: bool
     session: str | None  # active | login needed | not needed
-    session_expires_at: datetime | None
-    login_url: str | None  # ICICI login page for the Breeze app (null: BREEZE_API_KEY not set)
+    logins: list[FeedLogin]  # the providers that are set up (none: the feed can only simulate)
     error: str | None
     wanted: int
     subscribed: int
@@ -480,6 +488,11 @@ class MarketDataAdmin(BaseModel):
 class BreezeSessionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_token: str = Field(min_length=4, max_length=200)  # the apisession value from ICICI's redirect
+
+
+class KiteSessionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_token: str = Field(min_length=4, max_length=200)  # from Kite's redirect after the platform login
 
 
 # -- runs (the engine) -----------------------------------------------------------------------------------------

@@ -13,6 +13,12 @@ export default async function MonitorMarketData({
 }) {
   const sp = await searchParams;
   const r = await apiGet<MarketDataAdmin>("/v1/admin/market-data");
+  // a provider's login sends the browser back here: Breeze with ?apisession=, Kite with ?request_token=&status=
+  const redirect = sp.apisession
+    ? { provider: "breeze" as const, token: sp.apisession }
+    : sp.request_token && sp.status === "success"
+      ? { provider: "kite" as const, token: sp.request_token }
+      : undefined;
   if (!r.ok) return <LoadError what="market data" message={r.error.message} />;
   return (
     <div className="flex flex-col gap-4">
@@ -22,7 +28,7 @@ export default async function MonitorMarketData({
           One price feed for the whole platform: every user&apos;s strategies and screens read from it.
         </p>
       </div>
-      <MarketDataPanel data={r.data} redirectToken={sp.apisession} />
+      <MarketDataPanel data={r.data} redirect={redirect} />
     </div>
   );
 }

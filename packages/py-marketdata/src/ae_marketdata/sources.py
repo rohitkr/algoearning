@@ -1,8 +1,9 @@
 """Where prices come from. A Source subscribes to instrument keys and puts Bars and Ticks on a queue; the Feed
-(service.py) publishes them. Two sources:
+(service.py) publishes them. Three sources, one at a time (`choose_source`):
 
     BreezeSource     ICICI Breeze streaming (the platform's licensed-to-us feed, ADR 0006): 1-minute OHLC candles
-                     and last-price quotes over Breeze's websocket, so streaming costs no REST API calls
+                     and last-price quotes over Breeze's websocket, so streaming costs no REST API calls. The default.
+    KiteSource       the platform's own Kite account (kite_feed.py, ADR 0021): ticks over Kite's websocket
     SimulatedSource  random-walk prices for local development and demos, clearly labelled as simulated
 
 Breeze details marked "verify" below come from the SDK source, not yet from a live session."""
@@ -24,6 +25,17 @@ from .types import IST, Bar, InstrumentKey, Right, Tick
 
 log = structlog.get_logger("ae_marketdata.sources")
 Event = Bar | Tick
+
+
+def choose_source(env: Mapping[str, str]) -> str:
+    """breeze | kite | simulated, or what MARKET_DATA_SOURCE names. auto (the default): Breeze when its keys are set,
+    else the platform Kite app when its key is set, else simulated prices."""
+    choice = env.get("MARKET_DATA_SOURCE", "auto").lower() or "auto"
+    if choice != "auto":
+        return choice
+    if env.get("BREEZE_API_KEY") and env.get("BREEZE_API_SECRET"):
+        return "breeze"
+    return "kite" if env.get("KITE_FEED_API_KEY") else "simulated"
 
 
 class Source(Protocol):

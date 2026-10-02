@@ -78,3 +78,18 @@ async def test_refresh_updates_lot_sizes_and_keeps_missing_ones(seeded: str) -> 
         got = dict(c.execute(text("SELECT code, lot_size || ':' || source FROM instruments")).all())
     e.dispose()
     assert got["NIFTY"] == "75:kite" and got["SENSEX"] == "20:seed"
+
+
+def test_backfill_reads_from_the_feed_s_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ae_worker.__main__ import history_provider
+
+    for k in ("MARKET_DATA_SOURCE", "BREEZE_API_KEY", "BREEZE_API_SECRET", "KITE_FEED_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    assert history_provider() == "breeze"  # nothing set: Breeze, the default (it then says what is missing)
+    monkeypatch.setenv("KITE_FEED_API_KEY", "k")
+    assert history_provider() == "kite"
+    monkeypatch.setenv("BREEZE_API_KEY", "b")
+    monkeypatch.setenv("BREEZE_API_SECRET", "s")
+    assert history_provider() == "breeze"  # both set: Breeze stays the default
+    monkeypatch.setenv("MARKET_DATA_SOURCE", "kite")
+    assert history_provider() == "kite"

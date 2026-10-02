@@ -1,5 +1,6 @@
-"""The platform's daily Breeze session: an admin logs in to ICICI once a trading day (Monitor > Market data); the
-session token is stored encrypted in platform_secrets and the feed picks it up within seconds."""
+"""The platform's daily price-feed session: an admin logs in to the provider (ICICI Breeze, or the platform's own
+Kite account) once a trading day from Monitor > Market data; the token is stored encrypted in platform_secrets and
+the feed picks it up within seconds."""
 
 from __future__ import annotations
 
@@ -15,11 +16,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .types import IST
 
 BREEZE_SESSION = "breeze_session"
+KITE_SESSION = "kite_feed_session"  # the platform's Kite access token (not any user's broker account)
+KITE_LOGIN_URL = "https://kite.zerodha.com/connect/login?v=3&api_key={api_key}"
 BREEZE_LOGIN_URL = "https://api.icicidirect.com/apiuser/login?api_key={api_key}"
 
 
 def breeze_login_url(api_key: str) -> str:
     return BREEZE_LOGIN_URL.format(api_key=quote(api_key, safe=""))
+
+
+def kite_login_url(api_key: str) -> str:
+    return KITE_LOGIN_URL.format(api_key=quote(api_key, safe=""))
 
 
 def session_expiry(now: datetime) -> datetime:
@@ -32,29 +39,40 @@ def _context(name: str) -> str:
     return f"platform_secret:{name}"
 
 
+async def save_session(
+    s: AsyncSession, box: SecretBox, name: str, token: str, expires_at: datetime, by: uuid.UUID | None
+) -> datetime:
+    row = (await s.execute(select(PlatformSecret).where(PlatformSecret.name == name))).scalar_one_or_none()
+    if row is None:
+        row = PlatformSecret(name=name)
+        s.add(row)
+    row.value_enc = box.encrypt(token.strip(), _context(name))
+    row.expires_at = expires_at
+    row.updated_by = by
+    await s.flush()
+    return expires_at
+
+
+async def load_session(
+    s: AsyncSession, box: SecretBox, name: str, now: datetime | None = None
+) -> tuple[str | None, datetime | None]:
+    """(token, expires_at); token is None when there is none or it has expired."""
+    now = now or datetime.now(UTC)
+    row = (await s.execute(select(PlatformSecret).where(PlatformSecret.name == name))).scalar_one_or_none()
+    if row is None:
+        return None, None
+    if row.expires_at is not None and row.expires_at <= now:
+        return None, row.expires_at
+    return box.decrypt(row.value_enc, _context(name)), row.expires_at
+
+
 async def save_breeze_session(
     s: AsyncSession, box: SecretBox, token: str, by: uuid.UUID | None, now: datetime | None = None
 ) -> datetime:
-    now = now or datetime.now(UTC)
-    row = (await s.execute(select(PlatformSecret).where(PlatformSecret.name == BREEZE_SESSION))).scalar_one_or_none()
-    if row is None:
-        row = PlatformSecret(name=BREEZE_SESSION)
-        s.add(row)
-    row.value_enc = box.encrypt(token.strip(), _context(BREEZE_SESSION))
-    row.expires_at = session_expiry(now)
-    row.updated_by = by
-    await s.flush()
-    return row.expires_at
+    return await save_session(s, box, BREEZE_SESSION, token, session_expiry(now or datetime.now(UTC)), by)
 
 
 async def breeze_session(
     s: AsyncSession, box: SecretBox, now: datetime | None = None
 ) -> tuple[str | None, datetime | None]:
-    """(token, expires_at); token is None when there is none or it has expired."""
-    now = now or datetime.now(UTC)
-    row = (await s.execute(select(PlatformSecret).where(PlatformSecret.name == BREEZE_SESSION))).scalar_one_or_none()
-    if row is None:
-        return None, None
-    if row.expires_at is not None and row.expires_at <= now:
-        return None, row.expires_at
-    return box.decrypt(row.value_enc, _context(BREEZE_SESSION)), row.expires_at
+    return await load_session(s, box, BREEZE_SESSION, now)

@@ -1,5 +1,5 @@
-"""Backfilling 1-minute history from Breeze's REST API (ADR 0018): the index first, then the option contracts a
-scalper could have traded, into the same history_candles table the backtester reads.
+"""Backfilling 1-minute history from the price provider's REST API, Breeze or Kite (ADR 0018, 0021): the index first,
+then the option contracts a scalper could have traded, into the same history_candles table the backtester reads.
 
     python -m ae_worker backfill NIFTY --from 2025-01-01 [--to 2026-09-30] [--dry-run] [--reserve 500]
 
@@ -21,7 +21,7 @@ import math
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
-from typing import Any
+from typing import Any, Protocol
 
 import structlog
 from ae_db.models import HistoryCandle
@@ -157,6 +157,15 @@ def index_runs(missing: Sequence[date], max_days: int = 10) -> list[tuple[date, 
         else:
             out.append((d, d, 1))
     return out
+
+
+class HistoryClient(Protocol):
+    """Where history comes from: BreezeHistory below, or KiteHistory (kite_feed.py). Requests use Breeze's
+    parameters; rows come back shaped like Breeze's (datetime, open, high, low, close, volume, open_interest)."""
+
+    calls: int
+
+    async def candles(self, params: dict[str, Any], start: datetime, end: datetime) -> list[dict[str, Any]]: ...
 
 
 # -- Breeze ----------------------------------------------------------------------------------------------------
@@ -322,7 +331,7 @@ async def backfill(
     spot_exchange: str,
     deriv_exchange: str,
     strike_step: int,
-    client: BreezeHistory | None,
+    client: HistoryClient | None,
     buffer: int = 4,
     dry_run: bool = False,
     index_only: bool = False,

@@ -386,8 +386,8 @@ async def preflight(broker_account_id: uuid.UUID, user: CurrentUser, s: UserSess
         tick = (await Hub(redis).last(["NIFTY"])).get("NIFTY")
         fresh = tick is not None and datetime.now(UTC) - tick.ts < timedelta(minutes=2)
         health = await Hub(redis).health()
-        add("Price feed", fresh and not health.get("simulated"),
-            "live prices" if fresh and not health.get("simulated") else "simulated prices: log in to Breeze in Monitor"
+        live = fresh and not health.get("simulated")
+        add("Price feed", live, "live prices" if live else "simulated prices: log in to the price feed in Monitor"
             if fresh else "no prices in the last 2 minutes")  # fmt: skip
         add(
             "Engine",
