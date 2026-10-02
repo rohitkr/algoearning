@@ -1863,6 +1863,10 @@ export interface components {
          * @description A price provider whose keys are set, and its daily admin login.
          */
         FeedLogin: {
+            /** Account */
+            account?: string | null;
+            /** Expected Account */
+            expected_account?: string | null;
             /** Login Url */
             login_url: string;
             /** Name */

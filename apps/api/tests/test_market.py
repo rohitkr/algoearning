@@ -27,15 +27,17 @@ ADMIN = {"X-Dev-User": "admin@example.com"}
 
 
 def kite_session(req: httpx.Request) -> httpx.Response:
-    """Kite's token exchange for the platform app: request token rt-ok works, anything else is refused."""
+    """Kite's token exchange for the platform app: rt-ok logs in AB1234, rt-other ZZ9999, anything else is refused."""
     form = parse_qs(req.content.decode())
-    if req.url.path != "/session/token" or form["request_token"] != ["rt-ok"]:
+    users = {"rt-ok": "ab1234", "rt-other": "zz9999"}
+    rt = form["request_token"][0]
+    if req.url.path != "/session/token" or rt not in users:
         return httpx.Response(
             403, json={"status": "error", "error_type": "TokenException", "message": "Token is invalid"}
         )
-    want = hashlib.sha256(b"kitekeyrt-okkitesecret").hexdigest()
+    want = hashlib.sha256(f"kitekey{rt}kitesecret".encode()).hexdigest()
     assert form["checksum"] == [want] and form["api_key"] == ["kitekey"]
-    return httpx.Response(200, json={"status": "success", "data": {"access_token": "acc-1", "user_id": "ab1234"}})
+    return httpx.Response(200, json={"status": "success", "data": {"access_token": "acc-1", "user_id": users[rt]}})
 
 
 def run(coro):  # type: ignore[no-untyped-def]
@@ -63,6 +65,7 @@ def api(clean_db: str) -> Iterator[TestClient]:
         breeze_api_key="my key/1",
         kite_feed_api_key="kitekey",
         kite_feed_api_secret="kitesecret",
+        kite_feed_client_id="ab1234",
     )
     app = create_app(settings)
     app.state.brokers = {"zerodha": ZerodhaAdapter(transport=httpx.MockTransport(kite_session))}
@@ -111,14 +114,15 @@ def test_admin_market_data_and_breeze_session(api: TestClient) -> None:
     d = api.get("/v1/admin/market-data", headers=ADMIN).json()
     assert d["source"] is None
     assert d["logins"] == [
-        {"provider": "breeze", "name": "ICICI Breeze", "session_expires_at": None,
-         "login_url": "https://api.icicidirect.com/apiuser/login?api_key=my%20key%2F1"},
-        {"provider": "kite", "name": "Kite (platform account)", "session_expires_at": None,
-         "login_url": "https://kite.zerodha.com/connect/login?v=3&api_key=kitekey"},
+        {"provider": "breeze", "name": "ICICI Breeze", "session_expires_at": None, "account": None,
+         "expected_account": None, "login_url": "https://api.icicidirect.com/apiuser/login?api_key=my%20key%2F1"},
+        {"provider": "kite", "name": "Kite (platform account)", "session_expires_at": None, "account": None,
+         "expected_account": "AB1234", "login_url": "https://kite.zerodha.com/connect/login?v=3&api_key=kitekey"},
     ]  # fmt: skip
     assert {i["code"] for i in d["instruments"]} >= {"NIFTY", "SENSEX"}
 
-    r = api.put("/v1/admin/market-data/breeze-session", json={"session_token": " 12345678 "}, headers=ADMIN)
+    landed = "https://app.algoearning.com/?apisession=12345678"
+    r = api.put("/v1/admin/market-data/breeze-session", json={"session_token": landed}, headers=ADMIN)
     assert r.status_code == 200 and r.json()["logins"][0]["session_expires_at"] is not None
     assert r.json()["logins"][1]["session_expires_at"] is None
     assert api.put("/v1/admin/market-data/breeze-session", json={"session_token": "1"}, headers=A).status_code == 403
@@ -132,9 +136,16 @@ def test_admin_kite_session_for_the_platform_feed(api: TestClient) -> None:
     r = api.put("/v1/admin/market-data/kite-session", json={"request_token": "rt-bad"}, headers=ADMIN)
     assert r.status_code == 400 and "Kite login failed" in r.json()["error"]["message"]
 
-    r = api.put("/v1/admin/market-data/kite-session", json=body, headers=ADMIN)
+    r = api.put("/v1/admin/market-data/kite-session", json={"request_token": "rt-other"}, headers=ADMIN)
+    assert r.status_code == 400 and "ZZ9999" in r.json()["error"]["message"]  # not the platform's account
+    assert r.json()["error"]["message"].count("AB1234") == 1
+
+    # the whole address the login landed on works too (here: the old local app's, which nothing answered)
+    landed = "http://127.0.0.1:5678/kite/callback?action=login&type=login&status=success&request_token=rt-ok"
+    r = api.put("/v1/admin/market-data/kite-session", json={"request_token": landed}, headers=ADMIN)
     assert r.status_code == 200
     kite = r.json()["logins"][1]
+    assert kite["account"] == "AB1234"
     expires = datetime.fromisoformat(kite["session_expires_at"])
     assert kite["provider"] == "kite" and expires.hour == 0 and expires.minute == 30  # 06:00 IST, in UTC
     log = api.get("/v1/admin/audit?action=admin.market_data.kite_session", headers=ADMIN).json()["items"]

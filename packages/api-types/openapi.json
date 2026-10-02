@@ -919,7 +919,7 @@
         "additionalProperties": false,
         "properties": {
           "session_token": {
-            "maxLength": 200,
+            "maxLength": 2000,
             "minLength": 4,
             "title": "Session Token",
             "type": "string"
@@ -1912,6 +1912,28 @@
       "FeedLogin": {
         "description": "A price provider whose keys are set, and its daily admin login.",
         "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account"
+          },
+          "expected_account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Account"
+          },
           "login_url": {
             "title": "Login Url",
             "type": "string"
@@ -2315,7 +2337,7 @@
         "additionalProperties": false,
         "properties": {
           "request_token": {
-            "maxLength": 200,
+            "maxLength": 2000,
             "minLength": 4,
             "title": "Request Token",
             "type": "string"

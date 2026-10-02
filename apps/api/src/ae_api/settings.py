@@ -23,6 +23,7 @@
 | BREEZE_API_KEY        |                | ICICI Breeze app key: the platform price feed (phase 10) |
 | KITE_FEED_API_KEY     |                | the platform's own Kite Connect app, the other price-feed |
 | KITE_FEED_API_SECRET  |                | provider (ADR 0021): Monitor's daily login, token exchange |
+| KITE_FEED_CLIENT_ID   |                | optional: the only Zerodha account that login accepts      |
 | REGISTRATION_OPEN     | true           | false: only accounts we already have may sign in    |
 """
 
@@ -62,6 +63,7 @@ class Settings(BaseSettings):
     breeze_api_key: str | None = None  # only for Monitor's login link; the feed process holds the secret
     kite_feed_api_key: str | None = None  # the platform Kite app (not a user's): Monitor's login link
     kite_feed_api_secret: str | None = Field(default=None, repr=False)  # turns its login into the day's session
+    kite_feed_client_id: str | None = None  # optional: the Zerodha account the platform feed must log in with
     registration_open: bool = True
 
     @property

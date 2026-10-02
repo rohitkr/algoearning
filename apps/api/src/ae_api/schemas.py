@@ -469,6 +469,8 @@ class FeedLogin(BaseModel):
     name: str
     login_url: str
     session_expires_at: datetime | None  # null or past: log in today
+    account: str | None = None  # the account today's session belongs to (Kite: the Zerodha client ID)
+    expected_account: str | None = None  # Kite: KITE_FEED_CLIENT_ID, the only account accepted (null: any)
 
 
 class MarketDataAdmin(BaseModel):
@@ -487,12 +489,12 @@ class MarketDataAdmin(BaseModel):
 
 class BreezeSessionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    session_token: str = Field(min_length=4, max_length=200)  # the apisession value from ICICI's redirect
+    session_token: str = Field(min_length=4, max_length=2000)  # apisession from ICICI's redirect, or that whole URL
 
 
 class KiteSessionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    request_token: str = Field(min_length=4, max_length=200)  # from Kite's redirect after the platform login
+    request_token: str = Field(min_length=4, max_length=2000)  # from Kite's redirect, or the whole URL it landed on
 
 
 # -- runs (the engine) -----------------------------------------------------------------------------------------

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
+from urllib.parse import parse_qs, urlsplit
 
 from ae_brokers.base import BrokerError, Credentials
 from ae_core.secrets import SecretBox
@@ -12,6 +13,7 @@ from ae_db.models import Instrument
 from ae_marketdata.hub import Hub
 from ae_marketdata.session import (
     BREEZE_SESSION,
+    KITE_ACCOUNT,
     KITE_SESSION,
     breeze_login_url,
     kite_login_url,
@@ -55,6 +57,16 @@ def _box(request: Request) -> SecretBox:
     if box is None:
         raise Unavailable("APP_ENCRYPTION_KEY is not configured")
     return box
+
+
+def _token(raw: str, param: str) -> str:
+    """The token itself, also when the whole address the login landed on was pasted (…?param=<token>&…)."""
+    raw = raw.strip()
+    if "=" in raw:
+        found = parse_qs(urlsplit(raw).query or raw.split("?", 1)[-1]).get(param)
+        if found:
+            return found[0].strip()
+    return raw
 
 
 def _dt(v: Any) -> datetime | None:
@@ -119,7 +131,19 @@ async def market_data_admin(_: Admin, request: Request, db: DbDep, settings: Set
         for provider, name, key, url, secret in providers:
             if key:
                 expires = (await load_session(s, box, secret))[1] if box is not None else None
-                logins.append(FeedLogin(provider=provider, name=name, login_url=url(key), session_expires_at=expires))
+                account = (await load_session(s, box, KITE_ACCOUNT))[0] if provider == "kite" and box else None
+                logins.append(
+                    FeedLogin(
+                        provider=provider,
+                        name=name,
+                        login_url=url(key),
+                        session_expires_at=expires,
+                        account=account,
+                        expected_account=settings.kite_feed_client_id.upper()
+                        if provider == "kite" and settings.kite_feed_client_id
+                        else None,
+                    )
+                )
     last = await hub.last(codes)
     today = datetime.now(IST).date()
     return MarketDataAdmin(
@@ -151,7 +175,7 @@ async def set_breeze_session(
 ) -> MarketDataAdmin:
     """Store today's Breeze session token (from ICICI's login redirect); the feed reconnects with it."""
     box = _box(request)
-    token = body.session_token.strip()
+    token = _token(body.session_token, "apisession")
     async with db.system_session() as s:
         expires = await save_breeze_session(s, box, token, admin.user_id)
         await audit(
@@ -173,12 +197,22 @@ async def set_kite_session(
     creds = Credentials(settings.kite_feed_api_key, settings.kite_feed_api_secret)
     try:
         session = await request.app.state.brokers["zerodha"].exchange(
-            creds, {"status": "success", "request_token": body.request_token.strip()}
+            creds, {"status": "success", "request_token": _token(body.request_token, "request_token")}
         )
     except BrokerError as exc:
-        raise AppError(f"Kite login failed: {exc.message}") from exc
+        raise AppError(
+            f"Kite login failed: {exc.message}. A request token works once, for a few minutes: log in to Kite "
+            "again and use the new one."
+        ) from exc
+    expected = (settings.kite_feed_client_id or "").strip().upper()
+    if expected and session.client_id != expected:
+        raise AppError(
+            f"Kite logged in {session.client_id}, but the platform's Kite account is {expected} "
+            "(KITE_FEED_CLIENT_ID): log out of Kite and log in with that account"
+        )
     async with db.system_session() as s:
         expires = await save_session(s, box, KITE_SESSION, session.access_token, session.expires_at, admin.user_id)
+        await save_session(s, box, KITE_ACCOUNT, session.client_id, session.expires_at, admin.user_id)
         await audit(
             s, request, "admin.market_data.kite_session", admin.user_id, "platform_secret", KITE_SESSION,
             actor="admin", expires_at=expires.isoformat(), kite_user=session.client_id,

@@ -30,20 +30,20 @@ const LOGIN = {
   breeze: {
     path: "/v1/admin/market-data/breeze-session",
     field: "session_token",
-    placeholder: "Session token",
+    placeholder: "Session token or the whole address",
     hint: (
       <>
         Log in with the platform&apos;s ICICI Direct account once each trading day. ICICI sends you back to
         this app and the session is saved automatically (the Breeze app&apos;s redirect URL is the app&apos;s
-        address, e.g. http://localhost:3000). If it ever lands somewhere else, paste the{" "}
-        <code>apisession</code> value below.
+        address, e.g. http://localhost:3000). If it ever lands somewhere else, paste the address it landed on
+        (or just its <code>apisession</code> value) below.
       </>
     ),
   },
   kite: {
     path: "/v1/admin/market-data/kite-session",
     field: "request_token",
-    placeholder: "Request token",
+    placeholder: "Request token or the whole address",
     hint: (
       <>
         Log in with the platform&apos;s own Zerodha account (not a user&apos;s) once each trading day; the
@@ -89,6 +89,28 @@ function LoginCard({
         )}
       </div>
       <p className="text-sm text-muted">{how.hint}</p>
+      {login.provider === "kite" && (
+        <p className="text-sm">
+          {login.account && login.session_expires_at && new Date(login.session_expires_at) > new Date() ? (
+            <>
+              Logged in as <span className="font-medium">{login.account}</span>.{" "}
+            </>
+          ) : null}
+          <span className="text-muted">
+            {login.expected_account ? (
+              <>
+                Only Zerodha account{" "}
+                <span className="font-medium text-foreground">{login.expected_account}</span> is accepted.
+              </>
+            ) : (
+              <>
+                Any Zerodha account is accepted: set <code>KITE_FEED_CLIENT_ID</code> to allow only the
+                platform&apos;s.
+              </>
+            )}
+          </span>
+        </p>
+      )}
       <Button asChild variant="secondary" className="w-fit">
         <a href={login.login_url} target="_blank" rel="noreferrer">
           Log in to {name} <ExternalLink className="size-4" aria-hidden />

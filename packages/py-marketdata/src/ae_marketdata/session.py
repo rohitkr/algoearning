@@ -17,6 +17,7 @@ from .types import IST
 
 BREEZE_SESSION = "breeze_session"
 KITE_SESSION = "kite_feed_session"  # the platform's Kite access token (not any user's broker account)
+KITE_ACCOUNT = "kite_feed_account"  # the Zerodha client ID that session belongs to (shown in Monitor)
 KITE_LOGIN_URL = "https://kite.zerodha.com/connect/login?v=3&api_key={api_key}"
 BREEZE_LOGIN_URL = "https://api.icicidirect.com/apiuser/login?api_key={api_key}"
 

@@ -11,8 +11,9 @@ import { GATE_PAGE } from "./lib/gate-page";
 // panel, and every other path (the panel's own /monitor/... links, sign-in) works as on the main host. Admin
 // access is still checked by the panel and by the API; the host only changes the front door.
 // ICICI's Breeze login redirects the browser to the app's root with ?apisession=<token> (the Redirect URL registered
-// for the Breeze app). Forward it to Monitor's market-data page, which saves the session, removes the token from
-// the address bar and confirms. If the admin is signed out, Clerk's sign-in returns to that same URL afterwards.
+// for the Breeze app), and the platform Kite app's login with ?request_token=<token>&status=success (ADR 0021).
+// Forward either to Monitor's market-data page, which saves the session, removes the token from the address bar
+// and confirms. If the admin is signed out, Clerk's sign-in returns to that same URL afterwards.
 // Test environment: when APP_GATE_PASSWORD is set (production on the Mac), every page asks for that master password
 // in the browser's sign-in pop-up (HTTP Basic auth, any username) before anything else, so app.algoearning.com is
 // closed to the public; algoearning.com itself only shows the closed-alpha splash (apps/landing).
@@ -56,6 +57,17 @@ export default clerkMiddleware(async (auth, req) => {
     const url = req.nextUrl.clone();
     url.pathname = "/monitor/market-data";
     url.search = `?apisession=${encodeURIComponent(token)}`;
+    return NextResponse.redirect(url);
+  }
+  const kite = req.nextUrl.searchParams.get("request_token");
+  if (
+    kite &&
+    req.nextUrl.searchParams.get("status") === "success" &&
+    req.nextUrl.pathname !== "/monitor/market-data"
+  ) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/monitor/market-data";
+    url.search = `?request_token=${encodeURIComponent(kite)}&status=success`;
     return NextResponse.redirect(url);
   }
   const { pathname } = req.nextUrl;

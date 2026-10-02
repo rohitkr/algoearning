@@ -20,6 +20,20 @@ describe("proxy", () => {
     expect(r.headers.get("location")).toBe("http://localhost:3000/monitor/market-data?apisession=57212559");
   });
 
+  it("forwards the platform Kite login's redirect to Monitor's market-data page", async () => {
+    await import("./proxy");
+    const r = (await handler(
+      signedIn,
+      req("/?action=login&type=login&status=success&request_token=ab12"),
+    )) as Response;
+    expect(r.headers.get("location")).toBe(
+      "http://localhost:3000/monitor/market-data?request_token=ab12&status=success",
+    );
+    expect(
+      await handler(signedIn, req("/monitor/market-data?request_token=ab12&status=success")),
+    ).toBeUndefined();
+  });
+
   it("sends / to the testing dashboard", async () => {
     await import("./proxy");
     for (const who of [signedIn, signedOut]) {
