@@ -5,6 +5,8 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
+import { GATE_PAGE } from "./lib/gate-page";
+
 // Monitor (the admin panel) also answers on its own host, e.g. monitor.algoearning.com: its home page is the
 // panel, and every other path (the panel's own /monitor/... links, sign-in) works as on the main host. Admin
 // access is still checked by the panel and by the API; the host only changes the front door.
@@ -40,9 +42,13 @@ function passwordOk(header: string | null, password: string): boolean {
 export default clerkMiddleware(async (auth, req) => {
   const password = process.env.APP_GATE_PASSWORD;
   if (password && !passwordOk(req.headers.get("authorization"), password)) {
-    return new NextResponse("Internal Alpha Test Environment. Closed to the public.", {
+    return new NextResponse(GATE_PAGE, {
       status: 401,
-      headers: { "WWW-Authenticate": 'Basic realm="AlgoEarning test", charset="UTF-8"' },
+      headers: {
+        "WWW-Authenticate": 'Basic realm="AlgoEarning test", charset="UTF-8"',
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
     });
   }
   const token = req.nextUrl.searchParams.get("apisession");
