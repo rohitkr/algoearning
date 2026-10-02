@@ -28,6 +28,17 @@ ADMIN = {"X-Dev-User": "admin@example.com"}
 
 def kite_session(req: httpx.Request) -> httpx.Response:
     """Kite's token exchange for the platform app: rt-ok logs in AB1234, rt-other ZZ9999, anything else is refused."""
+    if req.url.path == "/user/profile":  # checking a pasted access token
+        if req.headers.get("Authorization") != "token kitekey:acc-old-app":
+            return httpx.Response(
+                403,
+                json={
+                    "status": "error",
+                    "error_type": "TokenException",
+                    "message": "Incorrect api_key or access_token",
+                },
+            )
+        return httpx.Response(200, json={"status": "success", "data": {"user_id": "ab1234", "user_name": "R"}})
     form = parse_qs(req.content.decode())
     users = {"rt-ok": "ab1234", "rt-other": "zz9999"}
     rt = form["request_token"][0]
@@ -166,3 +177,18 @@ def test_admin_kite_session_for_the_platform_feed(api: TestClient) -> None:
             await db.dispose()
 
     assert run(stored) == "acc-1"  # what the feed reads when it runs on Kite
+
+
+def test_admin_pastes_an_access_token_from_another_program(api: TestClient) -> None:
+    put = lambda body: api.put("/v1/admin/market-data/kite-session", json=body, headers=ADMIN)  # noqa: E731
+    assert put({}).status_code == 422  # one of the two
+    assert put({"request_token": "rt-ok", "access_token": "acc-old-app"}).status_code == 422
+    r = put({"access_token": "acc-stale"})
+    assert r.status_code == 400 and "Kite refused the access token" in r.json()["error"]["message"]
+
+    r = put({"access_token": " acc-old-app "})
+    assert r.status_code == 200
+    kite = r.json()["logins"][1]
+    assert kite["account"] == "AB1234" and datetime.fromisoformat(kite["session_expires_at"]) > datetime.now(UTC)
+    log = api.get("/v1/admin/audit?action=admin.market_data.kite_session", headers=ADMIN).json()["items"]
+    assert len(log) == 1 and "acc-old-app" not in str(log) and "access_token" in str(log)

@@ -55,6 +55,44 @@ const LOGIN = {
   },
 } as const;
 
+/** A box to paste a token into, and Save. */
+function TokenForm({
+  label,
+  placeholder,
+  disabled,
+  onSave,
+}: {
+  label: string;
+  placeholder: string;
+  disabled: boolean;
+  onSave: (token: string) => Promise<unknown>;
+}) {
+  const [token, setToken] = useState("");
+  return (
+    <form
+      className="flex flex-wrap gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void onSave(token).then(() => setToken(""));
+      }}
+    >
+      <input
+        aria-label={label}
+        className={`${inputClass} max-w-xs flex-1`}
+        value={token}
+        onChange={(e) => setToken(e.target.value)}
+        placeholder={placeholder}
+        autoComplete="off"
+        data-1p-ignore="true"
+        data-lpignore="true"
+      />
+      <Button type="submit" disabled={disabled || token.trim().length < 4}>
+        Save
+      </Button>
+    </form>
+  );
+}
+
 /** One provider's daily login: status, the login link, and a box to paste the token by hand. */
 function LoginCard({
   login,
@@ -69,7 +107,6 @@ function LoginCard({
   busy: string | null;
   note: ReturnType<typeof useAdminAction>["note"];
 }) {
-  const [token, setToken] = useState("");
   const how = LOGIN[login.provider];
   const name = PROVIDER[login.provider];
   const key = `session-${login.provider}`;
@@ -116,33 +153,42 @@ function LoginCard({
           Log in to {name} <ExternalLink className="size-4" aria-hidden />
         </a>
       </Button>
-      <form
-        className="flex flex-wrap gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void run(
+      <TokenForm
+        label={`${name} ${how.placeholder.toLowerCase()}`}
+        placeholder={how.placeholder}
+        disabled={busy !== null}
+        onSave={(token) =>
+          run(
             key,
             "PUT",
             how.path,
             { [how.field]: token },
             `${name} session saved: the feed reconnects within seconds.`,
-          ).then(() => setToken(""));
-        }}
-      >
-        <input
-          aria-label={`${name} ${how.placeholder.toLowerCase()}`}
-          className={`${inputClass} max-w-xs flex-1`}
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          placeholder={how.placeholder}
-          autoComplete="off"
-          data-1p-ignore="true"
-          data-lpignore="true"
-        />
-        <Button type="submit" disabled={busy !== null || token.trim().length < 4}>
-          Save
-        </Button>
-      </form>
+          )
+        }
+      />
+      {login.provider === "kite" && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-sm text-muted">
+            Already have today&apos;s <code>access_token</code> from another program logged in to the same
+            Kite app? Paste it here instead: no new login needed.
+          </p>
+          <TokenForm
+            label="Kite access token"
+            placeholder="Access token"
+            disabled={busy !== null}
+            onSave={(token) =>
+              run(
+                key,
+                "PUT",
+                how.path,
+                { access_token: token },
+                "Kite access token checked and saved: the feed reconnects within seconds.",
+              )
+            }
+          />
+        </div>
+      )}
       {note?.key === key && (
         <p role="status" className={cn("text-sm", note.ok ? "text-profit" : "text-loss")}>
           {note.text}

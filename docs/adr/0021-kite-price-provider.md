@@ -19,7 +19,8 @@ charts and the backtester read Redis and `history_candles` only, so they do not 
   Kite sends back a request token, which the API exchanges (it holds `KITE_FEED_API_SECRET`) for the day's access
   token, stored encrypted in `platform_secrets` (`kite_feed_session`) until 06:00 IST. The feed picks it up within
   seconds. A token Kite refuses is not retried until a new login is saved. If the login lands elsewhere, the
-  admin pastes the whole address (or just the token); `KITE_FEED_CLIENT_ID`, when set, refuses any other Zerodha
+  admin pastes the whole address (or just the token), or an access token another program already got from today's
+  login to the same Kite app (checked with Kite's profile call before it is kept); `KITE_FEED_CLIENT_ID`, when set, refuses any other Zerodha
   account, and Monitor shows which account is logged in.
 - **History:** `python -m ae_worker backfill` fetches from the feed's provider. `KiteHistory` answers the backfill's
   requests (written in Breeze's parameters) from Kite's historical API in 60-day windows. Kite only has contracts

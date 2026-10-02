@@ -7,7 +7,7 @@ from datetime import date, datetime
 from typing import Any, Generic, Literal, TypeVar
 
 from ae_core.strategy import StrategyConfig, StrategyKind, default_config
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 T = TypeVar("T")
 
@@ -493,8 +493,18 @@ class BreezeSessionIn(BaseModel):
 
 
 class KiteSessionIn(BaseModel):
+    """One of: the request token from Kite's redirect (or the whole URL it landed on), exchanged here for the day's
+    session; or an access token another program already got from a login to the same Kite app."""
+
     model_config = ConfigDict(extra="forbid")
-    request_token: str = Field(min_length=4, max_length=2000)  # from Kite's redirect, or the whole URL it landed on
+    request_token: str | None = Field(default=None, min_length=4, max_length=2000)
+    access_token: str | None = Field(default=None, min_length=4, max_length=200)
+
+    @model_validator(mode="after")
+    def _one_token(self) -> KiteSessionIn:
+        if (self.request_token is None) == (self.access_token is None):
+            raise ValueError("send either request_token or access_token")
+        return self
 
 
 # -- runs (the engine) -----------------------------------------------------------------------------------------

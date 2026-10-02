@@ -7,7 +7,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 from urllib.parse import parse_qs, urlsplit
 
-from ae_brokers.base import BrokerError, Credentials
+from ae_brokers.base import BrokerError, BrokerSession, Credentials
+from ae_brokers.zerodha import next_token_expiry
 from ae_core.secrets import SecretBox
 from ae_db.models import Instrument
 from ae_marketdata.hub import Hub
@@ -189,21 +190,35 @@ async def set_breeze_session(
 async def set_kite_session(
     body: KiteSessionIn, admin: Admin, request: Request, db: DbDep, settings: SettingsDep
 ) -> MarketDataAdmin:
-    """Turn the platform Kite login's request token (from Kite's redirect) into the day's session; the feed
-    reconnects with it when it runs on Kite."""
+    """Store the platform Kite app's session for the day: from a login's request token (Kite's redirect), or an
+    access token another program already got from the same Kite app. The feed reconnects with it when it runs on
+    Kite."""
     box = _box(request)
     if not (settings.kite_feed_api_key and settings.kite_feed_api_secret):
         raise AppError("the platform Kite app is not set up: KITE_FEED_API_KEY and KITE_FEED_API_SECRET")
     creds = Credentials(settings.kite_feed_api_key, settings.kite_feed_api_secret)
-    try:
-        session = await request.app.state.brokers["zerodha"].exchange(
-            creds, {"status": "success", "request_token": _token(body.request_token, "request_token")}
-        )
-    except BrokerError as exc:
-        raise AppError(
-            f"Kite login failed: {exc.message}. A request token works once, for a few minutes: log in to Kite "
-            "again and use the new one."
-        ) from exc
+    adapter = request.app.state.brokers["zerodha"]
+    if body.access_token is not None:
+        # a ready-made session (e.g. from another program on the same Kite app): checked with Kite before keeping it
+        access = body.access_token.strip()
+        try:
+            client_id = str((await adapter.profile(creds, access)).get("user_id") or "").upper()
+        except BrokerError as exc:
+            raise AppError(
+                f"Kite refused the access token: {exc.message}. It must come from today's login to the same Kite "
+                "app (KITE_FEED_API_KEY)."
+            ) from exc
+        session = BrokerSession(access, client_id, next_token_expiry(datetime.now(UTC)))
+    else:
+        try:
+            session = await adapter.exchange(
+                creds, {"status": "success", "request_token": _token(body.request_token or "", "request_token")}
+            )
+        except BrokerError as exc:
+            raise AppError(
+                f"Kite login failed: {exc.message}. A request token works once, for a few minutes: log in to "
+                "Kite again and use the new one."
+            ) from exc
     expected = (settings.kite_feed_client_id or "").strip().upper()
     if expected and session.client_id != expected:
         raise AppError(
@@ -216,5 +231,6 @@ async def set_kite_session(
         await audit(
             s, request, "admin.market_data.kite_session", admin.user_id, "platform_secret", KITE_SESSION,
             actor="admin", expires_at=expires.isoformat(), kite_user=session.client_id,
+            pasted="access_token" if body.access_token is not None else "request_token",
         )  # fmt: skip
     return await market_data_admin(admin, request, db, settings)

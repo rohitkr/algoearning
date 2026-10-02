@@ -193,8 +193,9 @@ export interface paths {
         get?: never;
         /**
          * Set Kite Session
-         * @description Turn the platform Kite login's request token (from Kite's redirect) into the day's session; the feed
-         *     reconnects with it when it runs on Kite.
+         * @description Store the platform Kite app's session for the day: from a login's request token (Kite's redirect), or an
+         *     access token another program already got from the same Kite app. The feed reconnects with it when it runs on
+         *     Kite.
          */
         put: operations["set_kite_session_v1_admin_market_data_kite_session_put"];
         post?: never;
@@ -1994,10 +1995,16 @@ export interface components {
             /** Unchanged */
             unchanged: string[];
         };
-        /** KiteSessionIn */
+        /**
+         * KiteSessionIn
+         * @description One of: the request token from Kite's redirect (or the whole URL it landed on), exchanged here for the day's
+         *     session; or an access token another program already got from a login to the same Kite app.
+         */
         KiteSessionIn: {
+            /** Access Token */
+            access_token?: string | null;
             /** Request Token */
-            request_token: string;
+            request_token?: string | null;
         };
         /** Leg */
         Leg: {

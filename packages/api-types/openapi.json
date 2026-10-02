@@ -2335,17 +2335,35 @@
       },
       "KiteSessionIn": {
         "additionalProperties": false,
+        "description": "One of: the request token from Kite's redirect (or the whole URL it landed on), exchanged here for the day's\nsession; or an access token another program already got from a login to the same Kite app.",
         "properties": {
+          "access_token": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 4,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Token"
+          },
           "request_token": {
-            "maxLength": 2000,
-            "minLength": 4,
-            "title": "Request Token",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 4,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Token"
           }
         },
-        "required": [
-          "request_token"
-        ],
         "title": "KiteSessionIn",
         "type": "object"
       },
@@ -7199,7 +7217,7 @@
     },
     "/v1/admin/market-data/kite-session": {
       "put": {
-        "description": "Turn the platform Kite login's request token (from Kite's redirect) into the day's session; the feed\nreconnects with it when it runs on Kite.",
+        "description": "Store the platform Kite app's session for the day: from a login's request token (Kite's redirect), or an\naccess token another program already got from the same Kite app. The feed reconnects with it when it runs on\nKite.",
         "operationId": "set_kite_session_v1_admin_market_data_kite_session_put",
         "requestBody": {
           "content": {
