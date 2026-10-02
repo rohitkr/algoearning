@@ -23,7 +23,8 @@ from .types import IST, Bar, Tick
 
 LAST, SUBS, HEALTH = "md:last", "md:subs", "md:health"
 BAR_CHANNEL, TICK_CHANNEL = "md:bar", "md:tick"
-BARS_TTL_S = 4 * 24 * 3600
+BARS_DAYS = 4
+BARS_TTL_S = BARS_DAYS * 24 * 3600
 WANT_TTL_S = 180
 
 

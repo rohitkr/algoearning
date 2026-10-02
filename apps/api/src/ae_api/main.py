@@ -17,6 +17,7 @@ from .auth import Authenticator
 from .auth.clerk import ClerkAuthenticator, clerk_profile_fetcher
 from .auth.dev import DevHeaderAuthenticator
 from .billing.razorpay import RazorpayClient
+from .charts import ChartService
 from .logconfig import configure_logging
 from .login_state import LoginStateSigner
 from .middleware import RequestContextMiddleware
@@ -25,6 +26,7 @@ from .routers import (
     backtests,
     billing,
     brokers,
+    charts,
     entitlements,
     health,
     market,
@@ -50,9 +52,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if settings.app_encryption_key and app.state.redis is not None
         else None
     )
+    app.state.charts = (
+        ChartService(app.state.redis, app.state.db)
+        if app.state.redis is not None and app.state.db is not None
+        else None
+    )
     try:
         yield
     finally:
+        if app.state.charts is not None:
+            await app.state.charts.close()
         if app.state.db is not None:
             await app.state.db.dispose()
         if app.state.redis is not None:
@@ -104,6 +113,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         strategies.router,
         monitor.router,
         market.router,
+        charts.router,
         runs.router,
         backtests.router,
         notifications.router,

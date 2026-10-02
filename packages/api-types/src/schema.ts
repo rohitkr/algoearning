@@ -575,6 +575,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/charts/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chart Options */
+        get: operations["chart_options_v1_charts_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/charts/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chart Snapshot */
+        get: operations["chart_snapshot_v1_charts_snapshot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/charts/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chart Stream */
+        get: operations["chart_stream_v1_charts_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/market/snapshot": {
         parameters: {
             query?: never;
@@ -1557,6 +1608,66 @@ export interface components {
             name?: string | null;
             /** Ok */
             ok: boolean;
+        };
+        /** ChartCandle */
+        ChartCandle: {
+            /** Close */
+            close: number;
+            /** High */
+            high: number;
+            /** Low */
+            low: number;
+            /** Open */
+            open: number;
+            /** Time */
+            time: number;
+            /** Volume */
+            volume: number;
+        };
+        /** ChartInstrumentOut */
+        ChartInstrumentOut: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+        };
+        /** ChartOptions */
+        ChartOptions: {
+            /** Instruments */
+            instruments: components["schemas"]["ChartInstrumentOut"][];
+            /** Timeframes */
+            timeframes: number[];
+        };
+        /**
+         * ChartSnapshot
+         * @description Everything a chart needs; the stream (/v1/charts/stream) starts with this and then sends changes.
+         */
+        ChartSnapshot: {
+            /** Candles */
+            candles: components["schemas"]["ChartCandle"][];
+            /** Error */
+            error: string | null;
+            forming: components["schemas"]["ChartCandle"] | null;
+            /** Key */
+            key: string;
+            /** Last Price */
+            last_price: number | null;
+            /** Name */
+            name: string;
+            smc: components["schemas"]["SmcOverlay"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "live" | "simulated" | "down";
+            /** Timeframe */
+            timeframe: number;
+            /**
+             * Type
+             * @default snapshot
+             * @constant
+             */
+            type: "snapshot";
         };
         /** Check */
         Check: {
@@ -2705,6 +2816,62 @@ export interface components {
             /** Previous */
             previous?: string | null;
         };
+        /** SmcBox */
+        SmcBox: {
+            /** Bottom */
+            bottom: number;
+            /** End */
+            end: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "fvg" | "ob";
+            /** Label */
+            label: string;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "bull" | "bear";
+            /** Start */
+            start: number;
+            /** Top */
+            top: number;
+        };
+        /** SmcLevel */
+        SmcLevel: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "pdh" | "pdl" | "resistance" | "support";
+            /** Label */
+            label: string;
+            /** Price */
+            price: number;
+        };
+        /** SmcLine */
+        SmcLine: {
+            /** End */
+            end: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "bos" | "choch" | "liquidity";
+            /** Label */
+            label: string;
+            /** Price */
+            price: number;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "bull" | "bear";
+            /** Start */
+            start: number;
+        };
         /**
          * SmcOption
          * @description Which option to buy for a signal: bullish buys a call, bearish a put.
@@ -2737,6 +2904,19 @@ export interface components {
              */
             min_volume: number;
             strike?: components["schemas"]["Strike"];
+        };
+        /** SmcOverlay */
+        SmcOverlay: {
+            /** Boxes */
+            boxes: components["schemas"]["SmcBox"][];
+            /** Candles */
+            candles: number;
+            /** Levels */
+            levels: components["schemas"]["SmcLevel"][];
+            /** Lines */
+            lines: components["schemas"]["SmcLine"][];
+            /** Swing Length */
+            swing_length: number;
         };
         /** SmcRisk */
         SmcRisk: {
@@ -6123,6 +6303,238 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServerIpOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    chart_options_v1_charts_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartOptions"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    chart_snapshot_v1_charts_snapshot_get: {
+        parameters: {
+            query: {
+                /** @description Index code, e.g. NIFTY */
+                key: string;
+                /** @description Candle length in minutes */
+                timeframe?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartSnapshot"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    chart_stream_v1_charts_stream_get: {
+        parameters: {
+            query: {
+                /** @description Index code, e.g. NIFTY */
+                key: string;
+                /** @description Candle length in minutes */
+                timeframe?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-sent events: ChartSnapshot first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
                 };
             };
             /** @description Bad request */

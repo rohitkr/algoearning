@@ -16,7 +16,7 @@ from ae_db.session import Database
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 
-from .hub import Hub
+from .hub import BARS_DAYS, Hub
 from .types import IST, Bar
 
 log = structlog.get_logger("ae_marketdata.history")
@@ -227,3 +227,23 @@ async def archive_today(db: Database, hub: Hub, day: date | None = None) -> int:
 async def count_rows(db: Database) -> int:
     async with db.system_session() as s:
         return int((await s.execute(select(func.count()).select_from(HistoryCandle))).scalar_one())
+
+
+async def recent_bars(db: Database, hub: Hub, key: str, sessions: int, today: date | None = None) -> list[Bar]:
+    """The last `sessions` trading days of `key`'s 1-minute bars, today included, oldest first: the history store
+    (archived every evening) merged with the feed's bars still in Redis (today and the last few days), Redis
+    winning for a minute both have. For charts."""
+    today = today or datetime.now(IST).date()
+    lo = datetime.combine(today - timedelta(days=7 + 2 * sessions), time(0), tzinfo=IST)
+    by_ts: dict[datetime, Bar] = {}
+    async with db.system_session() as s:
+        q = select(HistoryCandle).where(HistoryCandle.key == key, HistoryCandle.ts >= lo)
+        for c in (await s.execute(q)).scalars():
+            ts = _ist(c.ts)
+            by_ts[ts] = Bar(key, ts, c.open, c.high, c.low, c.close, int(c.volume or 0))
+    for back in range(BARS_DAYS):
+        for b in await hub.bars(key, today - timedelta(days=back)):
+            by_ts[_ist(b.ts)] = b
+    days = sorted({ts.date() for ts in by_ts})[-sessions:]
+    first = days[0] if days else today
+    return [by_ts[ts] for ts in sorted(by_ts) if ts.date() >= first]

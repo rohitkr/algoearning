@@ -778,3 +778,71 @@ class HistoryCoverage(BaseModel):
     option_to: date | None
     option_days: int
     expiries: int
+
+
+# -- charts (live SMC charts, ae_api.charts) ---------------------------------------------------------------------
+class ChartInstrumentOut(BaseModel):
+    code: str
+    name: str
+
+
+class ChartOptions(BaseModel):
+    instruments: list[ChartInstrumentOut]
+    timeframes: list[int]  # minutes
+
+
+class ChartCandle(BaseModel):
+    time: int  # epoch seconds of the period's start
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+class SmcBox(BaseModel):
+    kind: Literal["fvg", "ob"]
+    side: Literal["bull", "bear"]
+    top: float
+    bottom: float
+    start: int  # epoch seconds
+    end: int | None  # the mitigating candle; None: still open
+    label: str
+
+
+class SmcLine(BaseModel):
+    kind: Literal["bos", "choch", "liquidity"]
+    side: Literal["bull", "bear"]
+    price: float
+    start: int
+    end: int | None  # the breaking / sweeping candle; None: not taken yet
+    label: str
+
+
+class SmcLevel(BaseModel):
+    kind: Literal["pdh", "pdl", "resistance", "support"]
+    price: float
+    label: str
+
+
+class SmcOverlay(BaseModel):
+    boxes: list[SmcBox]
+    lines: list[SmcLine]
+    levels: list[SmcLevel]
+    candles: int
+    swing_length: int
+
+
+class ChartSnapshot(BaseModel):
+    """Everything a chart needs; the stream (/v1/charts/stream) starts with this and then sends changes."""
+
+    type: Literal["snapshot"] = "snapshot"
+    key: str
+    name: str
+    timeframe: int
+    candles: list[ChartCandle]  # closed, oldest first
+    forming: ChartCandle | None
+    smc: SmcOverlay
+    status: Literal["live", "simulated", "down"]
+    last_price: float | None
+    error: str | None

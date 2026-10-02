@@ -1267,6 +1267,173 @@
         "title": "BrokerTestOut",
         "type": "object"
       },
+      "ChartCandle": {
+        "properties": {
+          "close": {
+            "title": "Close",
+            "type": "number"
+          },
+          "high": {
+            "title": "High",
+            "type": "number"
+          },
+          "low": {
+            "title": "Low",
+            "type": "number"
+          },
+          "open": {
+            "title": "Open",
+            "type": "number"
+          },
+          "time": {
+            "title": "Time",
+            "type": "integer"
+          },
+          "volume": {
+            "title": "Volume",
+            "type": "number"
+          }
+        },
+        "required": [
+          "time",
+          "open",
+          "high",
+          "low",
+          "close",
+          "volume"
+        ],
+        "title": "ChartCandle",
+        "type": "object"
+      },
+      "ChartInstrumentOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "ChartInstrumentOut",
+        "type": "object"
+      },
+      "ChartOptions": {
+        "properties": {
+          "instruments": {
+            "items": {
+              "$ref": "#/components/schemas/ChartInstrumentOut"
+            },
+            "title": "Instruments",
+            "type": "array"
+          },
+          "timeframes": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Timeframes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "instruments",
+          "timeframes"
+        ],
+        "title": "ChartOptions",
+        "type": "object"
+      },
+      "ChartSnapshot": {
+        "description": "Everything a chart needs; the stream (/v1/charts/stream) starts with this and then sends changes.",
+        "properties": {
+          "candles": {
+            "items": {
+              "$ref": "#/components/schemas/ChartCandle"
+            },
+            "title": "Candles",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "forming": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChartCandle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "last_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Price"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "smc": {
+            "$ref": "#/components/schemas/SmcOverlay"
+          },
+          "status": {
+            "enum": [
+              "live",
+              "simulated",
+              "down"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "timeframe": {
+            "title": "Timeframe",
+            "type": "integer"
+          },
+          "type": {
+            "const": "snapshot",
+            "default": "snapshot",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "timeframe",
+          "candles",
+          "forming",
+          "smc",
+          "status",
+          "last_price",
+          "error"
+        ],
+        "title": "ChartSnapshot",
+        "type": "object"
+      },
       "Check": {
         "properties": {
           "detail": {
@@ -4554,6 +4721,147 @@
         "title": "ServerIpOut",
         "type": "object"
       },
+      "SmcBox": {
+        "properties": {
+          "bottom": {
+            "title": "Bottom",
+            "type": "number"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "kind": {
+            "enum": [
+              "fvg",
+              "ob"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "bull",
+              "bear"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "integer"
+          },
+          "top": {
+            "title": "Top",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "side",
+          "top",
+          "bottom",
+          "start",
+          "end",
+          "label"
+        ],
+        "title": "SmcBox",
+        "type": "object"
+      },
+      "SmcLevel": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "pdh",
+              "pdl",
+              "resistance",
+              "support"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "price": {
+            "title": "Price",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "price",
+          "label"
+        ],
+        "title": "SmcLevel",
+        "type": "object"
+      },
+      "SmcLine": {
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "kind": {
+            "enum": [
+              "bos",
+              "choch",
+              "liquidity"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "price": {
+            "title": "Price",
+            "type": "number"
+          },
+          "side": {
+            "enum": [
+              "bull",
+              "bear"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "side",
+          "price",
+          "start",
+          "end",
+          "label"
+        ],
+        "title": "SmcLine",
+        "type": "object"
+      },
       "SmcOption": {
         "additionalProperties": false,
         "description": "Which option to buy for a signal: bullish buys a call, bearish a put.",
@@ -4604,6 +4912,48 @@
           }
         },
         "title": "SmcOption",
+        "type": "object"
+      },
+      "SmcOverlay": {
+        "properties": {
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/SmcBox"
+            },
+            "title": "Boxes",
+            "type": "array"
+          },
+          "candles": {
+            "title": "Candles",
+            "type": "integer"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/SmcLevel"
+            },
+            "title": "Levels",
+            "type": "array"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SmcLine"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "swing_length": {
+            "title": "Swing Length",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "boxes",
+          "lines",
+          "levels",
+          "candles",
+          "swing_length"
+        ],
+        "title": "SmcOverlay",
         "type": "object"
       },
       "SmcRisk": {
@@ -9443,6 +9793,299 @@
         "summary": "Server Ip",
         "tags": [
           "brokers"
+        ]
+      }
+    },
+    "/v1/charts/options": {
+      "get": {
+        "operationId": "chart_options_v1_charts_options_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChartOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Chart Options",
+        "tags": [
+          "charts"
+        ]
+      }
+    },
+    "/v1/charts/snapshot": {
+      "get": {
+        "operationId": "chart_snapshot_v1_charts_snapshot_get",
+        "parameters": [
+          {
+            "description": "Index code, e.g. NIFTY",
+            "in": "query",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "description": "Index code, e.g. NIFTY",
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Candle length in minutes",
+            "in": "query",
+            "name": "timeframe",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "description": "Candle length in minutes",
+              "title": "Timeframe",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChartSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Chart Snapshot",
+        "tags": [
+          "charts"
+        ]
+      }
+    },
+    "/v1/charts/stream": {
+      "get": {
+        "operationId": "chart_stream_v1_charts_stream_get",
+        "parameters": [
+          {
+            "description": "Index code, e.g. NIFTY",
+            "in": "query",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "description": "Index code, e.g. NIFTY",
+              "maxLength": 20,
+              "minLength": 1,
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Candle length in minutes",
+            "in": "query",
+            "name": "timeframe",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "description": "Candle length in minutes",
+              "title": "Timeframe",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "Server-sent events: ChartSnapshot first"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Chart Stream",
+        "tags": [
+          "charts"
         ]
       }
     },

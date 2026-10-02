@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CandlestickChart,
   CreditCard,
   FileText,
   FlaskConical,
@@ -21,6 +22,7 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, phase: 11 },
+  { href: "/charts", label: "Charts", icon: CandlestickChart, phase: 10 },
   { href: "/brokers", label: "Broker", icon: Link2, phase: 7 },
   { href: "/builder", label: "Strategy Builder", icon: Workflow, phase: 8 },
   { href: "/strategies", label: "Strategies", icon: BarChart3, phase: 8 },

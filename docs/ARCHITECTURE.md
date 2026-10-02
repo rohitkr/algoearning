@@ -87,7 +87,7 @@ runs the Python packages. Each Python app depends on the `packages/py-*` librari
 ## Backend
 
 **API (`apps/api`).** FastAPI with Pydantic models. `main.py:create_app` wires the pieces together. Each area
-has a router in `routers/`: `me`, `plans`, `strategies`, `runs`, `market`, `backtests`, `reports`,
+has a router in `routers/`: `me`, `plans`, `strategies`, `runs`, `market`, `charts`, `backtests`, `reports`,
 `notifications`, `billing`, `brokers`, `webhooks`, `monitor` and `admin`. All routes sit under `/v1`, and
 `/health` is the liveness check. Errors share one JSON shape (`errors.py`). Every request gets a request id and
 an access-log line (`middleware.py`). In development, the OpenAPI docs are at http://localhost:8000/docs.
@@ -115,7 +115,8 @@ by. Each run writes a heartbeat, and the worker alerts users when the heartbeat 
 **Market data (`packages/py-marketdata`).** One feed for the whole platform (ADRs 0006 and 0013). It streams
 from ICICI Breeze, or simulates prices when no Breeze keys are set, and publishes to Redis through `Hub`. The
 engine and the API only ever read Redis. Option contracts stream only while something asks for them. Each day's
-candles are archived to Postgres for backtesting.
+candles are archived to Postgres for backtesting. The Charts page's live candles and SMC zones are built from the
+same bars and ticks in the API (`ae_api/charts.py`) and streamed to the browser as server-sent events (ADR 0020).
 
 **Brokers (`packages/py-brokers`).** An adapter per broker; Zerodha is the one available today (ADR 0007). API
 keys are envelope-encrypted with `APP_ENCRYPTION_KEY` (`ae_core/secrets.py`) and never returned by the API. Each
@@ -140,8 +141,8 @@ service applies pending migrations when it starts in production.
 
 **Next.js 16 (App Router) with React 19 and Tailwind CSS 4** (`apps/web`).
 
-- **Pages:** signed-in pages live in `app/(app)/`, one folder per section (dashboard, builder, strategies, runs,
-  backtesting, reports, brokers, notifications, subscription, profile). Monitor, the admin panel, is in
+- **Pages:** signed-in pages live in `app/(app)/`, one folder per section (dashboard, charts, builder, strategies,
+  runs, backtesting, reports, brokers, notifications, subscription, profile). Monitor, the admin panel, is in
   `app/monitor/`.
 - **Data:** pages are server components that call the API with the user's token (`lib/api.ts: apiGet`). Browser
   actions call it directly (`lib/client-api.ts`). Live screens refresh every few seconds.
