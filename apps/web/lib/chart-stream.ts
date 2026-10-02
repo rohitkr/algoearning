@@ -83,6 +83,7 @@ export async function followChart(opts: {
         const { data, rest } = parseSse(buffer);
         buffer = rest;
         for (const d of data) {
+          if (signal.aborted) return;
           const msg = JSON.parse(d) as ChartMessage;
           if (msg.type === "snapshot") {
             failures = 0;

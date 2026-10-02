@@ -2,7 +2,7 @@
 
 import type { ChartCandle, ChartOptions, ChartSnapshot, SmcOverlay } from "@algoearning/api-types";
 import { formatNumber } from "@algoearning/shared";
-import { Button, StatusPill, cn } from "@algoearning/ui";
+import { StatusPill, cn } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
 import {
   CandlestickSeries,
@@ -16,7 +16,7 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from "lightweight-charts";
-import { X } from "lucide-react";
+import { Layers } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { followChart, upsertCandle, type ChartMessage, type StreamState } from "@/lib/chart-stream";
@@ -63,17 +63,83 @@ function statusPill(state: StreamState, status: ChartSnapshot["status"] | null, 
   return <StatusPill tone="neutral">No live prices</StatusPill>;
 }
 
+/** The overlays a chart draws, switched on and off from a small menu so the chart keeps its height. */
+function OverlayMenu({
+  layers,
+  onToggle,
+}: {
+  layers: Record<Layer, boolean>;
+  onToggle: (id: Layer) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+  const on = LAYERS.filter((l) => layers[l.id]).length;
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="true"
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs font-medium text-muted hover:text-foreground"
+      >
+        <Layers className="size-3.5" aria-hidden />
+        SMC
+        <span className="tabular-nums">
+          {on}/{LAYERS.length}
+        </span>
+      </button>
+      {open && (
+        <div
+          role="group"
+          aria-label="Overlays"
+          className="absolute right-0 z-20 mt-1 w-60 rounded-lg border border-border bg-surface p-1 shadow-card"
+        >
+          {LAYERS.map((l) => (
+            <label
+              key={l.id}
+              className="flex items-start gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface-2"
+            >
+              <input
+                type="checkbox"
+                checked={layers[l.id]}
+                onChange={() => onToggle(l.id)}
+                className="mt-0.5 accent-[var(--primary)]"
+              />
+              <span>
+                <span className="block font-medium">{l.label}</span>
+                <span className="block text-xs text-muted">{l.hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** One live candlestick chart with SMC zones, its own index and timeframe picker. */
 export function SmcChart({
   spec,
   options,
   onChange,
-  onRemove,
 }: {
   spec: ChartSpec;
   options: ChartOptions;
   onChange: (spec: ChartSpec) => void;
-  onRemove?: () => void;
 }) {
   const { getToken } = useAuth();
   const box = useRef<HTMLDivElement>(null);
@@ -201,12 +267,17 @@ export function SmcChart({
 
     const onMessage = (m: ChartMessage) => {
       const s = series.current;
-      if (!s) return;
+      // a message still in flight from the previous index or timeframe must never land on this one's chart
+      if (!s || ctrl.signal.aborted) return;
       switch (m.type) {
         case "snapshot": {
           candles.current = m.forming ? [...m.candles, m.forming] : [...m.candles];
           s.setData(candles.current.map(toBar));
           if (first) {
+            // a new index or timeframe: fit the price axis to its prices again (it may have been dragged or
+            // zoomed on the previous one) and show the latest candles
+            s.priceScale().applyOptions({ autoScale: true });
+            chart.current?.timeScale().resetTimeScale();
             chart.current?.timeScale().scrollToRealTime();
             first = false;
           }
@@ -280,9 +351,9 @@ export function SmcChart({
   return (
     <section
       aria-label={`${name} ${spec.timeframe} minute chart`}
-      className="flex h-full min-w-0 flex-col overflow-hidden rounded-card border border-border bg-surface shadow-card"
+      className="flex h-full min-w-0 flex-col rounded-card border border-border bg-surface shadow-card"
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-3 py-2">
+      <div className="@container flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border px-2.5 py-1.5">
         <label className="sr-only" htmlFor={`${spec.id}-index`}>
           Index
         </label>
@@ -318,10 +389,10 @@ export function SmcChart({
           ))}
         </div>
         {last && (
-          <span className="text-sm tabular-nums">
+          <span className="text-sm whitespace-nowrap tabular-nums">
             <span className="font-semibold">{formatNumber(last.price)}</span>
             {last.change != null && (
-              <span className={cn("ml-1.5 text-xs", tone)}>
+              <span className={cn("ml-1.5 hidden text-xs @md:inline", tone)}>
                 {last.change >= 0 ? "+" : ""}
                 {last.change.toFixed(2)}%
               </span>
@@ -329,40 +400,11 @@ export function SmcChart({
           </span>
         )}
         <span className="ml-auto flex items-center gap-1">
+          <OverlayMenu layers={layers} onToggle={toggle} />
           {statusPill(state, status, detail)}
-          {onRemove && (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Remove this chart"
-              onClick={onRemove}
-              className="size-8"
-            >
-              <X className="size-4" aria-hidden />
-            </Button>
-          )}
         </span>
       </div>
-      <div className="flex flex-wrap gap-1.5 border-b border-border px-3 py-1.5" aria-label="Overlays">
-        {LAYERS.map((l) => (
-          <button
-            key={l.id}
-            type="button"
-            title={l.hint}
-            aria-pressed={layers[l.id]}
-            onClick={() => toggle(l.id)}
-            className={cn(
-              "h-6 rounded-full border px-2.5 text-xs font-medium",
-              layers[l.id]
-                ? "border-primary/40 bg-primary/10 text-primary-text"
-                : "border-border text-muted hover:text-foreground",
-            )}
-          >
-            {l.label}
-          </button>
-        ))}
-      </div>
-      <div className="relative min-h-[440px] flex-1 md:min-h-[540px]">
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-b-card">
         <div ref={box} className="absolute inset-0" />
         {empty && state === "open" && (
           <p className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted">

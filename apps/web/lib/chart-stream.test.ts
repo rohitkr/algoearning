@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { sanitize } from "../components/charts/chart-board";
+import { LAYOUTS, MAX_CHARTS, placement, resizeTracks, template } from "../components/charts/layouts";
 import { parseSse, upsertCandle } from "./chart-stream";
 
 const c = (time: number, close = 1) => ({ time, open: 1, high: 2, low: 0, close, volume: 0 });
@@ -33,7 +34,7 @@ describe("upsertCandle", () => {
   });
 });
 
-describe("sanitize saved charts", () => {
+describe("sanitize the saved board", () => {
   const options = {
     instruments: [
       { code: "NIFTY", name: "Nifty 50" },
@@ -41,19 +42,46 @@ describe("sanitize saved charts", () => {
     ],
     timeframes: [1, 5, 15],
   };
-  it("drops charts that are no longer possible and caps the count", () => {
-    const saved = [
-      { id: "a", key: "NIFTY", timeframe: 5 },
-      { id: "b", key: "FINNIFTY", timeframe: 5 },
-      { id: "c", key: "SENSEX", timeframe: 7 },
-      { id: "d", key: "SENSEX", timeframe: 15 },
-      { id: "e", key: "NIFTY", timeframe: 1 },
-    ];
-    expect(sanitize(saved, options)).toEqual([
-      { id: "a", key: "NIFTY", timeframe: 5 },
-      { id: "d", key: "SENSEX", timeframe: 15 },
-    ]);
-    expect(sanitize("junk", options)).toBeNull();
-    expect(sanitize([], options)).toBeNull();
+  it("keeps what is still possible and replaces the rest with defaults", () => {
+    const b = sanitize(
+      {
+        layout: "4",
+        charts: [
+          { id: "a", key: "NIFTY", timeframe: 15 },
+          { id: "b", key: "FINNIFTY", timeframe: 5 },
+          { id: "c", key: "SENSEX", timeframe: 7 },
+        ],
+        cols: [2, 1],
+        rows: [1, -1],
+      },
+      options,
+    );
+    expect(b.layout).toBe("4");
+    expect(b.charts).toHaveLength(4);
+    expect(b.charts[0]).toEqual({ id: "a", key: "NIFTY", timeframe: 15 });
+    expect(b.charts[1]).toEqual({ id: "c1", key: "SENSEX", timeframe: 5 });
+    expect(b.charts[2]?.id).toBe("c2");
+    expect(b.cols).toEqual([2, 1]);
+    expect(b.rows).toEqual([1, 1]);
+  });
+  it("falls back to two charts side by side", () => {
+    const b = sanitize("junk", options);
+    expect(b.layout).toBe("2c");
+    expect(b.charts.slice(0, 2).map((c) => c.key)).toEqual(["NIFTY", "SENSEX"]);
+  });
+});
+
+describe("layouts", () => {
+  it("resizes two neighbouring tracks, never below the minimum share", () => {
+    expect(resizeTracks([1, 1], 0, 0.25)).toEqual([1.5, 0.5]);
+    const [a, b] = resizeTracks([1, 1], 0, 0.9);
+    expect(a).toBeCloseTo(1.6);
+    expect(b).toBeCloseTo(0.4);
+    expect(resizeTracks([1, 1, 1], 1, -0.1).reduce((s, x) => s + x, 0)).toBeCloseTo(3);
+  });
+  it("places cells on the lines between gutter tracks", () => {
+    expect(placement({ col: 1, row: 0, rowSpan: 2 })).toEqual({ gridColumn: "3 / 4", gridRow: "1 / 4" });
+    expect(template([2, 1], 8)).toBe("minmax(0, 2fr) 8px minmax(0, 1fr)");
+    for (const l of LAYOUTS) expect(l.cells.length).toBeLessThanOrEqual(MAX_CHARTS);
   });
 });
