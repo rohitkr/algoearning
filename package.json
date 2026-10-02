@@ -13,7 +13,19 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "host:setup": "scripts/home-host.sh setup",
+    "host:tunnel": "scripts/home-host.sh tunnel",
+    "host:build": "scripts/home-host.sh build",
+    "host:install": "scripts/home-host.sh install",
+    "host:deploy": "scripts/home-host.sh deploy",
+    "host:status": "scripts/home-host.sh status",
+    "host:start": "scripts/home-host.sh start",
+    "host:stop": "scripts/home-host.sh stop",
+    "host:restart": "scripts/home-host.sh restart",
+    "host:logs": "scripts/home-host.sh logs",
+    "host:uninstall": "scripts/home-host.sh uninstall",
+    "deploy": "scripts/home-host.sh deploy"
   },
   "devDependencies": {
     "prettier": "^3.9.9",
