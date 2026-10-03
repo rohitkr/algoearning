@@ -5,7 +5,7 @@ The code is on GitHub. Three things are not, and a new computer needs all three:
 | What                                      | Where on this Mac                                                                  | How it moves                                            |
 | ----------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | The database (users, strategies, history) | Postgres in `.data/pg/`                                                            | `scripts/backup.py` to Cloudflare R2, then restore      |
-| Secrets (keys, `APP_ENCRYPTION_KEY`)      | `.env`, `.env.production`, `apps/web/.env.local`, `apps/web/.env.production.local` | `scripts/secrets-backup.sh` to Google Drive (encrypted) |
+| Secrets (keys, `APP_ENCRYPTION_KEY`)      | `.env`, `.env.production`, `apps/web/.env.local`, `apps/web/.env.production.local` | `scripts/secrets-backup.sh` copies them to Google Drive |
 | The Cloudflare Tunnel login               | `~/.cloudflared/` (`cert.pem`, `<tunnel id>.json`, `algoearning.yml`)              | included in `scripts/secrets-backup.sh`                 |
 
 `APP_ENCRYPTION_KEY` must be the same on the new computer. Without it, the stored broker credentials and the daily
@@ -55,11 +55,11 @@ uv run --env-file .env python scripts/backup.py restore .data/backups/full-20261
 replaces only `history_candles`. The database must already have the tables and roles from `make migrate` (step 5
 below). Start the services again afterwards (`scripts/home-host.sh start`, or `make dev`).
 
-## Secrets backup to Google Drive (manual, encrypted)
+## Secrets backup to Google Drive (manual)
 
-The env files and `~/.cloudflared/` cannot go to GitHub, so this command packs them into one file, encrypts it with
-a passphrase you choose (AES-256), and saves it in your Google Drive folder. Run it again whenever you change any of
-them; Google Drive keeps the older versions.
+The env files and `~/.cloudflared/` cannot go to GitHub, so this command copies them as they are into your Google
+Drive folder, `My Drive/AlgoEarning/config/`: the same paths as in the repo, and `~/.cloudflared` as `cloudflared/`.
+Run it again whenever you change any of them; Google Drive keeps the older versions of each file.
 
 One-time setup: install Google Drive for desktop and sign in with your Google account. The Drive folder then
 appears in Finder, and the script finds it by itself.
@@ -69,14 +69,13 @@ brew install --cask google-drive
 ```
 
 ```bash
-scripts/secrets-backup.sh push       # asks for the passphrase twice -> My Drive/AlgoEarning/algoearning-secrets.tar.gz.enc
-scripts/secrets-backup.sh list       # what the backup contains (asks for the passphrase)
-scripts/secrets-backup.sh restore    # puts the files back; a file that differs is kept as <name>.bak-<date>
+scripts/secrets-backup.sh push       # copy the files into My Drive/AlgoEarning/config/
+scripts/secrets-backup.sh list       # what the Drive copy holds
+scripts/secrets-backup.sh restore    # copy them back; a file that differs is kept as <name>.bak-<date>
 ```
 
-Save the passphrase in your password manager (Google Password Manager is fine for this: one entry, the passphrase
-as the password). Without it nobody can open the file, including you. Also keep `APP_ENCRYPTION_KEY` in that entry's
-note as a second copy. The previous backup stays next to it as `algoearning-secrets.tar.gz.enc.previous`.
+These are plain copies: anyone who can open your Google Drive can read every key in them, so keep two-step
+verification on for your Google account.
 
 ## Set up a new computer from scratch
 
@@ -119,7 +118,7 @@ Restore the secrets from Google Drive (wait until Drive has synced the `AlgoEarn
 files into the repo and `~/.cloudflared/` into your home folder:
 
 ```bash
-scripts/secrets-backup.sh restore          # asks for the passphrase
+scripts/secrets-backup.sh restore          # the env files into the repo, ~/.cloudflared into your home folder
 make setup                                 # pnpm install + uv sync (all JS and Python packages)
 ```
 
