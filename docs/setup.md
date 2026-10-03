@@ -5,8 +5,8 @@ The code is on GitHub. Three things are not, and a new computer needs all three:
 | What                                      | Where on this Mac                                                                  | How it moves                                            |
 | ----------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | The database (users, strategies, history) | Postgres in `.data/pg/`                                                            | `scripts/backup.py` to Cloudflare R2, then restore      |
-| Secrets (keys, `APP_ENCRYPTION_KEY`)      | `.env`, `.env.production`, `apps/web/.env.local`, `apps/web/.env.production.local` | copy them by hand, keep a copy in your password manager |
-| The Cloudflare Tunnel login               | `~/.cloudflared/` (`cert.pem`, `<tunnel id>.json`, `algoearning.yml`)              | copy the folder by hand                                 |
+| Secrets (keys, `APP_ENCRYPTION_KEY`)      | `.env`, `.env.production`, `apps/web/.env.local`, `apps/web/.env.production.local` | `scripts/secrets-backup.sh` to Google Drive (encrypted) |
+| The Cloudflare Tunnel login               | `~/.cloudflared/` (`cert.pem`, `<tunnel id>.json`, `algoearning.yml`)              | included in `scripts/secrets-backup.sh`                 |
 
 `APP_ENCRYPTION_KEY` must be the same on the new computer. Without it, the stored broker credentials and the daily
 market-data sessions in the database cannot be opened, and every user has to enter their broker keys again.
@@ -55,6 +55,29 @@ uv run --env-file .env python scripts/backup.py restore .data/backups/full-20261
 replaces only `history_candles`. The database must already have the tables and roles from `make migrate` (step 5
 below). Start the services again afterwards (`scripts/home-host.sh start`, or `make dev`).
 
+## Secrets backup to Google Drive (manual, encrypted)
+
+The env files and `~/.cloudflared/` cannot go to GitHub, so this command packs them into one file, encrypts it with
+a passphrase you choose (AES-256), and saves it in your Google Drive folder. Run it again whenever you change any of
+them; Google Drive keeps the older versions.
+
+One-time setup: install Google Drive for desktop and sign in with your Google account. The Drive folder then
+appears in Finder, and the script finds it by itself.
+
+```bash
+brew install --cask google-drive
+```
+
+```bash
+scripts/secrets-backup.sh push       # asks for the passphrase twice -> My Drive/AlgoEarning/algoearning-secrets.tar.gz.enc
+scripts/secrets-backup.sh list       # what the backup contains (asks for the passphrase)
+scripts/secrets-backup.sh restore    # puts the files back; a file that differs is kept as <name>.bak-<date>
+```
+
+Save the passphrase in your password manager (Google Password Manager is fine for this: one entry, the passphrase
+as the password). Without it nobody can open the file, including you. Also keep `APP_ENCRYPTION_KEY` in that entry's
+note as a second copy. The previous backup stays next to it as `algoearning-secrets.tar.gz.enc.previous`.
+
 ## Set up a new computer from scratch
 
 The steps for a Mac. Do steps 1 to 7 for development; add step 8 to move production there.
@@ -65,9 +88,12 @@ The steps for a Mac. Do steps 1 to 7 for development; add step 8 to move product
 uv run --env-file .env --with boto3 python scripts/backup.py push full
 ```
 
-Also copy these to the new computer (AirDrop, a USB stick, or from your password manager):
-`.env`, `.env.production`, `apps/web/.env.local`, `apps/web/.env.production.local`, and the folder
-`~/.cloudflared/`.
+Then back up the secrets to Google Drive (see above), so the new computer gets the latest `.env` files and
+`~/.cloudflared/`:
+
+```bash
+scripts/secrets-backup.sh push
+```
 
 ### 2. Install the tools
 
@@ -76,6 +102,7 @@ xcode-select --install                     # git and compilers (skip if already 
 # Homebrew, from https://brew.sh:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 brew install node@22 pnpm uv postgresql@17 redis cloudflared
+brew install --cask google-drive           # then open it and sign in, for the secrets backup
 ```
 
 ### 3. Clone the repo
@@ -88,10 +115,11 @@ cd algoearning-github
 
 ### 4. Put the secrets back, and install the dependencies
 
-Copy the files from step 1 into the same places in the repo, then lock them down:
+Restore the secrets from Google Drive (wait until Drive has synced the `AlgoEarning` folder). It puts the four env
+files into the repo and `~/.cloudflared/` into your home folder:
 
 ```bash
-chmod 600 .env .env.production apps/web/.env.local apps/web/.env.production.local
+scripts/secrets-backup.sh restore          # asks for the passphrase
 make setup                                 # pnpm install + uv sync (all JS and Python packages)
 ```
 

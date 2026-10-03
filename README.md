@@ -128,6 +128,9 @@ uv run --env-file .env --with boto3 python scripts/backup.py push full          
 uv run --env-file .env --with boto3 python scripts/backup.py list
 uv run --env-file .env --with boto3 python scripts/backup.py pull latest-full   # into .data/backups/
 uv run --env-file .env python scripts/backup.py restore .data/backups/full-<date>.dump
+
+scripts/secrets-backup.sh push      # .env files + ~/.cloudflared, encrypted, into Google Drive (run after changing them)
+scripts/secrets-backup.sh restore   # put them back (asks for the passphrase)
 ```
 
 ### Background processes (run by hand)
