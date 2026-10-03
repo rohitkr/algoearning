@@ -128,10 +128,28 @@ uv run --env-file .env --with boto3 python scripts/backup.py push full          
 uv run --env-file .env --with boto3 python scripts/backup.py list
 uv run --env-file .env --with boto3 python scripts/backup.py pull latest-full   # into .data/backups/
 uv run --env-file .env python scripts/backup.py restore .data/backups/full-<date>.dump
-
-scripts/secrets-backup.sh push      # .env files + ~/.cloudflared, encrypted, into Google Drive (run after changing them)
-scripts/secrets-backup.sh restore   # put them back (asks for the passphrase)
 ```
+
+### Backing up the config files (.env and the tunnel login)
+
+These files are never in git, so back them up yourself after changing any of them: `.env`, `.env.production`,
+`apps/web/.env.local`, `apps/web/.env.production.local` and the `~/.cloudflared/` folder. The command packs them into
+one file, encrypts it with a passphrase you choose (AES-256), and saves it to Google Drive under
+`My Drive/AlgoEarning/`. Only the encrypted file reaches Google. Drive keeps older versions (right-click > Manage
+versions), and the previous backup also stays next to it as `.previous`.
+
+One-time setup: `brew install --cask google-drive`, open Google Drive and sign in. The script finds the Drive folder
+by itself.
+
+```bash
+scripts/secrets-backup.sh push      # after any change: asks for the passphrase twice, saves the encrypted file
+scripts/secrets-backup.sh list      # what the backup contains (asks for the passphrase)
+scripts/secrets-backup.sh restore   # put the files back, e.g. on a new computer; a differing file is kept as .bak-<date>
+```
+
+Use a long passphrase (4–5 random words) and save it in your password manager, together with a second copy of
+`APP_ENCRYPTION_KEY`. Without the passphrase nobody can open the backup, including you. Without `APP_ENCRYPTION_KEY`
+the broker logins in the database backups cannot be read, and unlike the other keys it cannot be re-created.
 
 ### Background processes (run by hand)
 
