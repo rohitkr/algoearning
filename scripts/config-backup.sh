@@ -2,9 +2,9 @@
 # Back up the files that are not in git (the env files and the Cloudflare Tunnel login) to Google Drive, as plain
 # copies you can open there. Run it by hand after changing any of them; nothing runs on a schedule.
 #
-#   scripts/secrets-backup.sh push                     # copy the files into Google Drive
-#   scripts/secrets-backup.sh restore                  # copy them back from Google Drive (e.g. on a new computer)
-#   scripts/secrets-backup.sh list                     # what the Drive copy holds
+#   scripts/config-backup.sh push                     # copy the files into Google Drive
+#   scripts/config-backup.sh restore                  # copy them back from Google Drive (e.g. on a new computer)
+#   scripts/config-backup.sh list                     # what the Drive copy holds
 #
 # Google Drive: install "Google Drive for desktop" (brew install --cask google-drive) and sign in once. The files go
 # to My Drive/AlgoEarning/config/, at the same paths as in the repo (~/.cloudflared as cloudflared/), and Drive

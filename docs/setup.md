@@ -2,11 +2,11 @@
 
 The code is on GitHub. Three things are not, and a new computer needs all three:
 
-| What                                      | Where on this Mac                                                                  | How it moves                                            |
-| ----------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| The database (users, strategies, history) | Postgres in `.data/pg/`                                                            | `scripts/backup.py` to Cloudflare R2, then restore      |
-| Secrets (keys, `APP_ENCRYPTION_KEY`)      | `.env`, `.env.production`, `apps/web/.env.local`, `apps/web/.env.production.local` | `scripts/secrets-backup.sh` copies them to Google Drive |
-| The Cloudflare Tunnel login               | `~/.cloudflared/` (`cert.pem`, `<tunnel id>.json`, `algoearning.yml`)              | included in `scripts/secrets-backup.sh`                 |
+| What                                      | Where on this Mac                                                                  | How it moves                                           |
+| ----------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| The database (users, strategies, history) | Postgres in `.data/pg/`                                                            | `scripts/backup.py` to Cloudflare R2, then restore     |
+| Secrets (keys, `APP_ENCRYPTION_KEY`)      | `.env`, `.env.production`, `apps/web/.env.local`, `apps/web/.env.production.local` | `scripts/config-backup.sh` copies them to Google Drive |
+| The Cloudflare Tunnel login               | `~/.cloudflared/` (`cert.pem`, `<tunnel id>.json`, `algoearning.yml`)              | included in `scripts/config-backup.sh`                 |
 
 `APP_ENCRYPTION_KEY` must be the same on the new computer. Without it, the stored broker credentials and the daily
 market-data sessions in the database cannot be opened, and every user has to enter their broker keys again.
@@ -69,9 +69,9 @@ brew install --cask google-drive
 ```
 
 ```bash
-scripts/secrets-backup.sh push       # copy the files into My Drive/AlgoEarning/config/
-scripts/secrets-backup.sh list       # what the Drive copy holds
-scripts/secrets-backup.sh restore    # copy them back; a file that differs is kept as <name>.bak-<date>
+scripts/config-backup.sh push       # copy the files into My Drive/AlgoEarning/config/
+scripts/config-backup.sh list       # what the Drive copy holds
+scripts/config-backup.sh restore    # copy them back; a file that differs is kept as <name>.bak-<date>
 ```
 
 These are plain copies: anyone who can open your Google Drive can read every key in them, so keep two-step
@@ -91,7 +91,7 @@ Then back up the secrets to Google Drive (see above), so the new computer gets t
 `~/.cloudflared/`:
 
 ```bash
-scripts/secrets-backup.sh push
+scripts/config-backup.sh push
 ```
 
 ### 2. Install the tools
@@ -118,7 +118,7 @@ Restore the secrets from Google Drive (wait until Drive has synced the `AlgoEarn
 files into the repo and `~/.cloudflared/` into your home folder:
 
 ```bash
-scripts/secrets-backup.sh restore          # the env files into the repo, ~/.cloudflared into your home folder
+scripts/config-backup.sh restore          # the env files into the repo, ~/.cloudflared into your home folder
 make setup                                 # pnpm install + uv sync (all JS and Python packages)
 ```
 

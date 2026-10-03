@@ -142,9 +142,9 @@ One-time setup: `brew install --cask google-drive`, open Google Drive and sign i
 by itself.
 
 ```bash
-scripts/secrets-backup.sh push      # after any change: copy the files into Google Drive
-scripts/secrets-backup.sh list      # what the Drive copy holds
-scripts/secrets-backup.sh restore   # copy them back, e.g. on a new computer; a differing file is kept as .bak-<date>
+scripts/config-backup.sh push      # after any change: copy the files into Google Drive
+scripts/config-backup.sh list      # what the Drive copy holds
+scripts/config-backup.sh restore   # copy them back, e.g. on a new computer; a differing file is kept as .bak-<date>
 ```
 
 `APP_ENCRYPTION_KEY` in `.env` matters most: without it the broker logins in the database backups cannot be read,
