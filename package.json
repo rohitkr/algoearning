@@ -25,7 +25,17 @@
     "host:restart": "scripts/home-host.sh restart",
     "host:logs": "scripts/home-host.sh logs",
     "host:uninstall": "scripts/home-host.sh uninstall",
-    "deploy": "scripts/home-host.sh deploy"
+    "deploy": "scripts/home-host.sh deploy",
+    "config:push": "scripts/config-backup.sh push",
+    "config:list": "scripts/config-backup.sh list",
+    "config:restore": "scripts/config-backup.sh restore",
+    "db:backup": "uv run --env-file .env --with boto3 python scripts/backup.py push full",
+    "db:backup:history": "uv run --env-file .env --with boto3 python scripts/backup.py push history",
+    "db:backup:list": "uv run --env-file .env --with boto3 python scripts/backup.py list",
+    "db:backup:pull": "uv run --env-file .env --with boto3 python scripts/backup.py pull",
+    "db:restore": "uv run --env-file .env python scripts/backup.py restore",
+    "history:show": "uv run --env-file .env python scripts/show-history.py",
+    "history:backfill": "uv run --env-file .env python -m ae_worker backfill"
   },
   "devDependencies": {
     "prettier": "^3.9.9",

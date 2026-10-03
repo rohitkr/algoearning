@@ -57,6 +57,20 @@ With Docker installed, `make up` runs the whole stack (web, api, engine, worker,
 Python commands read their settings from `.env` (`DATABASE_URL`, `REDIS_URL`, broker keys), so run them as
 `uv run --env-file .env ...` from the repo root. On the home-hosted Mac, `.env` points at the production database.
 
+### Shortcuts (`pnpm <name>`, or `npm run <name>`)
+
+Extra words after the name are passed on, e.g. `pnpm history:show NIFTY 2025-01-02` (with npm, put `--` before them).
+
+| Shortcut                                       | Runs                                                            |
+| ---------------------------------------------- | --------------------------------------------------------------- |
+| `config:push` / `list` / `restore`             | `scripts/config-backup.sh` (the `.env` files to Google Drive)   |
+| `db:backup`, `db:backup:history`               | `scripts/backup.py push full` / `push history` (database to R2) |
+| `db:backup:list`, `db:backup:pull`             | `backup.py list` / `pull <latest-full\|name>`                   |
+| `db:restore .data/backups/<file>.dump`         | `backup.py restore <file>` (stop the services first)            |
+| `history:show [KEY DAY]`                       | `scripts/show-history.py`                                       |
+| `history:backfill NIFTY --from DATE`           | `python -m ae_worker backfill` (download history)               |
+| `host:deploy`, `host:status`, `host:logs`, ... | `scripts/home-host.sh <command>` (production on this Mac)       |
+
 ### Develop
 
 ```bash
