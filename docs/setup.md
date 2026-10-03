@@ -1,4 +1,4 @@
-# Backups, and moving AlgoEarning to another computer
+# Setup: a new computer from scratch, backups and restore
 
 The code is on GitHub. Three things are not, and a new computer needs all three:
 

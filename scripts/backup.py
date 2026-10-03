@@ -1,4 +1,4 @@
-"""Manual database backups to Cloudflare R2, and restoring them (docs/new-machine.md). Nothing runs this on a schedule.
+"""Manual database backups to Cloudflare R2, and restoring them (docs/setup.md). Nothing runs this on a schedule.
 
     uv run --env-file .env --with boto3 python scripts/backup.py push history     # history_candles only
     uv run --env-file .env --with boto3 python scripts/backup.py push full        # the whole database
@@ -69,7 +69,7 @@ def bucket():  # type: ignore[no-untyped-def]
     need = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET")
     missing = [k for k in need if not os.environ.get(k)]
     if missing:
-        die(f"set {', '.join(missing)} in .env (docs/new-machine.md, one-time setup)")
+        die(f"set {', '.join(missing)} in .env (docs/setup.md, one-time setup)")
     s3 = boto3.client(
         "s3",
         endpoint_url=f"https://{os.environ['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",

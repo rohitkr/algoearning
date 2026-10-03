@@ -50,7 +50,7 @@ make db-down    # stop Postgres + Redis
 
 With Docker installed, `make up` runs the whole stack (web, api, engine, worker, Postgres, Redis).
 
-`make help` lists every target. Moving to another computer: [docs/new-machine.md](docs/new-machine.md).
+`make help` lists every target. Moving to another computer: [docs/setup.md](docs/setup.md).
 
 ## Commands
 
@@ -121,7 +121,7 @@ Keys: an index is its code (`NIFTY`), an option is `UNDERLYING:EXPIRY:STRIKE:RIG
 ### Backups and a new computer
 
 Manual backups of the database to Cloudflare R2, restoring them, and setting up another computer from a fresh
-clone step by step: [docs/new-machine.md](docs/new-machine.md).
+clone step by step: [docs/setup.md](docs/setup.md).
 
 ```bash
 uv run --env-file .env --with boto3 python scripts/backup.py push full          # or: push history
