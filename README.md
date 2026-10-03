@@ -52,6 +52,96 @@ With Docker installed, `make up` runs the whole stack (web, api, engine, worker,
 
 `make help` lists every target.
 
+## Commands
+
+Python commands read their settings from `.env` (`DATABASE_URL`, `REDIS_URL`, broker keys), so run them as
+`uv run --env-file .env ...` from the repo root. On the home-hosted Mac, `.env` points at the production database.
+
+### Develop
+
+```bash
+make dev                 # everything: Postgres + Redis, migrations, API :8000, web :3000
+make dev-fresh           # same, first freeing ports 3000/8000
+make dev-api             # only the API, with reload
+make dev-web             # only the web app
+make db-up / db-down     # local Postgres + Redis (data in .data/), also scripts/local-db.sh up|down|status
+make setup               # install JS + Python dependencies
+make help                # every make target
+```
+
+### Check
+
+```bash
+make check               # lint + typecheck + tests (what CI runs)
+make test                # all tests (test-py: pytest, test-js: vitest)
+make lint / typecheck    # ruff + eslint + prettier / mypy (strict) + tsc
+make format              # auto-format Python and JS
+uv run pytest apps/api/tests/test_market.py -q   # one test file
+uv run python scripts/check-contrast.py          # every theme colour passes WCAG AA, light and dark
+```
+
+### Database and API types
+
+```bash
+make migrate                         # apply migrations (alembic upgrade head)
+make migration m="add foo"           # new migration from model changes
+make types                           # regenerate web API types from the FastAPI OpenAPI spec
+uv run --env-file .env alembic -c packages/py-db/alembic.ini current   # revision the database is at
+```
+
+### Historical data (backtests)
+
+1-minute candles live in the `history_candles` table. The backfill fetches from the feed's provider (Breeze, or
+the platform Kite account), so it needs that provider's keys and today's session from Monitor > Market data.
+Breeze allows 5,000 REST calls a day, shared with the live feed: run it after market hours. A rerun continues
+where the last one stopped.
+
+```bash
+# download: the index first, then the option contracts in reach each day
+uv run --env-file .env python -m ae_worker backfill NIFTY --from 2025-01-01 --to 2026-09-30
+uv run --env-file .env python -m ae_worker backfill NIFTY --from 2025-01-01 --dry-run      # plan + count calls only
+uv run --env-file .env python -m ae_worker backfill SENSEX --from 2025-01-01 --index-only  # index candles only
+#   more options: --reserve 500 (calls kept for the live feed), --buffer 4 (strikes beyond each day's range)
+
+# import an existing DuckDB file (from algo-trading-claude)
+uv run --env-file .env --with duckdb python -m ae_worker import-history ~/git/algo-trading-claude/data/market_data.duckdb
+
+# look at what is stored
+uv run --env-file .env python scripts/show-history.py                          # summary per underlying
+uv run --env-file .env python scripts/show-history.py NIFTY 2025-01-02         # the index's candles that day
+uv run --env-file .env python scripts/show-history.py NIFTY 2025-01-02 --options              # contracts that day
+uv run --env-file .env python scripts/show-history.py NIFTY:2025-01-02:23600:CE 2025-01-02    # one contract
+
+# the 3 x 3 SMC backtests as a JSON report
+uv run --env-file .env python -m ae_worker smc-report NIFTY,BANKNIFTY,SENSEX --from 2025-01-01 --out smc.json
+```
+
+Keys: an index is its code (`NIFTY`), an option is `UNDERLYING:EXPIRY:STRIKE:RIGHT`. Times are IST.
+
+### Background processes (run by hand)
+
+```bash
+uv run --env-file .env python -m ae_marketdata           # the market-data feed (MARKET_DATA_SOURCE=breeze|kite|simulated|auto)
+uv run --env-file .env python -m ae_engine               # the trading engine (--once: start, report ready, exit)
+uv run --env-file .env python -m ae_worker               # scheduled jobs (--once: every job once, then exit)
+uv run --env-file .env python -m ae_worker refresh-instruments   # one job, then exit
+```
+
+Never run these, or `make dev`, while production runs on the same Mac: they share the ports and the database.
+
+### Production on this Mac (docs/home-hosting.md)
+
+```bash
+scripts/home-host.sh deploy          # build the web app, restart api, web, feed, worker (also: npm run deploy)
+scripts/home-host.sh status          # what runs
+scripts/home-host.sh logs [service]  # follow logs (.data/logs/<service>.log)
+scripts/home-host.sh restart engine  # the engine is not restarted by deploy: outside market hours only
+scripts/home-host.sh start|stop|restart [service]
+scripts/home-host.sh setup|tunnel|install|uninstall   # one-time setup
+```
+
+Services: postgres, redis, api, web, feed, worker, engine, tunnel, awake.
+
 ## Conventions
 
 - Colours come only from theme tokens (`bg-surface`, `text-muted`, `text-profit`, ...); see `packages/ui/src/styles.css`.
