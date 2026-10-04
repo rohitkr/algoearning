@@ -1759,6 +1759,40 @@ export interface components {
             /** Value */
             value: number;
         };
+        /**
+         * Condition
+         * @description `left op right` on the latest completed candle of `timeframe`. above/below hold while true; a cross is true only
+         *     on the candle that crossed (the one before it was on the other side).
+         */
+        Condition: {
+            /** Left */
+            left?: components["schemas"]["NumberOperand"] | components["schemas"]["PriceOperand"] | components["schemas"]["LevelOperand"];
+            /**
+             * Op
+             * @default crosses_above
+             * @enum {string}
+             */
+            op: "above" | "below" | "crosses_above" | "crosses_below";
+            /** Right */
+            right: components["schemas"]["NumberOperand"] | components["schemas"]["PriceOperand"] | components["schemas"]["LevelOperand"];
+            /**
+             * Timeframe
+             * @default 5
+             * @enum {integer}
+             */
+            timeframe: 1 | 3 | 5 | 10 | 15 | 30 | 60;
+        };
+        /** ConditionGroup */
+        ConditionGroup: {
+            /** Conditions */
+            conditions: components["schemas"]["Condition"][];
+            /**
+             * Match
+             * @default all
+             * @enum {string}
+             */
+            match: "all" | "any";
+        };
         /** ConfigIssue */
         ConfigIssue: {
             /** Loc */
@@ -1936,6 +1970,8 @@ export interface components {
          * Holding
          * @description How long a trade lives. intraday: exit at `exit` the same day. next_day: at `exit` on the next trading day.
          *     days: at `exit` `days` trading days after entry. expiry: at `exit` on the first leg's expiry day.
+         *     `exit_when` / `exit_when_mirrored`: also exit, earlier, when these conditions hold (for a trade entered on
+         *     `when` / `when_mirrored`).
          */
         Holding: {
             /**
@@ -1948,6 +1984,8 @@ export interface components {
              * @default 15:15
              */
             exit: string;
+            exit_when?: components["schemas"]["ConditionGroup"] | null;
+            exit_when_mirrored?: components["schemas"]["ConditionGroup"] | null;
             /**
              * Mode
              * @default intraday
@@ -2074,6 +2112,36 @@ export interface components {
             strike?: components["schemas"]["Strike"];
             target?: components["schemas"]["Threshold"] | null;
             trailing?: components["schemas"]["Trailing"] | null;
+        };
+        /**
+         * LevelOperand
+         * @description A price level of the day, plus `offset` points (e.g. 10 above the range high, or -50 below the 09:20 price).
+         *     opening_range_high/low: the first `minutes` from 09:15. day_open/high/low: today so far. prev_high/low/close: the
+         *     previous session. price_at: the index close of the minute starting at `at` (a reference for "moved X points").
+         */
+        LevelOperand: {
+            /** At */
+            at?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "level";
+            /**
+             * Minutes
+             * @default 15
+             */
+            minutes: number;
+            /**
+             * Name
+             * @enum {string}
+             */
+            name: "opening_range_high" | "opening_range_low" | "day_open" | "day_high" | "day_low" | "prev_high" | "prev_low" | "prev_close" | "price_at";
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
         };
         /** LiveBroker */
         LiveBroker: {
@@ -2255,6 +2323,16 @@ export interface components {
             telegram_connected: boolean;
             /** Telegram Enabled */
             telegram_enabled: boolean;
+        };
+        /** NumberOperand */
+        NumberOperand: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "number";
+            /** Value */
+            value: number;
         };
         /** OpenPosition */
         OpenPosition: {
@@ -2602,6 +2680,23 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * PriceOperand
+         * @description The index candle's open/high/low/close on the condition's timeframe.
+         */
+        PriceOperand: {
+            /**
+             * Field
+             * @default close
+             * @enum {string}
+             */
+            field: "open" | "high" | "low" | "close";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "price";
+        };
         /** PurchaseOut */
         PurchaseOut: {
             /**
@@ -2836,6 +2931,10 @@ export interface components {
          * @description When a new trade may start. `dte`: only on days that many trading days (Mon-Fri) before the first leg's
          *     expiry (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for
          *     intraday, none for positional), so a late engine start still enters, but not too late.
+         *
+         *     mode time: enter at `at`. mode signal: from `at` on, enter when `when` holds (the legs as written) or when
+         *     `when_mirrored` holds (the legs with calls and puts swapped: one set of legs trades a breakout both ways), at most
+         *     `max_entries` trades a day.
          */
         RulesEntry: {
             /**
@@ -2848,13 +2947,20 @@ export interface components {
             /** Dte */
             dte?: number[] | null;
             /**
+             * Max Entries
+             * @default 1
+             */
+            max_entries: number;
+            /**
              * Mode
              * @default time
-             * @constant
+             * @enum {string}
              */
-            mode: "time";
+            mode: "time" | "signal";
             /** Until */
             until?: string | null;
+            when?: components["schemas"]["ConditionGroup"] | null;
+            when_mirrored?: components["schemas"]["ConditionGroup"] | null;
         };
         /**
          * RulesRisk

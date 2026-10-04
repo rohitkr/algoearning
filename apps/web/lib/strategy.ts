@@ -4,9 +4,12 @@ import type {
   Instrument,
   LegStrike,
   LegThreshold,
+  RulesCondition,
+  RulesConditionGroup,
   RulesConfig,
   RulesEntry,
   RulesHolding,
+  RulesOperand,
   RulesRisk,
   SmcScalpConfig,
   StrategyConfig,
@@ -43,13 +46,89 @@ export const HOLD_LABEL: Record<RulesHolding["mode"], string> = {
   expiry: "Until expiry day",
 };
 
+export const TIMEFRAMES = [1, 3, 5, 10, 15, 30, 60] as const;
+
+export const OP_LABEL: Record<RulesCondition["op"], string> = {
+  crosses_above: "crosses above",
+  crosses_below: "crosses below",
+  above: "is above",
+  below: "is below",
+};
+
+export const LEVEL_LABEL: Record<Extract<RulesOperand, { kind: "level" }>["name"], string> = {
+  opening_range_high: "Opening range high",
+  opening_range_low: "Opening range low",
+  day_open: "Today's open",
+  day_high: "Today's high so far",
+  day_low: "Today's low so far",
+  prev_high: "Previous day's high",
+  prev_low: "Previous day's low",
+  prev_close: "Previous day's close",
+  price_at: "Price at a time",
+};
+
+/** A starting condition: the 5-minute close crossing above the first 15 minutes' high. */
+export function newCondition(): RulesCondition {
+  return {
+    timeframe: 5,
+    left: { kind: "price", field: "close" },
+    op: "crosses_above",
+    right: { kind: "level", name: "opening_range_high", minutes: 15, at: null, offset: 0 },
+  };
+}
+
+export function newGroup(): RulesConditionGroup {
+  return { match: "all", conditions: [newCondition()] };
+}
+
+/** "the 5-minute close", "the first 15 minutes' high + 10", "50". */
+export function operandText(o: RulesOperand, tf: number): string {
+  if (o.kind === "number") return String(o.value);
+  if (o.kind === "price") return `the ${tf}-minute ${o.field ?? "close"}`;
+  const off = o.offset ? ` ${o.offset > 0 ? "+" : "−"} ${Math.abs(o.offset)}` : "";
+  const name =
+    o.name === "opening_range_high"
+      ? `the first ${o.minutes ?? 15} minutes' high`
+      : o.name === "opening_range_low"
+        ? `the first ${o.minutes ?? 15} minutes' low`
+        : o.name === "price_at"
+          ? `the price at ${o.at ?? "?"}`
+          : LEVEL_LABEL[o.name].replace(/^(.)/, (x) => x.toLowerCase());
+  return name + off;
+}
+
+export function groupText(g: RulesConditionGroup | null | undefined): string {
+  const parts = (g?.conditions ?? []).map((c) => {
+    const tf = c.timeframe ?? 5;
+    return `${operandText(c.left ?? { kind: "price", field: "close" }, tf)} ${OP_LABEL[c.op ?? "crosses_above"]} ${operandText(c.right, tf)}`;
+  });
+  return parts.join(g?.match === "any" ? " or " : " and ");
+}
+
 /** A rules config's parts with the API's defaults filled in, ready to spread and change. */
 export function entryOf(c: RulesConfig): RulesEntry {
-  return { mode: "time", at: "09:20", until: null, days: [...WEEKDAYS], dte: null, ...c.entry };
+  return {
+    mode: "time",
+    at: "09:20",
+    until: null,
+    days: [...WEEKDAYS],
+    dte: null,
+    when: null,
+    when_mirrored: null,
+    max_entries: 1,
+    ...c.entry,
+  };
 }
 
 export function holdingOf(c: RulesConfig): RulesHolding {
-  return { mode: "intraday", exit: "15:15", days: 1, ...c.holding };
+  return {
+    mode: "intraday",
+    exit: "15:15",
+    days: 1,
+    exit_when: null,
+    exit_when_mirrored: null,
+    ...c.holding,
+  };
 }
 
 export function rulesRiskOf(c: RulesConfig): RulesRisk {
@@ -70,7 +149,7 @@ export function rulesFromTimeBased(c: TimeBasedConfig): RulesConfig {
   return {
     kind: "rules",
     underlying: c.underlying,
-    entry: { mode: "time", at: t.entry, until: null, days: t.days, dte: null },
+    entry: { mode: "time", at: t.entry, until: null, days: t.days, dte: null, max_entries: 1 },
     holding: { mode: "intraday", exit: t.exit, days: 1 },
     legs: c.legs,
     risk: { ...r, combined_stop: null, lock_profit: null },
@@ -190,10 +269,20 @@ function describeRules(c: RulesConfig, inst: Instrument | undefined): string[] {
   const r = rulesRiskOf(c);
   const when = e.dte?.length ? `, only ${dteText(e.dte)}` : "";
   const until = e.until ? ` (not after ${e.until})` : "";
-  const lines = [
-    `Enter at ${e.at}${until}, ${days(e.days)}${when}; ${holdingText(h)}.`,
-    ...c.legs.map((l, i) => `Leg ${i + 1}: ${describeLeg(l, c.underlying, inst)}`),
-  ];
+  const lines =
+    e.mode === "signal"
+      ? [
+          `From ${e.at}${until}, ${days(e.days)}${when}, at most ${e.max_entries ?? 1} trade${(e.max_entries ?? 1) === 1 ? "" : "s"} a day; ${holdingText(h)}.`,
+          ...(e.when ? [`Enter the legs below when ${groupText(e.when)}.`] : []),
+          ...(e.when_mirrored
+            ? [`Enter them mirrored (calls and puts swapped) when ${groupText(e.when_mirrored)}.`]
+            : []),
+        ]
+      : [`Enter at ${e.at}${until}, ${days(e.days)}${when}; ${holdingText(h)}.`];
+  lines.push(...c.legs.map((l, i) => `Leg ${i + 1}: ${describeLeg(l, c.underlying, inst)}`));
+  if (h.exit_when) lines.push(`Exit early when ${groupText(h.exit_when)}.`);
+  if (h.exit_when_mirrored)
+    lines.push(`Exit a mirrored trade early when ${groupText(h.exit_when_mirrored)}.`);
   if (r.mtm_stop_loss) lines.push(`Exit everything if the trade's loss reaches ₹${r.mtm_stop_loss}.`);
   if (r.mtm_target) lines.push(`Exit everything if the trade's profit reaches ₹${r.mtm_target}.`);
   if (r.exit_all_on_leg_sl) lines.push("When any leg's stop-loss hits, exit every leg.");
@@ -233,7 +322,8 @@ export function configSummary(c: StrategyConfig): string {
     const e = entryOf(c);
     const h = holdingOf(c);
     const hold = { intraday: "", next_day: "next day ", days: `+${h.days}d `, expiry: "expiry " }[h.mode];
-    return `${c.underlying} · ${n} leg${n === 1 ? "" : "s"} · ${e.at}–${hold}${h.exit}`;
+    const start = e.mode === "signal" ? `signal from ${e.at}` : e.at;
+    return `${c.underlying} · ${n} leg${n === 1 ? "" : "s"} · ${start}–${hold}${h.exit}`;
   }
   if (c.kind === "time_based") {
     const n = c.legs.length;

@@ -386,7 +386,7 @@ _NOTED = {
     "no_trade_day": "a day was skipped: too few index bars in the strategy's range window",
     "no_expiry": "a signal was skipped: no listed expiry after that day in the data",
     "order_not_placed": "an order could not be placed: the contract had no price in the data",
-    "no_price_for_entry": "a breakout was skipped: no price for its contracts within 5 minutes",
+    "no_price_for_entry": "a signal was skipped: no price for its contracts within 5 minutes",
 }
 
 
@@ -458,7 +458,7 @@ def signal_stats(r: BacktestResult) -> dict[str, Any] | None:
     losses = [n for n in nets if n < 0]
     signals = []
     for sig in r.signals[:2000]:
-        gid = f"SMC-{datetime.fromisoformat(sig['time']):%Y%m%d%H%M}"
+        gid = sig.get("group") or f"SMC-{datetime.fromisoformat(sig['time']):%Y%m%d%H%M}"
         ts = by_group.get(gid, [])
         signals.append(
             {k: v for k, v in sig.items() if k not in ("event", "setup")}

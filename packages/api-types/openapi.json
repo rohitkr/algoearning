@@ -1577,6 +1577,114 @@
         "title": "CombinedStop",
         "type": "object"
       },
+      "Condition": {
+        "additionalProperties": false,
+        "description": "`left op right` on the latest completed candle of `timeframe`. above/below hold while true; a cross is true only\non the candle that crossed (the one before it was on the other side).",
+        "properties": {
+          "left": {
+            "discriminator": {
+              "mapping": {
+                "level": "#/components/schemas/LevelOperand",
+                "number": "#/components/schemas/NumberOperand",
+                "price": "#/components/schemas/PriceOperand"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NumberOperand"
+              },
+              {
+                "$ref": "#/components/schemas/PriceOperand"
+              },
+              {
+                "$ref": "#/components/schemas/LevelOperand"
+              }
+            ],
+            "title": "Left"
+          },
+          "op": {
+            "default": "crosses_above",
+            "enum": [
+              "above",
+              "below",
+              "crosses_above",
+              "crosses_below"
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "right": {
+            "discriminator": {
+              "mapping": {
+                "level": "#/components/schemas/LevelOperand",
+                "number": "#/components/schemas/NumberOperand",
+                "price": "#/components/schemas/PriceOperand"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NumberOperand"
+              },
+              {
+                "$ref": "#/components/schemas/PriceOperand"
+              },
+              {
+                "$ref": "#/components/schemas/LevelOperand"
+              }
+            ],
+            "title": "Right"
+          },
+          "timeframe": {
+            "default": 5,
+            "enum": [
+              1,
+              3,
+              5,
+              10,
+              15,
+              30,
+              60
+            ],
+            "title": "Timeframe",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "right"
+        ],
+        "title": "Condition",
+        "type": "object"
+      },
+      "ConditionGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/Condition"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Conditions",
+            "type": "array"
+          },
+          "match": {
+            "default": "all",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "title": "Match",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conditions"
+        ],
+        "title": "ConditionGroup",
+        "type": "object"
+      },
       "ConfigIssue": {
         "properties": {
           "loc": {
@@ -2127,7 +2235,7 @@
       },
       "Holding": {
         "additionalProperties": false,
-        "description": "How long a trade lives. intraday: exit at `exit` the same day. next_day: at `exit` on the next trading day.\ndays: at `exit` `days` trading days after entry. expiry: at `exit` on the first leg's expiry day.",
+        "description": "How long a trade lives. intraday: exit at `exit` the same day. next_day: at `exit` on the next trading day.\ndays: at `exit` `days` trading days after entry. expiry: at `exit` on the first leg's expiry day.\n`exit_when` / `exit_when_mirrored`: also exit, earlier, when these conditions hold (for a trade entered on\n`when` / `when_mirrored`).",
         "properties": {
           "days": {
             "default": 1,
@@ -2141,6 +2249,26 @@
             "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
             "title": "Exit",
             "type": "string"
+          },
+          "exit_when": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConditionGroup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exit_when_mirrored": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConditionGroup"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "mode": {
             "default": "intraday",
@@ -2527,6 +2655,64 @@
           "option_type"
         ],
         "title": "Leg",
+        "type": "object"
+      },
+      "LevelOperand": {
+        "additionalProperties": false,
+        "description": "A price level of the day, plus `offset` points (e.g. 10 above the range high, or -50 below the 09:20 price).\nopening_range_high/low: the first `minutes` from 09:15. day_open/high/low: today so far. prev_high/low/close: the\nprevious session. price_at: the index close of the minute starting at `at` (a reference for \"moved X points\").",
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "kind": {
+            "const": "level",
+            "default": "level",
+            "title": "Kind",
+            "type": "string"
+          },
+          "minutes": {
+            "default": 15,
+            "maximum": 180.0,
+            "minimum": 1.0,
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "name": {
+            "enum": [
+              "opening_range_high",
+              "opening_range_low",
+              "day_open",
+              "day_high",
+              "day_low",
+              "prev_high",
+              "prev_low",
+              "prev_close",
+              "price_at"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "offset": {
+            "default": 0,
+            "maximum": 100000.0,
+            "minimum": -100000.0,
+            "title": "Offset",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "LevelOperand",
         "type": "object"
       },
       "LiveBroker": {
@@ -3061,6 +3247,28 @@
           "telegram_available"
         ],
         "title": "NotificationSettingsOut",
+        "type": "object"
+      },
+      "NumberOperand": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "number",
+            "default": "number",
+            "title": "Kind",
+            "type": "string"
+          },
+          "value": {
+            "maximum": 1000000.0,
+            "minimum": -1000000.0,
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "NumberOperand",
         "type": "object"
       },
       "OpenPosition": {
@@ -4121,6 +4329,31 @@
         "title": "PresetOut",
         "type": "object"
       },
+      "PriceOperand": {
+        "additionalProperties": false,
+        "description": "The index candle's open/high/low/close on the condition's timeframe.",
+        "properties": {
+          "field": {
+            "default": "close",
+            "enum": [
+              "open",
+              "high",
+              "low",
+              "close"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "kind": {
+            "const": "price",
+            "default": "price",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "PriceOperand",
+        "type": "object"
+      },
       "PurchaseOut": {
         "properties": {
           "outcome": {
@@ -4660,7 +4893,7 @@
       },
       "RulesEntry": {
         "additionalProperties": false,
-        "description": "When a new trade may start. `dte`: only on days that many trading days (Mon-Fri) before the first leg's\nexpiry (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for\nintraday, none for positional), so a late engine start still enters, but not too late.",
+        "description": "When a new trade may start. `dte`: only on days that many trading days (Mon-Fri) before the first leg's\nexpiry (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for\nintraday, none for positional), so a late engine start still enters, but not too late.\n\nmode time: enter at `at`. mode signal: from `at` on, enter when `when` holds (the legs as written) or when\n`when_mirrored` holds (the legs with calls and puts swapped: one set of legs trades a breakout both ways), at most\n`max_entries` trades a day.",
         "properties": {
           "at": {
             "default": "09:20",
@@ -4701,9 +4934,19 @@
             ],
             "title": "Dte"
           },
+          "max_entries": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Entries",
+            "type": "integer"
+          },
           "mode": {
-            "const": "time",
             "default": "time",
+            "enum": [
+              "time",
+              "signal"
+            ],
             "title": "Mode",
             "type": "string"
           },
@@ -4718,6 +4961,26 @@
               }
             ],
             "title": "Until"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConditionGroup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "when_mirrored": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConditionGroup"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "RulesEntry",

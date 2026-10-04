@@ -150,25 +150,94 @@ class TimeBasedConfig(_Model):
 
 
 # -- rules (the builder, ADR 0022) -------------------------------------------------------------------------------
+# Conditions (phase 2): `left op right` on the index, read on completed candles of a timeframe.
+Timeframe = Literal[1, 3, 5, 10, 15, 30, 60]  # minutes; candles aligned to 09:15
+LevelName = Literal[
+    "opening_range_high",
+    "opening_range_low",
+    "day_open",
+    "day_high",
+    "day_low",
+    "prev_high",
+    "prev_low",
+    "prev_close",
+    "price_at",
+]
+MAX_CONDITIONS = 6
+
+
+class NumberOperand(_Model):
+    kind: Literal["number"] = "number"
+    value: float = Field(ge=-1_000_000, le=1_000_000)
+
+
+class PriceOperand(_Model):
+    """The index candle's open/high/low/close on the condition's timeframe."""
+
+    kind: Literal["price"] = "price"
+    field: Literal["open", "high", "low", "close"] = "close"
+
+
+class LevelOperand(_Model):
+    """A price level of the day, plus `offset` points (e.g. 10 above the range high, or -50 below the 09:20 price).
+    opening_range_high/low: the first `minutes` from 09:15. day_open/high/low: today so far. prev_high/low/close: the
+    previous session. price_at: the index close of the minute starting at `at` (a reference for "moved X points")."""
+
+    kind: Literal["level"] = "level"
+    name: LevelName
+    minutes: int = Field(default=15, ge=1, le=180)  # opening range only
+    at: HHMM | None = None  # price_at only
+    offset: float = Field(default=0, ge=-100_000, le=100_000)
+
+
+Operand = Annotated[NumberOperand | PriceOperand | LevelOperand, Field(discriminator="kind")]
+
+
+class Condition(_Model):
+    """`left op right` on the latest completed candle of `timeframe`. above/below hold while true; a cross is true only
+    on the candle that crossed (the one before it was on the other side)."""
+
+    timeframe: Timeframe = 5
+    left: Operand = Field(default_factory=PriceOperand)
+    op: Literal["above", "below", "crosses_above", "crosses_below"] = "crosses_above"
+    right: Operand
+
+
+class ConditionGroup(_Model):
+    match: Literal["all", "any"] = "all"
+    conditions: list[Condition] = Field(min_length=1, max_length=MAX_CONDITIONS)
+
+
 class RulesEntry(_Model):
     """When a new trade may start. `dte`: only on days that many trading days (Mon-Fri) before the first leg's
     expiry (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for
-    intraday, none for positional), so a late engine start still enters, but not too late."""
+    intraday, none for positional), so a late engine start still enters, but not too late.
 
-    mode: Literal["time"] = "time"
+    mode time: enter at `at`. mode signal: from `at` on, enter when `when` holds (the legs as written) or when
+    `when_mirrored` holds (the legs with calls and puts swapped: one set of legs trades a breakout both ways), at most
+    `max_entries` trades a day."""
+
+    mode: Literal["time", "signal"] = "time"
     at: HHMM = "09:20"
     until: HHMM | None = None
     days: list[Weekday] = Field(default_factory=lambda: list(WEEKDAYS), min_length=1, max_length=5)
     dte: list[Annotated[int, Field(ge=0, le=30)]] | None = Field(default=None, max_length=10)
+    when: ConditionGroup | None = None
+    when_mirrored: ConditionGroup | None = None
+    max_entries: int = Field(default=1, ge=1, le=10)
 
 
 class Holding(_Model):
     """How long a trade lives. intraday: exit at `exit` the same day. next_day: at `exit` on the next trading day.
-    days: at `exit` `days` trading days after entry. expiry: at `exit` on the first leg's expiry day."""
+    days: at `exit` `days` trading days after entry. expiry: at `exit` on the first leg's expiry day.
+    `exit_when` / `exit_when_mirrored`: also exit, earlier, when these conditions hold (for a trade entered on
+    `when` / `when_mirrored`)."""
 
     mode: Literal["intraday", "next_day", "days", "expiry"] = "intraday"
     exit: HHMM = "15:15"
     days: int = Field(default=1, ge=1, le=30)
+    exit_when: ConditionGroup | None = None
+    exit_when_mirrored: ConditionGroup | None = None
 
 
 class CombinedStop(_Model):
@@ -496,6 +565,7 @@ def _check_rules(c: RulesConfig, inst: Instrument) -> list[Issue]:
             issues.append(Issue(("holding", "exit"), "must be after the entry time"))
         elif e.until is not None and e.until >= h.exit:
             issues.append(Issue(("entry", "until"), f"must be before the exit time ({h.exit})"))
+    issues += _check_signals(c, inst)
     issues += _check_legs(c.legs, c.underlying, inst, r.exit_all_on_leg_sl)
     if r.combined_stop and not any(leg.action == "SELL" for leg in c.legs):
         issues.append(Issue(("risk", "combined_stop"), "needs at least one sold leg"))
@@ -509,6 +579,68 @@ def _check_rules(c: RulesConfig, inst: Instrument) -> list[Issue]:
             issues.append(Issue(("risk", "lock_profit", "trail_by"), "set both trail values, or neither"))
         if r.mtm_target is not None and lp.at >= r.mtm_target:
             issues.append(Issue(("risk", "lock_profit", "at"), "must be below the MTM target"))
+    return issues
+
+
+def _check_group(g: ConditionGroup, loc: Loc, inst: Instrument, latest: str | None) -> list[Issue]:
+    """One condition group; `latest`: a level must be known by then (the last entry time), None = no limit."""
+    issues: list[Issue] = []
+    for i, cond in enumerate(g.conditions):
+        at: Loc = (*loc, "conditions", i)
+        sides = (("left", cond.left), ("right", cond.right))
+        if all(isinstance(o, NumberOperand) for _, o in sides):
+            issues.append(Issue((*at, "right"), "compare the market with something: both sides are numbers"))
+        for side, o in sides:
+            if not isinstance(o, LevelOperand):
+                continue
+            known: str | None = None
+            if o.name.startswith("opening_range"):
+                known = _add_minutes(inst.session_open, o.minutes)
+            elif o.name == "price_at":
+                if o.at is None:
+                    issues.append(Issue((*at, side, "at"), "enter the time of the reference price"))
+                    continue
+                issues += _hours(inst, o.at, (*at, side, "at"))
+                known = _add_minutes(o.at, 1)
+            if o.at is not None and o.name != "price_at":
+                issues.append(Issue((*at, side, "at"), "only the price at a time uses a time"))
+            if known is not None and latest is not None and known > latest:
+                issues.append(Issue((*at, side), f"only known from {known}, after the last entry ({latest})"))
+    return issues
+
+
+def _add_minutes(hm: str, minutes: int) -> str:
+    h, m = (int(x) for x in hm.split(":"))
+    total = h * 60 + m + minutes
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def _check_signals(c: RulesConfig, inst: Instrument) -> list[Issue]:
+    e, h = c.entry, c.holding
+    issues: list[Issue] = []
+    if e.mode == "time":
+        for k in ("when", "when_mirrored"):
+            if getattr(e, k) is not None:
+                issues.append(Issue(("entry", k), "conditions need the entry mode 'when conditions are met'"))
+        if e.max_entries > 1:
+            issues.append(Issue(("entry", "max_entries"), "a timed entry trades once a day"))
+        for k in ("exit_when", "exit_when_mirrored"):
+            if getattr(h, k) is not None:
+                issues.append(Issue(("holding", k), "exit conditions need the entry mode 'when conditions are met'"))
+        return issues
+    if e.when is None and e.when_mirrored is None:
+        issues.append(Issue(("entry", "when"), "add the conditions that start a trade"))
+    latest = e.until or (h.exit if h.mode == "intraday" else inst.session_close)
+    for k in ("when", "when_mirrored"):
+        g = getattr(e, k)
+        if g is not None:
+            issues += _check_group(g, ("entry", k), inst, latest)
+    if h.exit_when is not None:
+        issues += _check_group(h.exit_when, ("holding", "exit_when"), inst, None)
+    if h.exit_when_mirrored is not None:
+        if e.when_mirrored is None:
+            issues.append(Issue(("holding", "exit_when_mirrored"), "only for trades entered on the mirrored signal"))
+        issues += _check_group(h.exit_when_mirrored, ("holding", "exit_when_mirrored"), inst, None)
     return issues
 
 
@@ -616,6 +748,12 @@ def _points_leg(id_: str, action: Literal["BUY", "SELL"], opt: Literal["CE", "PE
 
 _SL30 = Threshold(unit="percent", value=30)
 
+
+def _cross(tf: int, op: str, right: dict[str, Any]) -> dict[str, Any]:
+    """A one-condition group on the index close (presets)."""
+    return {"conditions": [{"timeframe": tf, "left": {"kind": "price", "field": "close"}, "op": op, "right": right}]}
+
+
 PRESETS: tuple[Preset, ...] = (
     Preset(
         "blank",
@@ -678,6 +816,77 @@ PRESETS: tuple[Preset, ...] = (
             holding=Holding(mode="expiry", exit="15:15"),
             legs=[_points_leg("L1", "SELL", "CE", 300), _points_leg("L2", "SELL", "PE", 300)],
             risk=RulesRisk(combined_stop=CombinedStop(unit="percent", value=40)),
+        ),
+    ),
+    Preset(
+        "opening_range_breakout",
+        "Opening range breakout",
+        "A 5-minute close above the first 15 minutes' high buys the ATM call; below the low, the ATM put. 30% "
+        "stop-loss, 50% target, one trade a day, exit by 15:15.",
+        RulesConfig.model_validate(
+            {
+                "entry": {
+                    "mode": "signal",
+                    "at": "09:30",
+                    "until": "14:30",
+                    "when": _cross(5, "crosses_above", {"kind": "level", "name": "opening_range_high"}),
+                    "when_mirrored": _cross(5, "crosses_below", {"kind": "level", "name": "opening_range_low"}),
+                },
+                "legs": [_leg("L1", "BUY", "CE", stop_loss=Threshold(value=30), target=Threshold(value=50))],
+            }
+        ),
+    ),
+    Preset(
+        "previous_day_breakout",
+        "Previous day high/low breakout",
+        "A 15-minute close above yesterday's high sells the ATM put (below yesterday's low: the ATM call), "
+        "40% stop-loss; exit if the index closes back inside, else at 15:15.",
+        RulesConfig.model_validate(
+            {
+                "entry": {
+                    "mode": "signal",
+                    "at": "09:30",
+                    "until": "14:30",
+                    "when": _cross(15, "crosses_above", {"kind": "level", "name": "prev_high"}),
+                    "when_mirrored": _cross(15, "crosses_below", {"kind": "level", "name": "prev_low"}),
+                },
+                "holding": {
+                    "exit_when": _cross(15, "below", {"kind": "level", "name": "prev_high"}),
+                    "exit_when_mirrored": _cross(15, "above", {"kind": "level", "name": "prev_low"}),
+                },
+                "legs": [_leg("L1", "SELL", "PE", stop_loss=Threshold(value=40))],
+            }
+        ),
+    ),
+    Preset(
+        "momentum_from_920",
+        "Momentum from 09:20",
+        "Once the index closes 50 points above its 09:20 price, buy the ATM call (50 below: the ATM put); 30% "
+        "stop-loss with a trailing stop, at most two trades a day.",
+        RulesConfig.model_validate(
+            {
+                "entry": {
+                    "mode": "signal",
+                    "at": "09:21",
+                    "until": "14:30",
+                    "max_entries": 2,
+                    "when": _cross(
+                        1, "crosses_above", {"kind": "level", "name": "price_at", "at": "09:20", "offset": 50}
+                    ),
+                    "when_mirrored": _cross(
+                        1, "crosses_below", {"kind": "level", "name": "price_at", "at": "09:20", "offset": -50}
+                    ),
+                },
+                "legs": [
+                    _leg(
+                        "L1",
+                        "BUY",
+                        "CE",
+                        stop_loss=Threshold(value=30),
+                        trailing=Trailing(unit="percent", trigger=20, step=10),
+                    )
+                ],
+            }
         ),
     ),
     Preset(

@@ -5,6 +5,7 @@ import {
   configSummary,
   describeConfig,
   describeLeg,
+  groupText,
   issueKey,
   issueLabel,
   issueMap,
@@ -52,7 +53,13 @@ describe("strategy text", () => {
     const c: RulesConfig = {
       kind: "rules",
       underlying: "NIFTY",
-      entry: { mode: "time", at: "15:00", days: ["MON", "TUE", "WED", "THU", "FRI"], dte: [0, 1] },
+      entry: {
+        mode: "time",
+        at: "15:00",
+        days: ["MON", "TUE", "WED", "THU", "FRI"],
+        dte: [0, 1],
+        max_entries: 1,
+      },
       holding: { mode: "next_day", exit: "09:30", days: 1 },
       legs: [leg()],
       risk: {
@@ -151,5 +158,29 @@ describe("strategy text", () => {
     ).toEqual({ "timing.exit": "first" });
     expect(issueLabel("legs.1.stop_loss.value")).toBe("Leg 2 · stop loss · value");
     expect(issueLabel("")).toBe("Strategy");
+  });
+
+  it("words conditions plainly", () => {
+    expect(
+      groupText({
+        match: "any",
+        conditions: [
+          {
+            timeframe: 15,
+            left: { kind: "price", field: "close" },
+            op: "crosses_above",
+            right: { kind: "level", name: "prev_high", minutes: 15, at: null, offset: 0 },
+          },
+          {
+            timeframe: 1,
+            left: { kind: "price", field: "low" },
+            op: "below",
+            right: { kind: "level", name: "price_at", minutes: 15, at: "09:20", offset: -50 },
+          },
+        ],
+      }),
+    ).toBe(
+      "the 15-minute close crosses above previous day's high or the 1-minute low is below the price at 09:20 − 50",
+    );
   });
 });

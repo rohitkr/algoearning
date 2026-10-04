@@ -8,7 +8,7 @@ entries. Plan: [the no-code builder plan](https://claude.ai/code/artifact/d4afb0
 
 **Decision.** A new strategy kind `rules` (`ae_core.strategy.RulesConfig`) replaces `time_based` as the builder's
 config; one runner (`RulesRunner`) runs it live, on paper and in backtests (ADR 0017). It is built in phases, each
-approved separately: 1 schedule and holding (this ADR), 2 conditions, breakouts and reference levels, 3 indicators on
+approved separately: 1 schedule and holding, 2 conditions, breakouts and reference levels, 3 indicators on
 the index, 4 templates and backtest improvements.
 
 - **Entry** (`entry`): at a time on chosen weekdays, optionally only N trading days before the first leg's expiry
@@ -32,5 +32,19 @@ the index, 4 templates and backtest improvements.
   legs and limits; run and backtest snapshots keep what they ran with, and `time_based` still parses and runs (as
   those rules), so history stays readable.
 
-**Not yet:** condition-based entries, opening-range and previous-day levels, indicators (phases 2-3); exchange holiday
-calendars; option-premium indicators. A plain-English strategy writer was considered and not taken up for now.
+**Phase 2: conditions** (`entry.mode = "signal"`). From `entry.at` until the last entry time, a trade starts when a
+condition group holds: `when` enters the legs as written, `when_mirrored` the same legs with calls and puts swapped, so
+one set of legs trades a breakout both ways (above the high: buy the call; below the low: buy the put). A group is
+all/any of up to 6 conditions `left op right` on a timeframe (1-60 minute candles aligned to 09:15, built from the
+1-minute bars the feed and the history store hold): `above`/`below` hold while true, a cross only on the candle that
+crossed. Operands: a number, the index candle's open/high/low/close, or a level with an optional points offset: the
+opening range of the first N minutes, today's open/high/low so far, the previous session's high/low/close, or the
+price at a time (for "50 points above the 09:20 price"). `holding.exit_when` / `exit_when_mirrored` close a trade
+early. `entry.max_entries` allows up to 10 trades a day, still one at a time. Conditions are read once per completed
+1-minute bar (`trading.conditions`, pure); a signal waits up to 5 minutes for its contracts' prices, else it is
+skipped and logged. Each entry notes an `entry_signal` (direction and the readings that fired it), shown with
+backtest results; backtests load the 10 days before the start for the previous session's levels. Presets: opening
+range breakout, previous day high/low breakout, momentum from 09:20.
+
+**Not yet:** indicators on the index (phase 3), exchange holiday calendars, option-premium conditions. A plain-English
+strategy writer was considered and not taken up for now.

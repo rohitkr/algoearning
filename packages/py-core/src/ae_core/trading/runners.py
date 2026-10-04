@@ -21,7 +21,7 @@ from ..strategy import (
     ZeroDteConfig,
     rules_from_time_based,
 )
-from . import options, rules
+from . import conditions, options, rules
 from .model import IST, Contract, Intent, Market, Position, Side
 from .rules import Right
 
@@ -150,8 +150,25 @@ class RulesRunner(Runner):
     kind = "rules"
     cfg: RulesConfig
 
+    def __init__(self, config: Any, multiplier: int = 1, state: Mapping[str, Any] | None = None) -> None:
+        super().__init__(config, multiplier, state)
+        self.prior_days = 1 if conditions.needs_prior_day(self.cfg) else 0  # the previous session's levels
+
     def _leg(self, leg_id: str) -> Leg | None:
         return next((leg for leg in self.cfg.legs if leg.id == leg_id), None)
+
+    def _legs_for(self, direction: str) -> list[Leg]:
+        """The legs as written, or mirrored (calls and puts swapped) for a trade entered on `when_mirrored`."""
+        if direction != "mirrored":
+            return list(self.cfg.legs)
+        swap = {"CE": "PE", "PE": "CE"}
+        return [leg.model_copy(update={"option_type": swap[leg.option_type]}) for leg in self.cfg.legs]
+
+    def _directions(self) -> list[str]:
+        e = self.cfg.entry
+        if e.mode == "time":
+            return ["as_written"]
+        return [d for d, g in (("as_written", e.when), ("mirrored", e.when_mirrored)) if g is not None]
 
     def _new_day(self, m: Market) -> None:
         today = m.now.date()
@@ -175,7 +192,7 @@ class RulesRunner(Runner):
         keys = super().wanted(m)
         keys |= {p["contract"] for p in self.s.get("pending", [])}
         if self.s.get("phase", "waiting") == "waiting":
-            for leg in self.cfg.legs:
+            for leg in (leg for d in self._directions() for leg in self._legs_for(d)):
                 expiry = rules.pick_expiry(m.expiries, m.now.date(), leg.expiry)
                 if expiry is None or m.spot is None:
                     continue
@@ -288,11 +305,15 @@ class RulesRunner(Runner):
         if until is not None and t >= until:
             self.s["phase"] = "done"
             return []
+        timed: dict[str, Any] = {"dir": "as_written", "why": [f"entry at {e.at}"]}
+        signal = self._signal(m) if e.mode == "signal" else timed
+        if signal is None:
+            return []
         final = self._final(m)
         if isinstance(final, datetime) and final <= now:
             final = f"the exit ({final:%a %d %b} {self.cfg.holding.exit}) has passed"
         contracts: list[tuple[Leg, Contract]] = []
-        for leg in self.cfg.legs:
+        for leg in self._legs_for(signal["dir"]):
             r = final if isinstance(final, str) else self._resolve(m, leg)
             if isinstance(r, str):
                 if self.s.get("waiting_reason") != r:
@@ -309,10 +330,55 @@ class RulesRunner(Runner):
             return []
         if any(m.price(c) is None for _, c in contracts):
             return []  # the prices were just requested: enter once they stream
+        if self.s.get("entries_day") != today:
+            self.s.update(entries_day=today, entries=0)
         self.s.update(phase="in", entered=today, final=final.isoformat(), cycle_realized=self.realized,
-                      reentries={}, pending=[], sold={}, lock_floor=None)  # fmt: skip
-        why_in = f"entry at {e.at}"
+                      reentries={}, pending=[], sold={}, lock_floor=None, direction=signal["dir"], signal=None,
+                      entries=int(self.s.get("entries", 0)) + 1, _group=f"R-{now:%Y%m%d%H%M}")  # fmt: skip
+        why_in = "; ".join(signal["why"])
+        if e.mode == "signal":
+            self.note("entry_signal", direction=signal["dir"], why=signal["why"], group=self.s["_group"], spot=m.spot)
         return _buy_first([self._enter(m, c, leg.action, leg.lots, leg.id, why_in) for leg, c in contracts])
+
+    def _context(self, m: Market) -> conditions.Context:
+        return conditions.Context(m.prior_spot_bars, m.spot_bars)
+
+    def _signal(self, m: Market) -> dict[str, Any] | None:
+        """The signal to enter on now: one already given and waiting for its contracts' prices (for up to 5
+        minutes), or a group that holds at this bar. Conditions are read once per completed 1-minute bar."""
+        e, now = self.cfg.entry, m.now
+        held = self.s.get("signal")
+        if held:
+            if now - datetime.fromisoformat(held["ts"]) <= timedelta(minutes=5):
+                return dict(held)
+            self.s["signal"] = None
+            self.note("no_price_for_entry", reason="no prices for the contracts within 5 minutes of the signal")
+        ctx = self._context(m)
+        if ctx.last_minute is None or ctx.last_minute.isoformat() == self.s.get("last_eval"):
+            return None
+        self.s["last_eval"] = ctx.last_minute.isoformat()
+        for direction, group in (("as_written", e.when), ("mirrored", e.when_mirrored)):
+            if group is None:
+                continue
+            ok, why = conditions.holds(ctx, group)
+            if ok:
+                sig = {"dir": direction, "why": why, "ts": now.isoformat()}
+                self.s["signal"] = sig
+                return dict(sig)
+        return None
+
+    def _exit_signal(self, m: Market) -> list[str] | None:
+        """The readings that say to leave the trade now (its direction's exit conditions), or None."""
+        h = self.cfg.holding
+        group = h.exit_when_mirrored if self.s.get("direction") == "mirrored" else h.exit_when
+        if group is None:
+            return None
+        ctx = self._context(m)
+        if ctx.last_minute is None or ctx.last_minute.isoformat() == self.s.get("last_exit_eval"):
+            return None
+        self.s["last_exit_eval"] = ctx.last_minute.isoformat()
+        ok, why = conditions.holds(ctx, group)
+        return why if ok else None
 
     # -- in a trade -------------------------------------------------------------------------------------------------
     def _close(self, m: Market, reason: str, event: str | None = None, **detail: Any) -> list[Intent]:
@@ -369,6 +435,9 @@ class RulesRunner(Runner):
             self.s["final"] = rules.at(m.now.date(), cfg.holding.exit, IST).isoformat()
         if m.now >= datetime.fromisoformat(self.s["final"]):
             return self._close(m, f"exit time {cfg.holding.exit}")
+        leave = self._exit_signal(m)
+        if leave is not None:
+            return self._close(m, "exit signal: " + "; ".join(leave), "exit_signal", why=leave)
 
         # leg stop-loss / target / trailing
         sl_hit = False
@@ -435,9 +504,13 @@ class RulesRunner(Runner):
         return out
 
     def _end_cycle(self, m: Market) -> None:
-        """The trade is over: another may start later today unless one already started today."""
-        self.s["phase"] = "done" if self.s.get("entered") == m.now.date().isoformat() else "waiting"
-        self.s["pending"] = []
+        """The trade is over: another may start later today unless today's entries are used up."""
+        today = m.now.date().isoformat()
+        used = int(self.s.get("entries", 0)) if self.s.get("entries_day") == today else 0
+        if self.s.get("entries_day") is None and self.s.get("entered") == today:
+            used = 1  # a trade started before entries were counted
+        self.s["phase"] = "done" if used >= self.cfg.entry.max_entries else "waiting"
+        self.s["pending"], self.s["_group"] = [], None
 
     def _queue_reentry(self, pos: Position, leg: Leg, kind: str) -> None:
         cfg = leg.reentry_on_sl if kind == "sl" else leg.reentry_on_target

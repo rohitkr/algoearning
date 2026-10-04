@@ -139,8 +139,61 @@ describe("StrategyBuilder", () => {
     };
     expect(saved.config.kind).toBe("rules");
     expect(saved.config.entry).toMatchObject({ at: "15:00", dte: [2] });
-    expect(saved.config.holding).toEqual({ mode: "days", exit: "09:30", days: 2 });
+    expect(saved.config.holding).toEqual({
+      mode: "days",
+      exit: "09:30",
+      days: 2,
+      exit_when: null,
+      exit_when_mirrored: null,
+    });
     expect(saved.config.legs[1]!.strike).toEqual({ mode: "points", offset: 0, premium: null, points: 300 });
+  });
+
+  it("builds a breakout traded both ways from conditions and saves them", async () => {
+    render(<StrategyBuilder catalog={catalog} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Opening range breakout/ }));
+    expect(screen.getByRole("heading", { name: "Entry conditions" })).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Enter the legs below when the 5-minute close crosses above the first 15 minutes' high\./,
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Enter them mirrored \(calls and puts swapped\) when the 5-minute close crosses below the first 15 minutes' low\./,
+      ),
+    ).toBeTruthy();
+
+    // a 10-point buffer above the range, and an early exit back inside it
+    fireEvent.change(screen.getAllByLabelText("Offset")[0]!, { target: { value: "10" } });
+    expect(screen.getByText(/crosses above the first 15 minutes' high \+ 10\./)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Exit early when conditions are met"));
+    expect(
+      screen.getByText(/Exit early when the 5-minute close crosses above the first 15 minutes' high\./),
+    ).toBeTruthy();
+    fireEvent.change(screen.getAllByLabelText("Rule")[2]!, { target: { value: "below" } });
+    expect(
+      screen.getByText(/Exit early when the 5-minute close is below the first 15 minutes' high\./),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+    await flush();
+    const saved = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies")!.body as {
+      config: { entry: { mode: string; when: { conditions: { right: object }[] } }; holding: object };
+    };
+    expect(saved.config.entry.mode).toBe("signal");
+    expect(saved.config.entry.when.conditions[0]!.right).toEqual({
+      kind: "level",
+      name: "opening_range_high",
+      minutes: 15,
+      at: null,
+      offset: 10,
+    });
+    expect(saved.config.holding).toMatchObject({ exit_when: { conditions: [{ op: "below" }] } });
+
+    // back to a timed entry: the conditions go
+    fireEvent.click(screen.getByRole("radio", { name: "At a time" }));
+    expect(screen.queryByRole("heading", { name: "Entry conditions" })).toBeNull();
   });
 
   it("opens an old time-based strategy as rules", () => {

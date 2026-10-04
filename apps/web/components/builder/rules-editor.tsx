@@ -5,9 +5,19 @@ import { Button, Card, cn } from "@algoearning/ui";
 import { Plus } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { HOLD_LABEL, WEEKDAYS, type Weekday, entryOf, holdingOf, newLeg, rulesRiskOf } from "@/lib/strategy";
+import {
+  HOLD_LABEL,
+  WEEKDAYS,
+  type Weekday,
+  entryOf,
+  holdingOf,
+  newGroup,
+  newLeg,
+  rulesRiskOf,
+} from "@/lib/strategy";
 
-import { Check, NumberField, SelectField, TimeField } from "./fields";
+import { ConditionGroupEditor } from "./conditions-editor";
+import { Check, NumberField, Segmented, SelectField, TimeField } from "./fields";
 import { LegEditor } from "./leg-editor";
 
 type Errs = Record<string, string>;
@@ -100,9 +110,26 @@ export function RulesEditor({
             When a trade starts and how long it is held. One trade at a time.
           </p>
         </div>
+        <Segmented
+          label="Enter"
+          value={e.mode}
+          options={[
+            { value: "time", label: "At a time" },
+            { value: "signal", label: "When conditions are met" },
+          ]}
+          onChange={(mode) =>
+            mode === "signal"
+              ? setEntry({ mode, when: e.when ?? newGroup(), at: e.at < "09:30" ? "09:30" : e.at })
+              : onChange({
+                  ...config,
+                  entry: { ...e, mode, when: null, when_mirrored: null, max_entries: 1 },
+                  holding: { ...h, exit_when: null, exit_when_mirrored: null },
+                })
+          }
+        />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <TimeField
-            label="Entry time"
+            label={e.mode === "signal" ? "Watch from" : "Entry time"}
             value={e.at}
             {...hours}
             error={errs["entry.at"]}
@@ -157,6 +184,17 @@ export function RulesEditor({
             />
           )}
         </div>
+        {e.mode === "signal" && (
+          <NumberField
+            label="Trades per day (at most)"
+            className="sm:w-56"
+            value={e.max_entries}
+            min={1}
+            max={10}
+            error={errs["entry.max_entries"]}
+            onChange={(v) => setEntry({ max_entries: v ?? Number.NaN })}
+          />
+        )}
         <Chips
           id="days-label"
           label="Trade on"
@@ -191,6 +229,87 @@ export function RulesEditor({
           </p>
         )}
       </Card>
+
+      {e.mode === "signal" && (
+        <Card className="flex flex-col gap-4">
+          <div>
+            <h2 className="font-semibold">Entry conditions</h2>
+            <p className="text-sm text-muted">
+              Read on {config.underlying}&apos;s candles each time one completes. A cross counts only on the
+              candle that crossed.
+            </p>
+          </div>
+          <ConditionGroupEditor
+            title="Enter the legs below when"
+            group={e.when ?? newGroup()}
+            path="entry.when"
+            errs={errs}
+            hours={hours}
+            onChange={(when) => setEntry({ when })}
+          />
+          <Check
+            label="Also trade the mirror image (calls and puts swapped) on the opposite signal"
+            checked={e.when_mirrored != null}
+            error={errs["entry.when_mirrored"]}
+            onChange={(on) =>
+              on
+                ? setEntry({ when_mirrored: newGroup() })
+                : onChange({
+                    ...config,
+                    entry: { ...e, when_mirrored: null },
+                    holding: { ...h, exit_when_mirrored: null },
+                  })
+            }
+          />
+          {e.when_mirrored && (
+            <ConditionGroupEditor
+              title="Enter the mirrored legs when"
+              hint="e.g. a breakout below the low buys the put where the breakout above the high buys the call"
+              group={e.when_mirrored}
+              path="entry.when_mirrored"
+              errs={errs}
+              hours={hours}
+              onChange={(when_mirrored) => setEntry({ when_mirrored })}
+            />
+          )}
+          <Check
+            label="Exit early when conditions are met"
+            checked={h.exit_when != null}
+            error={errs["holding.exit_when"]}
+            onChange={(on) => setHolding({ exit_when: on ? newGroup() : null })}
+          />
+          {h.exit_when && (
+            <ConditionGroupEditor
+              title={e.when_mirrored ? "Exit a trade entered on the first signal when" : "Exit when"}
+              group={h.exit_when}
+              path="holding.exit_when"
+              errs={errs}
+              hours={hours}
+              onChange={(exit_when) => setHolding({ exit_when })}
+            />
+          )}
+          {e.when_mirrored && (
+            <>
+              <Check
+                label="Exit a mirrored trade early when conditions are met"
+                checked={h.exit_when_mirrored != null}
+                error={errs["holding.exit_when_mirrored"]}
+                onChange={(on) => setHolding({ exit_when_mirrored: on ? newGroup() : null })}
+              />
+              {h.exit_when_mirrored && (
+                <ConditionGroupEditor
+                  title="Exit a mirrored trade when"
+                  group={h.exit_when_mirrored}
+                  path="holding.exit_when_mirrored"
+                  errs={errs}
+                  hours={hours}
+                  onChange={(exit_when_mirrored) => setHolding({ exit_when_mirrored })}
+                />
+              )}
+            </>
+          )}
+        </Card>
+      )}
 
       <section className="flex flex-col gap-3" aria-label="Legs">
         <div className="flex items-center justify-between">
