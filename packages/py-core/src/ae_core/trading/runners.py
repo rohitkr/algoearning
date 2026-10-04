@@ -19,9 +19,9 @@ from ..strategy import (
     SmcScalpConfig,
     TimeBasedConfig,
     ZeroDteConfig,
+    prior_days_needed,
     rules_conditions,
     rules_from_time_based,
-    uses_previous_day,
 )
 from . import conditions, options, rules
 from .model import IST, Contract, Intent, Market, Position, Side
@@ -157,8 +157,9 @@ class RulesRunner(Runner):
 
     def __init__(self, config: Any, multiplier: int = 1, state: Mapping[str, Any] | None = None) -> None:
         super().__init__(config, multiplier, state)
-        self.prior_days = 1 if uses_previous_day(self.cfg) else 0
+        self.prior_days = prior_days_needed(self.cfg)  # previous-day levels, indicator warm-up
         self._fresh: frozenset[int] = frozenset()
+        self._cache: dict[Any, Any] = {}  # earlier sessions' candles, for the indicators
         self._sizes = sorted({c.candle for c in rules_conditions(self.cfg)})
 
     def _leg(self, leg_id: str) -> Leg | None:
@@ -275,7 +276,7 @@ class RulesRunner(Runner):
 
     # -- conditions (ADR 0023) --------------------------------------------------------------------------------------
     def _context(self, m: Market) -> conditions.Context:
-        return conditions.Context(m.now, m.spot_bars, m.prior_spot_bars, self._fresh)
+        return conditions.Context(m.now, m.spot_bars, m.prior_spot_bars, self._fresh, self._cache)
 
     def _signal(self, m: Market, only: str | None = None) -> str | None:
         """The direction of the first entry signal that is true now (restricted to one direction), or None."""

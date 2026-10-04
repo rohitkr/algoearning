@@ -85,9 +85,91 @@ export const OP_LABEL: Record<Condition["op"], string> = {
 
 export const DIRECTION_LABEL = { always: "Always", up: "Up signal", down: "Down signal" } as const;
 
+export type IndicatorName = NonNullable<ConditionOperand["indicator"]>;
+
+export const INDICATOR_LABEL: Record<IndicatorName, string> = {
+  ema: "EMA",
+  sma: "SMA",
+  rsi: "RSI",
+  macd: "MACD",
+  supertrend: "Supertrend",
+  bollinger: "Bollinger Bands",
+  atr: "ATR",
+  adx: "ADX",
+};
+
+/** Each indicator's outputs (`line`), its default first; and its usual period. */
+export const INDICATOR_LINES: Partial<Record<IndicatorName, ConditionOperand["line"][]>> = {
+  macd: ["value", "signal", "hist"],
+  bollinger: ["middle", "upper", "lower"],
+  adx: ["value", "plus_di", "minus_di"],
+};
+export const INDICATOR_PERIOD: Record<IndicatorName, number> = {
+  ema: 20,
+  sma: 20,
+  rsi: 14,
+  macd: 26,
+  supertrend: 10,
+  bollinger: 20,
+  atr: 14,
+  adx: 14,
+};
+export const LINE_LABEL: Record<ConditionOperand["line"], string> = {
+  value: "Line",
+  signal: "Signal line",
+  hist: "Histogram",
+  upper: "Upper band",
+  middle: "Middle band",
+  lower: "Lower band",
+  plus_di: "+DI",
+  minus_di: "−DI",
+};
+
+/** An operand with the API's defaults filled in (every field present, as the API returns it). */
+export function operand(o: Partial<ConditionOperand> & Pick<ConditionOperand, "kind">): ConditionOperand {
+  return {
+    level: null,
+    minutes: 15,
+    value: null,
+    indicator: null,
+    period: 14,
+    line: "value",
+    multiplier: null,
+    fast: 12,
+    smoothing: 9,
+    ...o,
+  };
+}
+
+/** A new indicator operand with that indicator's usual settings. */
+export function indicatorOperand(name: IndicatorName): ConditionOperand {
+  return operand({
+    kind: "indicator",
+    indicator: name,
+    period: INDICATOR_PERIOD[name],
+    line: INDICATOR_LINES[name]?.[0] ?? "value",
+    multiplier: name === "supertrend" ? 3 : name === "bollinger" ? 2 : null,
+  });
+}
+
+function indicatorText(o: ConditionOperand): string {
+  const n = o.indicator ?? "ema";
+  const p = o.period ?? INDICATOR_PERIOD[n];
+  if (n === "macd") {
+    const line = o.line === "signal" ? " signal" : o.line === "hist" ? " histogram" : "";
+    return `MACD${line} (${o.fast ?? 12}, ${p}, ${o.smoothing ?? 9})`;
+  }
+  if (n === "bollinger") return `the ${o.line ?? "middle"} Bollinger Band (${p}, ${o.multiplier ?? 2})`;
+  if (n === "supertrend") return `Supertrend (${p}, ${o.multiplier ?? 3})`;
+  if (n === "adx")
+    return o.line === "plus_di" ? `+DI(${p})` : o.line === "minus_di" ? `−DI(${p})` : `ADX(${p})`;
+  return `${INDICATOR_LABEL[n]}(${p})`;
+}
+
 export function operandText(o: ConditionOperand | undefined): string {
   if (!o || o.kind === "price") return "the price";
   if (o.kind === "number") return `${o.value ?? "?"}`;
+  if (o.kind === "indicator") return indicatorText(o);
   const name = o.level ? LEVEL_LABEL[o.level] : "?";
   return o.level?.startsWith("opening_") ? `the ${o.minutes ?? 15}-minute ${name}` : name;
 }
@@ -95,7 +177,11 @@ export function operandText(o: ConditionOperand | undefined): string {
 /** "a 5-minute close crosses above the 15-minute opening range high" */
 export function conditionText(c: Condition): string {
   const left = !c.left || c.left.kind === "price" ? `a ${c.candle}-minute close` : operandText(c.left);
-  return `${left} ${OP_LABEL[c.op]} ${operandText(c.right)}`;
+  const onCandles =
+    c.left?.kind === "indicator" || (c.right?.kind === "indicator" && c.left && c.left.kind !== "price")
+      ? ` (${c.candle}-minute candles)`
+      : "";
+  return `${left} ${OP_LABEL[c.op]} ${operandText(c.right)}${onCandles}`;
 }
 
 export function groupText(g: ConditionGroup): string {

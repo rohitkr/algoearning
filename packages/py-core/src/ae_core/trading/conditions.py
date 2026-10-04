@@ -1,14 +1,17 @@
 """Entry and exit conditions on the index (ADR 0023): finished candles built from 1-minute bars, ready-made levels
-(opening range, today's open / high / low so far, previous session), and the comparison of two values. Pure functions
-of the bars they are given, so live, paper and backtest see the same thing."""
+(opening range, today's open / high / low so far, previous session), indicators (ADR 0024: computed on the
+condition's candles, earlier sessions first so they are warmed up at the open), and the comparison of two values.
+Pure functions of the bars they are given, so live, paper and backtest see the same thing."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import Any
 
 from ..strategy import Condition, ConditionGroup, Operand
+from . import indicators as ind
 from .model import BarLike
 
 
@@ -69,19 +72,74 @@ def level(
     return max(b.high for b in before) if name == "day_high" else min(b.low for b in before)
 
 
+def prior_candles(prior: Sequence[BarLike], size: int) -> list[Candle]:
+    """Earlier sessions' candles of `size` minutes, each session counted from its own first bar (all are over)."""
+    days: dict[object, list[BarLike]] = {}
+    for b in prior:
+        days.setdefault(b.ts.date(), []).append(b)
+    out: list[Candle] = []
+    for day_bars in days.values():
+        out += candles(day_bars, size, day_bars[-1].ts + timedelta(days=1))
+    return out
+
+
+def indicator_series(cs: Sequence[Candle], o: Operand) -> ind.Series:
+    """One value per candle for an indicator operand (None until warmed up)."""
+    closes = [c.close for c in cs]
+    name, n = o.indicator, o.period
+    if name == "ema":
+        return ind.ema(closes, n)
+    if name == "sma":
+        return ind.sma(closes, n)
+    if name == "rsi":
+        return ind.rsi(closes, n)
+    if name == "atr":
+        return ind.atr(cs, n)
+    if name == "supertrend":
+        return ind.supertrend(cs, n, o.multiplier or 3.0)
+    if name == "macd":
+        line, sig, hist = ind.macd(closes, o.fast, n, o.smoothing)
+        return {"signal": sig, "hist": hist}.get(o.line, line)
+    if name == "bollinger":
+        up, mid, lo = ind.bollinger(closes, n, o.multiplier or 2.0)
+        return {"upper": up, "lower": lo}.get(o.line, mid)
+    if name == "adx":
+        a, p, m = ind.adx(cs, n)
+        return {"plus_di": p, "minus_di": m}.get(o.line, a)
+    return [None] * len(cs)
+
+
 @dataclass
 class Context:
     now: datetime
     bars: Sequence[BarLike]
     prior: Sequence[BarLike]
     fresh: frozenset[int]  # candle sizes that finished a new candle since the last step
+    # kept by the runner across steps: earlier sessions' candles (they do not change during the day)
+    cache: dict[Any, Any] = field(default_factory=dict)
+    _series: dict[Any, dict[datetime, float | None]] = field(default_factory=dict)
 
-    def value(self, o: Operand, c: Candle, formed_at: datetime) -> float | None:
+    def value(self, o: Operand, c: Candle, formed_at: datetime, size: int = 1) -> float | None:
         if o.kind == "price":
             return c.close
         if o.kind == "number":
             return o.value
+        if o.kind == "indicator":
+            return self.indicator(o, size).get(c.ts)
         return level(o.level or "", o.minutes, self.bars, self.prior, c.ts, formed_at)
+
+    def indicator(self, o: Operand, size: int) -> dict[datetime, float | None]:
+        """The indicator's value by candle start, earlier sessions included."""
+        key = (size, o.indicator, o.period, o.line, o.multiplier, o.fast, o.smoothing)
+        if key not in self._series:
+            pk = ("prior", size, len(self.prior), self.prior[-1].ts if self.prior else None)
+            if pk not in self.cache:
+                if len(self.cache) > 64:
+                    self.cache.clear()
+                self.cache[pk] = prior_candles(self.prior, size)
+            cs = [*self.cache[pk], *candles(self.bars, size, self.now)]
+            self._series[key] = dict(zip((c.ts for c in cs), indicator_series(cs, o), strict=True))
+        return self._series[key]
 
 
 def latest(bars: Sequence[BarLike], size: int, now: datetime) -> Candle | None:
@@ -96,7 +154,8 @@ def holds(cond: Condition, ctx: Context) -> bool:
     cur = cs[-1]
     if ctx.now - (cur.ts + timedelta(minutes=cond.candle)) > timedelta(minutes=cond.candle + 1):
         return False  # no recent candle (feed gap, engine just started): no signal from stale data
-    lt, rt = ctx.value(cond.left, cur, cur.ts), ctx.value(cond.right, cur, cur.ts)
+    size = cond.candle
+    lt, rt = ctx.value(cond.left, cur, cur.ts, size), ctx.value(cond.right, cur, cur.ts, size)
     if lt is None or rt is None:
         return False
     if cond.op == "above":
@@ -106,7 +165,7 @@ def holds(cond: Condition, ctx: Context) -> bool:
     if cond.candle not in ctx.fresh or len(cs) < 2:
         return False
     prev = cs[-2]
-    lp, rp = ctx.value(cond.left, prev, cur.ts), ctx.value(cond.right, prev, cur.ts)
+    lp, rp = ctx.value(cond.left, prev, cur.ts, size), ctx.value(cond.right, prev, cur.ts, size)
     if lp is None or rp is None:
         return False
     return (lp <= rp and lt > rt) if cond.op == "crosses_above" else (lp >= rp and lt < rt)

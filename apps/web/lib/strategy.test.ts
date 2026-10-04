@@ -11,6 +11,8 @@ import {
   issueMap,
   newLeg,
   nextLegId,
+  operand,
+  indicatorOperand,
   rulesFromTimeBased,
   strikeLabel,
 } from "./strategy";
@@ -97,15 +99,15 @@ describe("strategy text", () => {
       conditionText({
         candle: 5,
         op: "crosses_above",
-        right: { kind: "level", level: "opening_high", minutes: 15 },
+        right: operand({ kind: "level", level: "opening_high" }),
       }),
     ).toBe("a 5-minute close crosses above the 15-minute opening range high");
     expect(
       conditionText({
         candle: 15,
         op: "below",
-        left: { kind: "level", level: "day_low", minutes: 15 },
-        right: { kind: "number", value: 24500, minutes: 15 },
+        left: operand({ kind: "level", level: "day_low" }),
+        right: operand({ kind: "number", value: 24500 }),
       }),
     ).toBe("day low so far is below 24500");
   });
@@ -178,5 +180,28 @@ describe("strategy text", () => {
     ).toEqual({ "timing.exit": "first" });
     expect(issueLabel("legs.1.stop_loss.value")).toBe("Leg 2 · stop loss · value");
     expect(issueLabel("")).toBe("Strategy");
+  });
+
+  it("words indicator conditions", () => {
+    const ema = (n: number) => ({ ...indicatorOperand("ema"), period: n });
+    expect(conditionText({ candle: 5, op: "crosses_above", left: ema(9), right: ema(21) })).toBe(
+      "EMA(9) crosses above EMA(21) (5-minute candles)",
+    );
+    expect(conditionText({ candle: 15, op: "crosses_below", right: indicatorOperand("supertrend") })).toBe(
+      "a 15-minute close crosses below Supertrend (10, 3)",
+    );
+    const macd = indicatorOperand("macd");
+    expect(conditionText({ candle: 5, op: "above", left: macd, right: { ...macd, line: "signal" } })).toBe(
+      "MACD (12, 26, 9) is above MACD signal (12, 26, 9) (5-minute candles)",
+    );
+    expect(
+      conditionText({
+        candle: 5,
+        op: "below",
+        left: indicatorOperand("rsi"),
+        right: operand({ kind: "number", value: 30 }),
+      }),
+    ).toBe("RSI(14) is below 30 (5-minute candles)");
+    expect(indicatorOperand("bollinger")).toMatchObject({ period: 20, line: "middle", multiplier: 2 });
   });
 });

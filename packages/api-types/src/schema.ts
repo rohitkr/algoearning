@@ -2351,24 +2351,52 @@ export interface components {
         };
         /**
          * Operand
-         * @description A value on the index: the close of the candle (price), a ready-made level, or a plain number.
+         * @description A value on the index: the close of the candle (price), a ready-made level, a plain number, or an indicator.
          *     Levels: the high/low of the first `minutes` of the session (opening_*), today's open, the day's high/low so far
-         *     (before the candle), and the previous session's high/low/close.
+         *     (before the candle), and the previous session's high/low/close. Indicators (ADR 0024) are computed on the
+         *     condition's candles, earlier sessions included so they are warmed up at the open: `period`, `line` (macd: value /
+         *     signal / hist; bollinger: middle / upper / lower; adx: value / plus_di / minus_di), `multiplier` (bollinger's band
+         *     width, default 2; supertrend's ATR multiple, default 3), and for macd `fast` / `period` (slow) / `smoothing`.
          */
         Operand: {
+            /**
+             * Fast
+             * @default 12
+             */
+            fast: number;
+            /** Indicator */
+            indicator?: ("ema" | "sma" | "rsi" | "macd" | "supertrend" | "bollinger" | "atr" | "adx") | null;
             /**
              * Kind
              * @default price
              * @enum {string}
              */
-            kind: "price" | "level" | "number";
+            kind: "price" | "level" | "number" | "indicator";
             /** Level */
             level?: ("opening_high" | "opening_low" | "day_open" | "day_high" | "day_low" | "prev_high" | "prev_low" | "prev_close") | null;
+            /**
+             * Line
+             * @default value
+             * @enum {string}
+             */
+            line: "value" | "signal" | "hist" | "upper" | "middle" | "lower" | "plus_di" | "minus_di";
             /**
              * Minutes
              * @default 15
              */
             minutes: number;
+            /** Multiplier */
+            multiplier?: number | null;
+            /**
+             * Period
+             * @default 14
+             */
+            period: number;
+            /**
+             * Smoothing
+             * @default 9
+             */
+            smoothing: number;
             /** Value */
             value?: number | null;
         };

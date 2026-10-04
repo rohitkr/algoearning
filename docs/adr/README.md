@@ -28,3 +28,4 @@ supersedes the old one, never by editing history.
 | 0021 | [Second price provider: the platform Kite, Breeze default](0021-kite-price-provider.md)              | Accepted                     |
 | 0022 | [Rule-based strategies: one builder for intraday and overnight](0022-rule-based-strategies.md)       | Accepted                     |
 | 0023 | [Conditions, levels and signals: entering and exiting on index moves](0023-conditions-and-levels.md) | Accepted                     |
+| 0024 | [Indicators: EMA, RSI, MACD, Supertrend and others as condition values](0024-indicators.md)          | Accepted                     |

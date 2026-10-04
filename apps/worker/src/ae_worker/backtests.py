@@ -9,7 +9,7 @@ from typing import Any
 
 import structlog
 from ae_core.backtest import BacktestResult, simulate, summarize_result
-from ae_core.strategy import AnyConfig, SmcScalpConfig, migrate, parse
+from ae_core.strategy import AnyConfig, RulesConfig, SmcScalpConfig, migrate, parse, prior_days_needed
 from ae_db.models import BacktestRun, Instrument
 from ae_db.session import Database
 from ae_marketdata.history import load_history
@@ -79,7 +79,10 @@ async def replay(
     """Run the simulator. The intraday SMC scalper (no position outlives its day) is replayed a month at a time, so a
     long range of option history never has to fit in memory at once."""
     if not isinstance(config, SmcScalpConfig):
-        history = await load_history(db, config.underlying, start, end)
+        # rules reading earlier sessions (previous-day levels, indicator warm-up) need the days before the start
+        sessions = prior_days_needed(config) if isinstance(config, RulesConfig) else 0
+        first = start - timedelta(days=7 + 2 * sessions) if sessions else start  # weekends and holidays included
+        history = await load_history(db, config.underlying, first, end)
         return await asyncio.to_thread(
             simulate, config, history, start, end, multiplier=multiplier, lot_size=lot_size, strike_step=strike_step,
             slippage_pct=slippage_pct,

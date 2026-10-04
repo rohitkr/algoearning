@@ -14,6 +14,7 @@ import {
   exitOf,
   holdingOf,
   newLeg,
+  operand,
   rulesRiskOf,
 } from "@/lib/strategy";
 
@@ -377,7 +378,7 @@ export function RulesEditor({
                         {
                           ...blankCondition(),
                           op: "below",
-                          right: { kind: "level", level: "opening_high", minutes: 15 },
+                          right: operand({ kind: "level", level: "opening_high" }),
                         },
                       ],
                     }

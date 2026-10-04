@@ -569,14 +569,26 @@
                     "kind": "price",
                     "level": null,
                     "minutes": 15,
-                    "value": null
+                    "value": null,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
                   },
                   "op": "crosses_above",
                   "right": {
                     "kind": "level",
                     "level": "opening_high",
                     "minutes": 15,
-                    "value": null
+                    "value": null,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
                   },
                   "candle": 5
                 }
@@ -591,14 +603,26 @@
                     "kind": "price",
                     "level": null,
                     "minutes": 15,
-                    "value": null
+                    "value": null,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
                   },
                   "op": "crosses_below",
                   "right": {
                     "kind": "level",
                     "level": "opening_low",
                     "minutes": 15,
-                    "value": null
+                    "value": null,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
                   },
                   "candle": 5
                 }
@@ -696,14 +720,26 @@
                     "kind": "price",
                     "level": null,
                     "minutes": 15,
-                    "value": null
+                    "value": null,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
                   },
                   "op": "crosses_above",
                   "right": {
                     "kind": "level",
                     "level": "prev_high",
                     "minutes": 15,
-                    "value": null
+                    "value": null,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
                   },
                   "candle": 5
                 }
@@ -718,14 +754,26 @@
                     "kind": "price",
                     "level": null,
                     "minutes": 15,
-                    "value": null
+                    "value": null,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
                   },
                   "op": "crosses_below",
                   "right": {
                     "kind": "level",
                     "level": "prev_low",
                     "minutes": 15,
-                    "value": null
+                    "value": null,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
                   },
                   "candle": 5
                 }
@@ -779,6 +827,515 @@
             "stop_loss": {
               "unit": "percent",
               "value": 30.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null,
+            "direction": "down"
+          }
+        ],
+        "risk": {
+          "mtm_stop_loss": null,
+          "mtm_target": null,
+          "exit_all_on_leg_sl": false,
+          "combined_stop": null,
+          "lock_profit": null
+        },
+        "exit": {
+          "when": null,
+          "on_opposite_signal": true
+        }
+      }
+    },
+    {
+      "id": "ema_crossover",
+      "name": "EMA 9/21 crossover",
+      "description": "On 5-minute candles, EMA 9 crossing above EMA 21 with RSI(14) above 50 buys the ATM call; the opposite buys the put. 30% stop-loss, exit on the opposite signal, up to 3 trades a day.",
+      "config": {
+        "kind": "rules",
+        "underlying": "NIFTY",
+        "entry": {
+          "mode": "conditions",
+          "at": "09:30",
+          "until": "14:30",
+          "days": ["MON", "TUE", "WED", "THU", "FRI"],
+          "dte": null,
+          "signals": [
+            {
+              "match": "all",
+              "conditions": [
+                {
+                  "left": {
+                    "kind": "indicator",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": "ema",
+                    "period": 9,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "op": "crosses_above",
+                  "right": {
+                    "kind": "indicator",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": "ema",
+                    "period": 21,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "candle": 5
+                },
+                {
+                  "left": {
+                    "kind": "indicator",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": "rsi",
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "op": "above",
+                  "right": {
+                    "kind": "number",
+                    "level": null,
+                    "minutes": 15,
+                    "value": 50.0,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "candle": 5
+                }
+              ],
+              "direction": "up"
+            },
+            {
+              "match": "all",
+              "conditions": [
+                {
+                  "left": {
+                    "kind": "indicator",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": "ema",
+                    "period": 9,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "op": "crosses_below",
+                  "right": {
+                    "kind": "indicator",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": "ema",
+                    "period": 21,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "candle": 5
+                },
+                {
+                  "left": {
+                    "kind": "indicator",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": "rsi",
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "op": "below",
+                  "right": {
+                    "kind": "number",
+                    "level": null,
+                    "minutes": 15,
+                    "value": 50.0,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "candle": 5
+                }
+              ],
+              "direction": "down"
+            }
+          ],
+          "max_per_day": 3
+        },
+        "holding": {
+          "mode": "intraday",
+          "exit": "15:15",
+          "days": 1
+        },
+        "legs": [
+          {
+            "id": "L1",
+            "action": "BUY",
+            "option_type": "CE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null,
+              "points": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 30.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null,
+            "direction": "up"
+          },
+          {
+            "id": "L2",
+            "action": "BUY",
+            "option_type": "PE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null,
+              "points": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 30.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null,
+            "direction": "down"
+          }
+        ],
+        "risk": {
+          "mtm_stop_loss": null,
+          "mtm_target": null,
+          "exit_all_on_leg_sl": false,
+          "combined_stop": null,
+          "lock_profit": null
+        },
+        "exit": {
+          "when": null,
+          "on_opposite_signal": true
+        }
+      }
+    },
+    {
+      "id": "supertrend_trend",
+      "name": "Supertrend (10, 3)",
+      "description": "On 15-minute candles, a close crossing above Supertrend buys the ATM call, below it the put; 35% stop-loss, exit on the opposite signal, up to 2 trades a day.",
+      "config": {
+        "kind": "rules",
+        "underlying": "NIFTY",
+        "entry": {
+          "mode": "conditions",
+          "at": "09:30",
+          "until": "14:30",
+          "days": ["MON", "TUE", "WED", "THU", "FRI"],
+          "dte": null,
+          "signals": [
+            {
+              "match": "all",
+              "conditions": [
+                {
+                  "left": {
+                    "kind": "price",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "op": "crosses_above",
+                  "right": {
+                    "kind": "indicator",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": "supertrend",
+                    "period": 10,
+                    "line": "value",
+                    "multiplier": 3.0,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "candle": 15
+                }
+              ],
+              "direction": "up"
+            },
+            {
+              "match": "all",
+              "conditions": [
+                {
+                  "left": {
+                    "kind": "price",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "op": "crosses_below",
+                  "right": {
+                    "kind": "indicator",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": "supertrend",
+                    "period": 10,
+                    "line": "value",
+                    "multiplier": 3.0,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "candle": 15
+                }
+              ],
+              "direction": "down"
+            }
+          ],
+          "max_per_day": 2
+        },
+        "holding": {
+          "mode": "intraday",
+          "exit": "15:15",
+          "days": 1
+        },
+        "legs": [
+          {
+            "id": "L1",
+            "action": "BUY",
+            "option_type": "CE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null,
+              "points": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 35.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null,
+            "direction": "up"
+          },
+          {
+            "id": "L2",
+            "action": "BUY",
+            "option_type": "PE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null,
+              "points": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 35.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null,
+            "direction": "down"
+          }
+        ],
+        "risk": {
+          "mtm_stop_loss": null,
+          "mtm_target": null,
+          "exit_all_on_leg_sl": false,
+          "combined_stop": null,
+          "lock_profit": null
+        },
+        "exit": {
+          "when": null,
+          "on_opposite_signal": true
+        }
+      }
+    },
+    {
+      "id": "rsi_reversal",
+      "name": "RSI reversal",
+      "description": "On 5-minute candles, RSI(14) crossing back above 30 buys the ATM call, back below 70 the put; 25% stop-loss, exit on the opposite signal.",
+      "config": {
+        "kind": "rules",
+        "underlying": "NIFTY",
+        "entry": {
+          "mode": "conditions",
+          "at": "09:30",
+          "until": "14:30",
+          "days": ["MON", "TUE", "WED", "THU", "FRI"],
+          "dte": null,
+          "signals": [
+            {
+              "match": "all",
+              "conditions": [
+                {
+                  "left": {
+                    "kind": "indicator",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": "rsi",
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "op": "crosses_above",
+                  "right": {
+                    "kind": "number",
+                    "level": null,
+                    "minutes": 15,
+                    "value": 30.0,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "candle": 5
+                }
+              ],
+              "direction": "up"
+            },
+            {
+              "match": "all",
+              "conditions": [
+                {
+                  "left": {
+                    "kind": "indicator",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null,
+                    "indicator": "rsi",
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "op": "crosses_below",
+                  "right": {
+                    "kind": "number",
+                    "level": null,
+                    "minutes": 15,
+                    "value": 70.0,
+                    "indicator": null,
+                    "period": 14,
+                    "line": "value",
+                    "multiplier": null,
+                    "fast": 12,
+                    "smoothing": 9
+                  },
+                  "candle": 5
+                }
+              ],
+              "direction": "down"
+            }
+          ],
+          "max_per_day": 3
+        },
+        "holding": {
+          "mode": "intraday",
+          "exit": "15:15",
+          "days": 1
+        },
+        "legs": [
+          {
+            "id": "L1",
+            "action": "BUY",
+            "option_type": "CE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null,
+              "points": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 25.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null,
+            "direction": "up"
+          },
+          {
+            "id": "L2",
+            "action": "BUY",
+            "option_type": "PE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null,
+              "points": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 25.0,
               "basis": "premium"
             },
             "target": null,

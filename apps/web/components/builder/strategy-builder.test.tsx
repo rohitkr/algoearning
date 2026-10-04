@@ -181,6 +181,32 @@ describe("StrategyBuilder", () => {
     expect(screen.queryByRole("heading", { name: "Signals" })).toBeNull();
   });
 
+  it("builds an indicator strategy and saves its settings", async () => {
+    render(<StrategyBuilder catalog={catalog} />);
+    fireEvent.click(screen.getByRole("radio", { name: /EMA 9\/21 crossover/ }));
+    expect(
+      screen.getByText(/EMA\(9\) crosses above EMA\(21\) \(5-minute candles\) and RSI\(14\) is above 50/),
+    ).toBeTruthy();
+
+    // the first condition's right side: EMA 21 -> Supertrend (10, 3)
+    fireEvent.change(screen.getAllByLabelText("Indicator")[1]!, { target: { value: "supertrend" } });
+    expect(screen.getAllByLabelText("ATR multiplier")).toHaveLength(1);
+    fireEvent.change(screen.getAllByLabelText("Period")[1]!, { target: { value: "7" } });
+    expect(screen.getByText(/EMA\(9\) crosses above Supertrend \(7, 3\)/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+    await flush();
+    const saved = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies")!.body as {
+      config: { entry: { signals: { conditions: { right: object }[] }[] } };
+    };
+    expect(saved.config.entry.signals[0]!.conditions[0]!.right).toMatchObject({
+      kind: "indicator",
+      indicator: "supertrend",
+      period: 7,
+      multiplier: 3,
+    });
+  });
+
   it("opens an old time-based strategy as rules", () => {
     const old = {
       kind: "time_based" as const,

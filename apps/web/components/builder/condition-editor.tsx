@@ -4,7 +4,16 @@ import type { Condition, ConditionGroup, ConditionOperand } from "@algoearning/a
 import { Button } from "@algoearning/ui";
 import { Plus, Trash2 } from "lucide-react";
 
-import { LEVEL_LABEL, OP_LABEL } from "@/lib/strategy";
+import {
+  INDICATOR_LABEL,
+  INDICATOR_LINES,
+  type IndicatorName,
+  LEVEL_LABEL,
+  LINE_LABEL,
+  OP_LABEL,
+  indicatorOperand,
+  operand,
+} from "@/lib/strategy";
 
 import { NumberField, SelectField } from "./fields";
 
@@ -12,10 +21,88 @@ type Errs = Record<string, string>;
 type Level = NonNullable<ConditionOperand["level"]>;
 
 const CANDLES = [1, 3, 5, 15, 30, 60] as const;
-const PRICE: ConditionOperand = { kind: "price", minutes: 15 };
-const LEVEL: ConditionOperand = { kind: "level", level: "opening_high", minutes: 15 };
+const PRICE: ConditionOperand = operand({ kind: "price" });
+const LEVEL: ConditionOperand = operand({ kind: "level", level: "opening_high" });
 
-/** What a value is: the candle's price, a ready-made level, or a number. */
+/** An indicator's settings: which one, its period, which of its lines, and its extra parameters. */
+function IndicatorFields({
+  value,
+  onChange,
+  errs,
+  path,
+}: {
+  value: ConditionOperand;
+  onChange: (o: ConditionOperand) => void;
+  errs: Errs;
+  path: string;
+}) {
+  const name = (value.indicator ?? "ema") as IndicatorName;
+  const lines = INDICATOR_LINES[name];
+  return (
+    <>
+      <SelectField
+        label="Indicator"
+        value={name}
+        error={errs[`${path}.indicator`]}
+        options={(Object.keys(INDICATOR_LABEL) as IndicatorName[]).map((n) => ({
+          value: n,
+          label: INDICATOR_LABEL[n],
+        }))}
+        onChange={(n) => onChange(indicatorOperand(n))}
+      />
+      <NumberField
+        label={name === "macd" ? "Slow period" : "Period"}
+        value={value.period}
+        min={1}
+        max={200}
+        error={errs[`${path}.period`]}
+        onChange={(v) => onChange({ ...value, period: v ?? Number.NaN })}
+      />
+      {lines && (
+        <SelectField
+          label="Output"
+          value={value.line}
+          error={errs[`${path}.line`]}
+          options={lines.map((l) => ({ value: l, label: LINE_LABEL[l] }))}
+          onChange={(line) => onChange({ ...value, line })}
+        />
+      )}
+      {(name === "supertrend" || name === "bollinger") && (
+        <NumberField
+          label={name === "supertrend" ? "ATR multiplier" : "Band width (σ)"}
+          value={value.multiplier}
+          step={0.5}
+          min={0}
+          max={10}
+          error={errs[`${path}.multiplier`]}
+          onChange={(v) => onChange({ ...value, multiplier: v })}
+        />
+      )}
+      {name === "macd" && (
+        <>
+          <NumberField
+            label="Fast period"
+            value={value.fast}
+            min={1}
+            max={100}
+            error={errs[`${path}.fast`]}
+            onChange={(v) => onChange({ ...value, fast: v ?? Number.NaN })}
+          />
+          <NumberField
+            label="Signal period"
+            value={value.smoothing}
+            min={1}
+            max={100}
+            error={errs[`${path}.smoothing`]}
+            onChange={(v) => onChange({ ...value, smoothing: v ?? Number.NaN })}
+          />
+        </>
+      )}
+    </>
+  );
+}
+
+/** What a value is: the candle's price, a ready-made level, a number, or an indicator. */
 function OperandFields({
   label,
   value,
@@ -42,17 +129,25 @@ function OperandFields({
           ...(allowPrice ? [{ value: "price", label: "Price (candle close)" }] : []),
           ...(Object.keys(LEVEL_LABEL) as Level[]).map((l) => ({ value: l, label: LEVEL_LABEL[l] })),
           { value: "number", label: "A number" },
+          { value: "indicator", label: "An indicator" },
         ]}
         onChange={(v) =>
           onChange(
             v === "price"
               ? PRICE
               : v === "number"
-                ? { kind: "number", minutes: 15, value: value.value ?? 25000 }
-                : { ...LEVEL, level: v as Level, minutes: value.minutes ?? 15 },
+                ? operand({ kind: "number", value: value.value ?? 25000 })
+                : v === "indicator"
+                  ? value.kind === "indicator"
+                    ? value
+                    : indicatorOperand("ema")
+                  : { ...LEVEL, level: v as Level, minutes: value.minutes ?? 15 },
           )
         }
       />
+      {value.kind === "indicator" && (
+        <IndicatorFields value={value} onChange={onChange} errs={errs} path={path} />
+      )}
       {value.kind === "level" && value.level?.startsWith("opening_") && (
         <NumberField
           label="First … minutes"

@@ -3318,14 +3318,43 @@
       },
       "Operand": {
         "additionalProperties": false,
-        "description": "A value on the index: the close of the candle (price), a ready-made level, or a plain number.\nLevels: the high/low of the first `minutes` of the session (opening_*), today's open, the day's high/low so far\n(before the candle), and the previous session's high/low/close.",
+        "description": "A value on the index: the close of the candle (price), a ready-made level, a plain number, or an indicator.\nLevels: the high/low of the first `minutes` of the session (opening_*), today's open, the day's high/low so far\n(before the candle), and the previous session's high/low/close. Indicators (ADR 0024) are computed on the\ncondition's candles, earlier sessions included so they are warmed up at the open: `period`, `line` (macd: value /\nsignal / hist; bollinger: middle / upper / lower; adx: value / plus_di / minus_di), `multiplier` (bollinger's band\nwidth, default 2; supertrend's ATR multiple, default 3), and for macd `fast` / `period` (slow) / `smoothing`.",
         "properties": {
+          "fast": {
+            "default": 12,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Fast",
+            "type": "integer"
+          },
+          "indicator": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ema",
+                  "sma",
+                  "rsi",
+                  "macd",
+                  "supertrend",
+                  "bollinger",
+                  "atr",
+                  "adx"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indicator"
+          },
           "kind": {
             "default": "price",
             "enum": [
               "price",
               "level",
-              "number"
+              "number",
+              "indicator"
             ],
             "title": "Kind",
             "type": "string"
@@ -3351,11 +3380,53 @@
             ],
             "title": "Level"
           },
+          "line": {
+            "default": "value",
+            "enum": [
+              "value",
+              "signal",
+              "hist",
+              "upper",
+              "middle",
+              "lower",
+              "plus_di",
+              "minus_di"
+            ],
+            "title": "Line",
+            "type": "string"
+          },
           "minutes": {
             "default": 15,
             "maximum": 180.0,
             "minimum": 1.0,
             "title": "Minutes",
+            "type": "integer"
+          },
+          "multiplier": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 10.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multiplier"
+          },
+          "period": {
+            "default": 14,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Period",
+            "type": "integer"
+          },
+          "smoothing": {
+            "default": 9,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Smoothing",
             "type": "integer"
           },
           "value": {

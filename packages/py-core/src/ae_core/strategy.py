@@ -160,15 +160,44 @@ Level = Literal["opening_high", "opening_low", "day_open", "day_high", "day_low"
 Candle = Literal[1, 3, 5, 15, 30, 60]
 
 
-class Operand(_Model):
-    """A value on the index: the close of the candle (price), a ready-made level, or a plain number.
-    Levels: the high/low of the first `minutes` of the session (opening_*), today's open, the day's high/low so far
-    (before the candle), and the previous session's high/low/close."""
+Indicator = Literal["ema", "sma", "rsi", "macd", "supertrend", "bollinger", "atr", "adx"]
+IndicatorLine = Literal["value", "signal", "hist", "upper", "middle", "lower", "plus_di", "minus_di"]
+# the outputs each indicator has (`line`); the first is its default
+INDICATOR_LINES: dict[str, tuple[str, ...]] = {
+    "macd": ("value", "signal", "hist"),
+    "bollinger": ("middle", "upper", "lower"),
+    "adx": ("value", "plus_di", "minus_di"),
+}
+INDICATOR_PERIOD = {
+    "ema": 20,
+    "sma": 20,
+    "rsi": 14,
+    "macd": 26,
+    "supertrend": 10,
+    "bollinger": 20,
+    "atr": 14,
+    "adx": 14,
+}
 
-    kind: Literal["price", "level", "number"] = "price"
+
+class Operand(_Model):
+    """A value on the index: the close of the candle (price), a ready-made level, a plain number, or an indicator.
+    Levels: the high/low of the first `minutes` of the session (opening_*), today's open, the day's high/low so far
+    (before the candle), and the previous session's high/low/close. Indicators (ADR 0024) are computed on the
+    condition's candles, earlier sessions included so they are warmed up at the open: `period`, `line` (macd: value /
+    signal / hist; bollinger: middle / upper / lower; adx: value / plus_di / minus_di), `multiplier` (bollinger's band
+    width, default 2; supertrend's ATR multiple, default 3), and for macd `fast` / `period` (slow) / `smoothing`."""
+
+    kind: Literal["price", "level", "number", "indicator"] = "price"
     level: Level | None = None
     minutes: int = Field(default=15, ge=1, le=180)  # opening range length
     value: float | None = Field(default=None, ge=-1_000_000, le=1_000_000)
+    indicator: Indicator | None = None
+    period: int = Field(default=14, ge=1, le=200)
+    line: IndicatorLine = "value"
+    multiplier: float | None = Field(default=None, gt=0, le=10)
+    fast: int = Field(default=12, ge=1, le=100)  # macd
+    smoothing: int = Field(default=9, ge=1, le=100)  # macd signal line
 
 
 class Condition(_Model):
@@ -276,6 +305,22 @@ def uses_previous_day(c: RulesConfig) -> bool:
         for k in rules_conditions(c)
         for o in (k.left, k.right)
     )
+
+
+SESSION_MINUTES = 375  # 09:15 - 15:30
+MAX_WARMUP_DAYS = 10
+
+
+def prior_days_needed(c: RulesConfig) -> int:
+    """Earlier sessions the conditions read: one for the previous day's levels; for indicators about three times the
+    longest period in candles (smoothed averages need that much to settle), in sessions, at most 10."""
+    need = 1 if uses_previous_day(c) else 0
+    for k in rules_conditions(c):
+        for o in (k.left, k.right):
+            if o.kind == "indicator":
+                candles = 3 * o.period + (o.smoothing if o.indicator == "macd" else 0) + 5
+                need = max(need, -(-candles * k.candle // SESSION_MINUTES))
+    return min(need, MAX_WARMUP_DAYS)
 
 
 def rules_from_time_based(c: TimeBasedConfig) -> RulesConfig:
@@ -589,7 +634,21 @@ def _check_operand(o: Operand, loc: Loc) -> list[Issue]:
         return [Issue((*loc, "level"), "pick a level")]
     if o.kind == "number" and o.value is None:
         return [Issue((*loc, "value"), "enter a number")]
-    return []
+    if o.kind != "indicator":
+        return []
+    if o.indicator is None:
+        return [Issue((*loc, "indicator"), "pick an indicator")]
+    issues: list[Issue] = []
+    lines = INDICATOR_LINES.get(o.indicator, ("value",))
+    if o.line not in lines:
+        issues.append(Issue((*loc, "line"), f"{o.indicator} has: {', '.join(lines)}"))
+    if o.multiplier is not None and o.indicator not in ("bollinger", "supertrend"):
+        issues.append(Issue((*loc, "multiplier"), "only bollinger and supertrend use a multiplier"))
+    if o.indicator == "macd" and o.fast >= o.period:
+        issues.append(Issue((*loc, "fast"), f"must be shorter than the slow period ({o.period})"))
+    if o.indicator in ("rsi", "atr", "adx", "supertrend") and o.period < 2:
+        issues.append(Issue((*loc, "period"), "must be at least 2"))
+    return issues
 
 
 def _check_group(g: ConditionGroup, loc: Loc) -> list[Issue]:
@@ -598,7 +657,7 @@ def _check_group(g: ConditionGroup, loc: Loc) -> list[Issue]:
         cl: Loc = (*loc, "conditions", j)
         issues += _check_operand(cond.left, (*cl, "left")) + _check_operand(cond.right, (*cl, "right"))
         if cond.left.kind == "number" and cond.right.kind == "number":
-            issues.append(Issue(cl, "compare the price or a level with something"))
+            issues.append(Issue(cl, "compare the price, a level or an indicator with something"))
     return issues
 
 
@@ -760,6 +819,34 @@ def _breakout(high: Level, low: Level) -> RulesConfig:
     )
 
 
+def _ind(name: Indicator, period: int, **kw: Any) -> Operand:
+    return Operand(kind="indicator", indicator=name, period=period, **kw)
+
+
+def _trend(
+    candle: Candle, up: list[Condition], down: list[Condition], stop: float, max_per_day: int = 3
+) -> RulesConfig:
+    """Buy the ATM call on the up signal, the put on the down one; exit on the opposite signal (indicator presets)."""
+    return RulesConfig(
+        entry=RulesEntry(
+            mode="conditions",
+            at="09:30",
+            until="14:30",
+            signals=[Signal(direction="up", conditions=up), Signal(direction="down", conditions=down)],
+            max_per_day=max_per_day,
+        ),
+        legs=[
+            _leg("L1", "BUY", "CE", stop_loss=Threshold(value=stop), direction="up"),
+            _leg("L2", "BUY", "PE", stop_loss=Threshold(value=stop), direction="down"),
+        ],
+        exit=RulesExit(on_opposite_signal=True),
+    )
+
+
+_PRICE = Operand(kind="price")
+_ST = _ind("supertrend", 10, multiplier=3)
+
+
 PRESETS: tuple[Preset, ...] = (
     Preset(
         "blank",
@@ -837,6 +924,51 @@ PRESETS: tuple[Preset, ...] = (
         "From 09:30, buy an ATM call when a 5-minute candle closes above yesterday's high, a put below its low; "
         "30% stop-loss, exit on the opposite signal or at 15:15.",
         _breakout("prev_high", "prev_low"),
+    ),
+    Preset(
+        "ema_crossover",
+        "EMA 9/21 crossover",
+        "On 5-minute candles, EMA 9 crossing above EMA 21 with RSI(14) above 50 buys the ATM call; the opposite "
+        "buys the put. 30% stop-loss, exit on the opposite signal, up to 3 trades a day.",
+        _trend(
+            5,
+            up=[
+                Condition(candle=5, left=_ind("ema", 9), op="crosses_above", right=_ind("ema", 21)),
+                Condition(candle=5, left=_ind("rsi", 14), op="above", right=Operand(kind="number", value=50)),
+            ],
+            down=[
+                Condition(candle=5, left=_ind("ema", 9), op="crosses_below", right=_ind("ema", 21)),
+                Condition(candle=5, left=_ind("rsi", 14), op="below", right=Operand(kind="number", value=50)),
+            ],
+            stop=30,
+        ),
+    ),
+    Preset(
+        "supertrend_trend",
+        "Supertrend (10, 3)",
+        "On 15-minute candles, a close crossing above Supertrend buys the ATM call, below it the put; 35% "
+        "stop-loss, exit on the opposite signal, up to 2 trades a day.",
+        _trend(
+            15,
+            up=[Condition(candle=15, left=_PRICE, op="crosses_above", right=_ST)],
+            down=[Condition(candle=15, left=_PRICE, op="crosses_below", right=_ST)],
+            stop=35,
+            max_per_day=2,
+        ),
+    ),
+    Preset(
+        "rsi_reversal",
+        "RSI reversal",
+        "On 5-minute candles, RSI(14) crossing back above 30 buys the ATM call, back below 70 the put; 25% "
+        "stop-loss, exit on the opposite signal.",
+        _trend(
+            5,
+            up=[Condition(candle=5, left=_ind("rsi", 14), op="crosses_above", right=Operand(kind="number", value=30))],
+            down=[
+                Condition(candle=5, left=_ind("rsi", 14), op="crosses_below", right=Operand(kind="number", value=70))
+            ],
+            stop=25,
+        ),
     ),
     Preset(
         "range_breakout",

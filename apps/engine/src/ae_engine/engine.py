@@ -143,7 +143,7 @@ class Engine:
         self.recover: set[uuid.UUID] = set()  # live runs whose in-flight orders must be looked up after a restart
         self.reconciled: dict[uuid.UUID, datetime] = {}
         self.mismatch: dict[tuple[uuid.UUID, str], int] = defaultdict(int)
-        self.prior: dict[tuple[str, date], list[Any]] = {}  # earlier sessions' index bars, loaded once a day
+        self.prior: dict[tuple[str, date, int], list[Any]] = {}  # earlier sessions' index bars, loaded once a day
 
     # -- one pass --------------------------------------------------------------------------------------------------
     async def tick(self) -> int:
@@ -284,7 +284,7 @@ class Engine:
     async def _prior_bars(self, underlying: str, today: date, sessions: int) -> list[Any]:
         """The index's 1-minute bars of the last `sessions` trading days before today: from the history store
         (archived every evening), else from the feed's bars still in Redis. Loaded once a day."""
-        key = (underlying, today)
+        key = (underlying, today, sessions)  # runs may need different numbers of sessions
         if key in self.prior:
             return self.prior[key]
         lo = datetime.combine(today - timedelta(days=7 + 2 * sessions), datetime.min.time(), tzinfo=IST)
