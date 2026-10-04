@@ -69,7 +69,9 @@
           "at": "09:20",
           "until": null,
           "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null
+          "dte": null,
+          "signals": [],
+          "max_per_day": 1
         },
         "holding": {
           "mode": "intraday",
@@ -93,7 +95,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           }
         ],
         "risk": {
@@ -102,6 +105,10 @@
           "exit_all_on_leg_sl": false,
           "combined_stop": null,
           "lock_profit": null
+        },
+        "exit": {
+          "when": null,
+          "on_opposite_signal": false
         }
       }
     },
@@ -117,7 +124,9 @@
           "at": "09:20",
           "until": null,
           "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null
+          "dte": null,
+          "signals": [],
+          "max_per_day": 1
         },
         "holding": {
           "mode": "intraday",
@@ -145,7 +154,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           },
           {
             "id": "L2",
@@ -167,7 +177,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           }
         ],
         "risk": {
@@ -176,6 +187,10 @@
           "exit_all_on_leg_sl": false,
           "combined_stop": null,
           "lock_profit": null
+        },
+        "exit": {
+          "when": null,
+          "on_opposite_signal": false
         }
       }
     },
@@ -191,7 +206,9 @@
           "at": "09:20",
           "until": null,
           "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null
+          "dte": null,
+          "signals": [],
+          "max_per_day": 1
         },
         "holding": {
           "mode": "intraday",
@@ -219,7 +236,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           },
           {
             "id": "L2",
@@ -241,7 +259,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           }
         ],
         "risk": {
@@ -250,6 +269,10 @@
           "exit_all_on_leg_sl": false,
           "combined_stop": null,
           "lock_profit": null
+        },
+        "exit": {
+          "when": null,
+          "on_opposite_signal": false
         }
       }
     },
@@ -265,7 +288,9 @@
           "at": "09:20",
           "until": null,
           "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null
+          "dte": null,
+          "signals": [],
+          "max_per_day": 1
         },
         "holding": {
           "mode": "intraday",
@@ -289,7 +314,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           },
           {
             "id": "L2",
@@ -307,7 +333,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           },
           {
             "id": "L3",
@@ -325,7 +352,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           },
           {
             "id": "L4",
@@ -343,7 +371,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           }
         ],
         "risk": {
@@ -352,6 +381,10 @@
           "exit_all_on_leg_sl": false,
           "combined_stop": null,
           "lock_profit": null
+        },
+        "exit": {
+          "when": null,
+          "on_opposite_signal": false
         }
       }
     },
@@ -367,7 +400,9 @@
           "at": "15:00",
           "until": "15:20",
           "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null
+          "dte": null,
+          "signals": [],
+          "max_per_day": 1
         },
         "holding": {
           "mode": "next_day",
@@ -395,7 +430,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           },
           {
             "id": "L2",
@@ -417,7 +453,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           }
         ],
         "risk": {
@@ -426,6 +463,10 @@
           "exit_all_on_leg_sl": false,
           "combined_stop": null,
           "lock_profit": null
+        },
+        "exit": {
+          "when": null,
+          "on_opposite_signal": false
         }
       }
     },
@@ -441,7 +482,9 @@
           "at": "09:30",
           "until": null,
           "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": [3]
+          "dte": [3],
+          "signals": [],
+          "max_per_day": 1
         },
         "holding": {
           "mode": "expiry",
@@ -465,7 +508,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           },
           {
             "id": "L2",
@@ -483,7 +527,8 @@
             "target": null,
             "trailing": null,
             "reentry_on_sl": null,
-            "reentry_on_target": null
+            "reentry_on_target": null,
+            "direction": "always"
           }
         ],
         "risk": {
@@ -495,6 +540,264 @@
             "value": 40.0
           },
           "lock_profit": null
+        },
+        "exit": {
+          "when": null,
+          "on_opposite_signal": false
+        }
+      }
+    },
+    {
+      "id": "opening_range_breakout",
+      "name": "Opening range breakout",
+      "description": "From 09:30, buy an ATM call when a 5-minute candle closes above the first 15 minutes' high, a put below its low; 30% stop-loss, exit on the opposite signal or at 15:15.",
+      "config": {
+        "kind": "rules",
+        "underlying": "NIFTY",
+        "entry": {
+          "mode": "conditions",
+          "at": "09:30",
+          "until": "14:30",
+          "days": ["MON", "TUE", "WED", "THU", "FRI"],
+          "dte": null,
+          "signals": [
+            {
+              "match": "all",
+              "conditions": [
+                {
+                  "left": {
+                    "kind": "price",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null
+                  },
+                  "op": "crosses_above",
+                  "right": {
+                    "kind": "level",
+                    "level": "opening_high",
+                    "minutes": 15,
+                    "value": null
+                  },
+                  "candle": 5
+                }
+              ],
+              "direction": "up"
+            },
+            {
+              "match": "all",
+              "conditions": [
+                {
+                  "left": {
+                    "kind": "price",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null
+                  },
+                  "op": "crosses_below",
+                  "right": {
+                    "kind": "level",
+                    "level": "opening_low",
+                    "minutes": 15,
+                    "value": null
+                  },
+                  "candle": 5
+                }
+              ],
+              "direction": "down"
+            }
+          ],
+          "max_per_day": 2
+        },
+        "holding": {
+          "mode": "intraday",
+          "exit": "15:15",
+          "days": 1
+        },
+        "legs": [
+          {
+            "id": "L1",
+            "action": "BUY",
+            "option_type": "CE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null,
+              "points": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 30.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null,
+            "direction": "up"
+          },
+          {
+            "id": "L2",
+            "action": "BUY",
+            "option_type": "PE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null,
+              "points": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 30.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null,
+            "direction": "down"
+          }
+        ],
+        "risk": {
+          "mtm_stop_loss": null,
+          "mtm_target": null,
+          "exit_all_on_leg_sl": false,
+          "combined_stop": null,
+          "lock_profit": null
+        },
+        "exit": {
+          "when": null,
+          "on_opposite_signal": true
+        }
+      }
+    },
+    {
+      "id": "prev_day_breakout",
+      "name": "Previous day high/low breakout",
+      "description": "From 09:30, buy an ATM call when a 5-minute candle closes above yesterday's high, a put below its low; 30% stop-loss, exit on the opposite signal or at 15:15.",
+      "config": {
+        "kind": "rules",
+        "underlying": "NIFTY",
+        "entry": {
+          "mode": "conditions",
+          "at": "09:30",
+          "until": "14:30",
+          "days": ["MON", "TUE", "WED", "THU", "FRI"],
+          "dte": null,
+          "signals": [
+            {
+              "match": "all",
+              "conditions": [
+                {
+                  "left": {
+                    "kind": "price",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null
+                  },
+                  "op": "crosses_above",
+                  "right": {
+                    "kind": "level",
+                    "level": "prev_high",
+                    "minutes": 15,
+                    "value": null
+                  },
+                  "candle": 5
+                }
+              ],
+              "direction": "up"
+            },
+            {
+              "match": "all",
+              "conditions": [
+                {
+                  "left": {
+                    "kind": "price",
+                    "level": null,
+                    "minutes": 15,
+                    "value": null
+                  },
+                  "op": "crosses_below",
+                  "right": {
+                    "kind": "level",
+                    "level": "prev_low",
+                    "minutes": 15,
+                    "value": null
+                  },
+                  "candle": 5
+                }
+              ],
+              "direction": "down"
+            }
+          ],
+          "max_per_day": 2
+        },
+        "holding": {
+          "mode": "intraday",
+          "exit": "15:15",
+          "days": 1
+        },
+        "legs": [
+          {
+            "id": "L1",
+            "action": "BUY",
+            "option_type": "CE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null,
+              "points": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 30.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null,
+            "direction": "up"
+          },
+          {
+            "id": "L2",
+            "action": "BUY",
+            "option_type": "PE",
+            "lots": 1,
+            "expiry": "current_week",
+            "strike": {
+              "mode": "atm",
+              "offset": 0,
+              "premium": null,
+              "points": null
+            },
+            "stop_loss": {
+              "unit": "percent",
+              "value": 30.0,
+              "basis": "premium"
+            },
+            "target": null,
+            "trailing": null,
+            "reentry_on_sl": null,
+            "reentry_on_target": null,
+            "direction": "down"
+          }
+        ],
+        "risk": {
+          "mtm_stop_loss": null,
+          "mtm_target": null,
+          "exit_all_on_leg_sl": false,
+          "combined_stop": null,
+          "lock_profit": null
+        },
+        "exit": {
+          "when": null,
+          "on_opposite_signal": true
         }
       }
     },

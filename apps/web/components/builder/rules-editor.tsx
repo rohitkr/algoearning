@@ -5,8 +5,19 @@ import { Button, Card, cn } from "@algoearning/ui";
 import { Plus } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { HOLD_LABEL, WEEKDAYS, type Weekday, entryOf, holdingOf, newLeg, rulesRiskOf } from "@/lib/strategy";
+import {
+  DIRECTION_LABEL,
+  HOLD_LABEL,
+  WEEKDAYS,
+  type Weekday,
+  entryOf,
+  exitOf,
+  holdingOf,
+  newLeg,
+  rulesRiskOf,
+} from "@/lib/strategy";
 
+import { ConditionGroupEditor, blankCondition } from "./condition-editor";
 import { Check, NumberField, SelectField, TimeField } from "./fields";
 import { LegEditor } from "./leg-editor";
 
@@ -84,10 +95,15 @@ export function RulesEditor({
   const e = entryOf(config);
   const h = holdingOf(config);
   const r = rulesRiskOf(config);
+  const ex = exitOf(config);
+  const signals = e.signals ?? [];
+  const byConditions = e.mode === "conditions";
   const days = (e.days ?? [...WEEKDAYS]) as Weekday[];
   const setEntry = (p: Partial<typeof e>) => onChange({ ...config, entry: { ...e, ...p } });
   const setHolding = (p: Partial<typeof h>) => onChange({ ...config, holding: { ...h, ...p } });
   const setRisk = (p: Partial<typeof r>) => onChange({ ...config, risk: { ...r, ...p } });
+  const setExit = (p: Partial<typeof ex>) => onChange({ ...config, exit: { ...ex, ...p } });
+  const setSignals = (next: typeof signals) => setEntry({ signals: next });
   const legs = config.legs;
   const max = catalog.limits.max_legs;
 
@@ -101,8 +117,30 @@ export function RulesEditor({
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <SelectField
+            label="Enter"
+            value={e.mode}
+            error={errs["entry.mode"]}
+            options={[
+              { value: "time", label: "At a time" },
+              { value: "conditions", label: "When conditions are met" },
+            ]}
+            onChange={(mode) =>
+              setEntry(
+                mode === "conditions"
+                  ? {
+                      mode,
+                      at: e.at < "09:30" ? "09:30" : e.at,
+                      signals: signals.length
+                        ? signals
+                        : [{ direction: "up", match: "all", conditions: [blankCondition()] }],
+                    }
+                  : { mode, signals: [] },
+              )
+            }
+          />
           <TimeField
-            label="Entry time"
+            label={byConditions ? "Earliest entry" : "Entry time"}
             value={e.at}
             {...hours}
             error={errs["entry.at"]}
@@ -157,6 +195,17 @@ export function RulesEditor({
             />
           )}
         </div>
+        {byConditions && (
+          <NumberField
+            label="Trades a day (at most)"
+            value={e.max_per_day}
+            min={1}
+            max={10}
+            className="sm:w-48"
+            error={errs["entry.max_per_day"]}
+            onChange={(v) => setEntry({ max_per_day: v ?? Number.NaN })}
+          />
+        )}
         <Chips
           id="days-label"
           label="Trade on"
@@ -192,6 +241,71 @@ export function RulesEditor({
         )}
       </Card>
 
+      {byConditions && (
+        <section className="flex flex-col gap-3" aria-label="Signals">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold">Signals</h2>
+              <p className="text-sm text-muted">
+                A trade starts on the first signal that is true. Conditions are checked when a candle
+                finishes.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={signals.length >= 4}
+              onClick={() =>
+                setSignals([
+                  ...signals,
+                  {
+                    direction: signals.some((x) => x.direction === "up") ? "down" : "up",
+                    match: "all",
+                    conditions: [blankCondition()],
+                  },
+                ])
+              }
+            >
+              <Plus className="size-4" aria-hidden /> Add signal
+            </Button>
+          </div>
+          {errs["entry.signals"] && <p className="text-sm text-loss">{errs["entry.signals"]}</p>}
+          {signals.map((sg, i) => (
+            <Card key={i} className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <SelectField
+                  label={`Signal ${i + 1} says`}
+                  className="sm:w-48"
+                  value={sg.direction}
+                  error={errs[`entry.signals.${i}.direction`]}
+                  options={(Object.keys(DIRECTION_LABEL) as (keyof typeof DIRECTION_LABEL)[]).map((d) => ({
+                    value: d,
+                    label: DIRECTION_LABEL[d],
+                  }))}
+                  onChange={(direction) =>
+                    setSignals(signals.map((x, j) => (j === i ? { ...x, direction } : x)))
+                  }
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSignals(signals.filter((_, j) => j !== i))}
+                  aria-label={`Remove signal ${i + 1}`}
+                >
+                  Remove signal
+                </Button>
+              </div>
+              <ConditionGroupEditor
+                group={sg}
+                errs={errs}
+                path={`entry.signals.${i}`}
+                onChange={(g) => setSignals(signals.map((x, j) => (j === i ? { ...x, ...g } : x)))}
+              />
+            </Card>
+          ))}
+        </section>
+      )}
+
       <section className="flex flex-col gap-3" aria-label="Legs">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">
@@ -222,6 +336,7 @@ export function RulesEditor({
             errs={errs}
             warns={warns}
             canRemove={legs.length > 1}
+            directional={byConditions}
             onChange={(l) => onChange({ ...config, legs: legs.map((x, j) => (j === i ? l : x)) })}
             onDuplicate={
               legs.length < max
@@ -235,6 +350,51 @@ export function RulesEditor({
           />
         ))}
       </section>
+
+      {byConditions && (
+        <Card className="flex flex-col gap-4">
+          <div>
+            <h2 className="font-semibold">Exit on conditions</h2>
+            <p className="text-sm text-muted">
+              Close the whole trade when these hold, besides stops and the exit time.
+            </p>
+          </div>
+          <Check
+            label="Exit when a signal comes in the other direction"
+            checked={ex.on_opposite_signal}
+            error={errs["exit.on_opposite_signal"]}
+            onChange={(on) => setExit({ on_opposite_signal: on })}
+          />
+          <Check
+            label="Exit when a condition is true"
+            checked={!!ex.when}
+            onChange={(on) =>
+              setExit({
+                when: on
+                  ? {
+                      match: "all",
+                      conditions: [
+                        {
+                          ...blankCondition(),
+                          op: "below",
+                          right: { kind: "level", level: "opening_high", minutes: 15 },
+                        },
+                      ],
+                    }
+                  : null,
+              })
+            }
+          />
+          {ex.when && (
+            <ConditionGroupEditor
+              group={ex.when}
+              errs={errs}
+              path="exit.when"
+              onChange={(g) => setExit({ when: g })}
+            />
+          )}
+        </Card>
+      )}
 
       <Card className="flex flex-col gap-4">
         <div>

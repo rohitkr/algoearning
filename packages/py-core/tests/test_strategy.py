@@ -178,3 +178,45 @@ def test_time_based_becomes_intraday_rules_and_overnight_needs_nrml() -> None:
     assert holds_overnight(parse(rules_cfg(holding={"mode": "next_day", "exit": "09:30"})))
     assert holds_overnight(parse({"kind": "range_breakout"}))
     assert not holds_overnight(parse({"kind": "range_breakout", "intraday_only": True}))
+
+
+def conditions_cfg(**over: Any) -> dict[str, Any]:
+    sig = {
+        "direction": "up",
+        "conditions": [{"op": "crosses_above", "right": {"kind": "level", "level": "opening_high"}}],
+    }
+    return {
+        "kind": "rules",
+        "entry": {"mode": "conditions", "signals": [sig]},
+        "legs": [leg(action="BUY", direction="up")],
+        **over,
+    }
+
+
+def test_condition_rules() -> None:
+    assert locs(conditions_cfg()) == []
+    assert locs(conditions_cfg(entry={"mode": "conditions"})) == [("entry", "signals"), ("legs", 0, "direction")]
+    assert locs(conditions_cfg(legs=[leg(direction="down")])) == [
+        ("entry", "signals", 0, "direction"),
+        ("legs", 0, "direction"),
+    ]
+    right = {"kind": "level"}  # level not picked
+    sig = {"conditions": [{"op": "above", "right": right}]}
+    assert locs(conditions_cfg(entry={"mode": "conditions", "signals": [sig]}, legs=[leg()])) == [
+        ("entry", "signals", 0, "conditions", 0, "right", "level")
+    ]
+    assert locs(conditions_cfg(exit={"on_opposite_signal": True})) == [("exit", "on_opposite_signal")]
+    assert locs(rules_cfg(legs=[leg(direction="up")])) == [("legs",)]  # time entry has no up signal
+    assert locs(rules_cfg(entry={"signals": conditions_cfg()["entry"]["signals"]})) == [("entry", "signals")]
+    for bad in (
+        {"candle": 2},
+        {"op": "touches"},
+        {"left": {"kind": "number"}, "right": {"kind": "number", "value": 1}},
+    ):
+        raw = conditions_cfg()
+        raw["entry"]["signals"][0]["conditions"] = [{"right": {"kind": "number", "value": 1}, **bad}]
+        try:
+            ls = locs(raw)
+        except ValidationError:
+            continue
+        assert ls  # schema-valid but wrong: a number against a number, or an unset number

@@ -1,11 +1,15 @@
 // Plain-language view of a strategy config (ae_core.strategy on the API), shared by the list and the builder.
 import type {
+  Condition,
+  ConditionGroup,
+  ConditionOperand,
   ConfigIssue,
   Instrument,
   LegStrike,
   LegThreshold,
   RulesConfig,
   RulesEntry,
+  RulesExit,
   RulesHolding,
   RulesRisk,
   SmcScalpConfig,
@@ -45,7 +49,58 @@ export const HOLD_LABEL: Record<RulesHolding["mode"], string> = {
 
 /** A rules config's parts with the API's defaults filled in, ready to spread and change. */
 export function entryOf(c: RulesConfig): RulesEntry {
-  return { mode: "time", at: "09:20", until: null, days: [...WEEKDAYS], dte: null, ...c.entry };
+  return {
+    mode: "time",
+    at: "09:20",
+    until: null,
+    days: [...WEEKDAYS],
+    dte: null,
+    signals: [],
+    max_per_day: 1,
+    ...c.entry,
+  };
+}
+
+export function exitOf(c: RulesConfig): RulesExit {
+  return { when: null, on_opposite_signal: false, ...c.exit };
+}
+
+export const LEVEL_LABEL: Record<NonNullable<ConditionOperand["level"]>, string> = {
+  opening_high: "opening range high",
+  opening_low: "opening range low",
+  day_open: "today's open",
+  day_high: "day high so far",
+  day_low: "day low so far",
+  prev_high: "previous day high",
+  prev_low: "previous day low",
+  prev_close: "previous day close",
+};
+
+export const OP_LABEL: Record<Condition["op"], string> = {
+  crosses_above: "crosses above",
+  crosses_below: "crosses below",
+  above: "is above",
+  below: "is below",
+};
+
+export const DIRECTION_LABEL = { always: "Always", up: "Up signal", down: "Down signal" } as const;
+
+export function operandText(o: ConditionOperand | undefined): string {
+  if (!o || o.kind === "price") return "the price";
+  if (o.kind === "number") return `${o.value ?? "?"}`;
+  const name = o.level ? LEVEL_LABEL[o.level] : "?";
+  return o.level?.startsWith("opening_") ? `the ${o.minutes ?? 15}-minute ${name}` : name;
+}
+
+/** "a 5-minute close crosses above the 15-minute opening range high" */
+export function conditionText(c: Condition): string {
+  const left = !c.left || c.left.kind === "price" ? `a ${c.candle}-minute close` : operandText(c.left);
+  return `${left} ${OP_LABEL[c.op]} ${operandText(c.right)}`;
+}
+
+export function groupText(g: ConditionGroup): string {
+  const parts = g.conditions.map(conditionText);
+  return parts.length > 1 ? parts.join(g.match === "all" ? " and " : " or ") : (parts[0] ?? "");
 }
 
 export function holdingOf(c: RulesConfig): RulesHolding {
@@ -70,10 +125,11 @@ export function rulesFromTimeBased(c: TimeBasedConfig): RulesConfig {
   return {
     kind: "rules",
     underlying: c.underlying,
-    entry: { mode: "time", at: t.entry, until: null, days: t.days, dte: null },
+    entry: { mode: "time", at: t.entry, until: null, days: t.days, dte: null, signals: [], max_per_day: 1 },
     holding: { mode: "intraday", exit: t.exit, days: 1 },
     legs: c.legs,
     risk: { ...r, combined_stop: null, lock_profit: null },
+    exit: { when: null, on_opposite_signal: false },
   };
 }
 
@@ -125,6 +181,7 @@ export function describeLeg(leg: StrategyLeg, underlying: string, inst: Instrume
   }
   if (leg.reentry_on_sl) parts.push(`Re-enter after SL ×${leg.reentry_on_sl.count}`);
   if (leg.reentry_on_target) parts.push(`Re-enter after target ×${leg.reentry_on_target.count}`);
+  if (leg.direction === "up" || leg.direction === "down") parts.push(`on an ${leg.direction} signal`);
   return parts.join(" · ");
 }
 
@@ -190,10 +247,17 @@ function describeRules(c: RulesConfig, inst: Instrument | undefined): string[] {
   const r = rulesRiskOf(c);
   const when = e.dte?.length ? `, only ${dteText(e.dte)}` : "";
   const until = e.until ? ` (not after ${e.until})` : "";
-  const lines = [
-    `Enter at ${e.at}${until}, ${days(e.days)}${when}; ${holdingText(h)}.`,
-    ...c.legs.map((l, i) => `Leg ${i + 1}: ${describeLeg(l, c.underlying, inst)}`),
-  ];
+  const entry =
+    e.mode === "conditions"
+      ? [
+          `From ${e.at}${until}, ${days(e.days)}${when}, enter on a signal (up to ${e.max_per_day} trade${e.max_per_day === 1 ? "" : "s"} a day); ${holdingText(h)}.`,
+          ...(e.signals ?? []).map((sg) => `${DIRECTION_LABEL[sg.direction]}: when ${groupText(sg)}.`),
+        ]
+      : [`Enter at ${e.at}${until}, ${days(e.days)}${when}; ${holdingText(h)}.`];
+  const lines = [...entry, ...c.legs.map((l, i) => `Leg ${i + 1}: ${describeLeg(l, c.underlying, inst)}`)];
+  const ex = exitOf(c);
+  if (ex.when) lines.push(`Exit everything when ${groupText(ex.when)}.`);
+  if (ex.on_opposite_signal) lines.push("Exit everything on a signal in the other direction.");
   if (r.mtm_stop_loss) lines.push(`Exit everything if the trade's loss reaches ₹${r.mtm_stop_loss}.`);
   if (r.mtm_target) lines.push(`Exit everything if the trade's profit reaches ₹${r.mtm_target}.`);
   if (r.exit_all_on_leg_sl) lines.push("When any leg's stop-loss hits, exit every leg.");
@@ -233,7 +297,8 @@ export function configSummary(c: StrategyConfig): string {
     const e = entryOf(c);
     const h = holdingOf(c);
     const hold = { intraday: "", next_day: "next day ", days: `+${h.days}d `, expiry: "expiry " }[h.mode];
-    return `${c.underlying} · ${n} leg${n === 1 ? "" : "s"} · ${e.at}–${hold}${h.exit}`;
+    const how = e.mode === "conditions" ? "signals " : "";
+    return `${c.underlying} · ${n} leg${n === 1 ? "" : "s"} · ${how}${e.at}–${hold}${h.exit}`;
   }
   if (c.kind === "time_based") {
     const n = c.legs.length;
@@ -263,6 +328,7 @@ export function newLeg(c: { legs: StrategyLeg[] }, weekly: boolean): StrategyLeg
     lots: 1,
     expiry: weekly ? "current_week" : "current_month",
     strike: { mode: "atm", offset: 0, premium: null, points: null },
+    direction: "always",
     stop_loss: null,
     target: null,
     trailing: null,

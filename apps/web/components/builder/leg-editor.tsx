@@ -126,6 +126,7 @@ export function LegEditor({
   errs,
   warns,
   canRemove,
+  directional = false,
   onChange,
   onDuplicate,
   onRemove,
@@ -137,6 +138,7 @@ export function LegEditor({
   errs: Errs;
   warns: Errs;
   canRemove: boolean;
+  directional?: boolean; // entering on signals: each leg may trade only on an up or a down signal
   onChange: (l: StrategyLeg) => void;
   onDuplicate?: () => void;
   onRemove: () => void;
@@ -176,6 +178,18 @@ export function LegEditor({
           ]}
           onChange={(v) => set("option_type", v)}
         />
+        {directional && (
+          <Segmented
+            label={`Leg ${index + 1} trades on`}
+            value={leg.direction ?? "always"}
+            options={[
+              { value: "always", label: "Any" },
+              { value: "up", label: "Up" },
+              { value: "down", label: "Down" },
+            ]}
+            onChange={(v) => set("direction", v)}
+          />
+        )}
         <span className="ml-auto flex gap-1">
           {onDuplicate && (
             <Button size="icon" variant="ghost" onClick={onDuplicate} aria-label={`Copy leg ${index + 1}`}>

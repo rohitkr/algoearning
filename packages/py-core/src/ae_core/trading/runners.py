@@ -19,9 +19,11 @@ from ..strategy import (
     SmcScalpConfig,
     TimeBasedConfig,
     ZeroDteConfig,
+    rules_conditions,
     rules_from_time_based,
+    uses_previous_day,
 )
-from . import options, rules
+from . import conditions, options, rules
 from .model import IST, Contract, Intent, Market, Position, Side
 from .rules import Right
 
@@ -132,6 +134,9 @@ class Runner:
                       position_id=pos.id)  # fmt: skip
 
 
+ARM_FOR = timedelta(minutes=2)  # a fired signal stays valid this long while option prices stream in
+
+
 def _buy_first(intents: list[Intent]) -> list[Intent]:
     """Hedge first: buy legs go before sells so the margin benefit exists when the short is placed."""
     return sorted(intents, key=lambda i: i.side != "BUY")
@@ -150,6 +155,12 @@ class RulesRunner(Runner):
     kind = "rules"
     cfg: RulesConfig
 
+    def __init__(self, config: Any, multiplier: int = 1, state: Mapping[str, Any] | None = None) -> None:
+        super().__init__(config, multiplier, state)
+        self.prior_days = 1 if uses_previous_day(self.cfg) else 0
+        self._fresh: frozenset[int] = frozenset()
+        self._sizes = sorted({c.candle for c in rules_conditions(self.cfg)})
+
     def _leg(self, leg_id: str) -> Leg | None:
         return next((leg for leg in self.cfg.legs if leg.id == leg_id), None)
 
@@ -162,7 +173,7 @@ class RulesRunner(Runner):
         self.s.pop("waiting_reason", None)
         if self.s.get("phase") == "in" and (self.open_positions() or self.s.get("pending")):
             return  # a held trade carries on
-        self.s.update(phase="waiting", reentries={}, pending=[])
+        self.s.update(phase="waiting", reentries={}, pending=[], cursor={})
 
     def _resolve(self, m: Market, leg: Leg) -> Contract | str:
         """The leg's contract right now, or why it cannot be chosen yet."""
@@ -262,6 +273,33 @@ class RulesRunner(Runner):
             day = found
         return rules.at(day, h.exit, IST)
 
+    # -- conditions (ADR 0023) --------------------------------------------------------------------------------------
+    def _context(self, m: Market) -> conditions.Context:
+        return conditions.Context(m.now, m.spot_bars, m.prior_spot_bars, self._fresh)
+
+    def _signal(self, m: Market, only: str | None = None) -> str | None:
+        """The direction of the first entry signal that is true now (restricted to one direction), or None."""
+        ctx = self._context(m)
+        for sig in self.cfg.entry.signals:
+            if only is not None and sig.direction != only:
+                continue
+            if conditions.group_holds(sig, ctx):
+                return sig.direction
+        return None
+
+    def _advance_cursors(self, m: Market) -> None:
+        cur = self.s.setdefault("cursor", {})
+        for size in self._sizes:
+            c = conditions.latest(m.spot_bars, size, m.now)
+            if c is not None:
+                cur[str(size)] = c.ts.isoformat()
+
+    def _entries_today(self, m: Market) -> int:
+        today = m.now.date().isoformat()
+        if self.s.get("entries_day") == today:
+            return int(self.s.get("entries", 0))
+        return 1 if self.s.get("entered") == today else 0  # state of a run from before ADR 0023
+
     def _skip_today(self, m: Market) -> str | None:
         """Why no trade starts today (wrong weekday, not the chosen days before expiry), or None."""
         e, today = self.cfg.entry, m.now.date()
@@ -288,11 +326,26 @@ class RulesRunner(Runner):
         if until is not None and t >= until:
             self.s["phase"] = "done"
             return []
+        direction = "always"
+        if e.mode == "conditions":
+            armed = self.s.get("armed")
+            if armed and now - datetime.fromisoformat(armed["at"]) <= ARM_FOR:
+                direction = armed["dir"]  # the signal fired a moment ago and the entry is still being prepared
+            else:
+                found = self._signal(m)
+                if found is None:
+                    self.s.pop("armed", None)
+                    return []
+                direction = found
+                self.s["armed"] = {"dir": found, "at": now.isoformat()}
+        legs = [leg for leg in self.cfg.legs if leg.direction in ("always", direction)]
+        if not legs:
+            return []
         final = self._final(m)
         if isinstance(final, datetime) and final <= now:
             final = f"the exit ({final:%a %d %b} {self.cfg.holding.exit}) has passed"
         contracts: list[tuple[Leg, Contract]] = []
-        for leg in self.cfg.legs:
+        for leg in legs:
             r = final if isinstance(final, str) else self._resolve(m, leg)
             if isinstance(r, str):
                 if self.s.get("waiting_reason") != r:
@@ -309,9 +362,12 @@ class RulesRunner(Runner):
             return []
         if any(m.price(c) is None for _, c in contracts):
             return []  # the prices were just requested: enter once they stream
-        self.s.update(phase="in", entered=today, final=final.isoformat(), cycle_realized=self.realized,
-                      reentries={}, pending=[], sold={}, lock_floor=None)  # fmt: skip
-        why_in = f"entry at {e.at}"
+        self.s.pop("entered", None)
+        self.s.pop("armed", None)
+        self.s.update(phase="in", entries_day=today, entries=self._entries_today(m) + 1, final=final.isoformat(),
+                      cycle_realized=self.realized, reentries={}, pending=[], sold={}, lock_floor=None,
+                      direction=direction)  # fmt: skip
+        why_in = f"{direction} signal" if e.mode == "conditions" else f"entry at {e.at}"
         return _buy_first([self._enter(m, c, leg.action, leg.lots, leg.id, why_in) for leg, c in contracts])
 
     # -- in a trade -------------------------------------------------------------------------------------------------
@@ -359,6 +415,20 @@ class RulesRunner(Runner):
 
     def step(self, m: Market) -> list[Intent]:
         self._new_day(m)
+        if self._sizes:
+            cur = self.s.get("cursor", {})
+            fresh = set()
+            for size in self._sizes:
+                c = conditions.latest(m.spot_bars, size, m.now)
+                if c is not None and cur.get(str(size)) != c.ts.isoformat():
+                    fresh.add(size)
+            self._fresh = frozenset(fresh)
+        out = self._step(m)
+        if self._sizes:
+            self._advance_cursors(m)
+        return out
+
+    def _step(self, m: Market) -> list[Intent]:
         phase = self.s["phase"]
         if phase == "waiting":
             return self._try_enter(m)
@@ -414,6 +484,16 @@ class RulesRunner(Runner):
             floor = self.s["lock_floor"]
             return out + self._close(m, f"profit fell to the locked ₹{floor:g}", "profit_lock_exit", pnl=pnl)
 
+        # exit on a condition or on the opposite signal
+        ex = cfg.exit
+        if ex.when and conditions.group_holds(ex.when, self._context(m)):
+            return out + self._close(m, "exit condition", "exit_condition", pnl=pnl)
+        if ex.on_opposite_signal and self.s.get("direction") in ("up", "down"):
+            other = "down" if self.s["direction"] == "up" else "up"
+            if self._signal(m, only=other):
+                self.s["armed"] = {"dir": other, "at": m.now.isoformat()}  # the next trade, if one is left today
+                return out + self._close(m, f"{other} signal", "opposite_signal", pnl=pnl)
+
         # re-entries
         keep = []
         for r in self.s.get("pending", []):
@@ -436,7 +516,7 @@ class RulesRunner(Runner):
 
     def _end_cycle(self, m: Market) -> None:
         """The trade is over: another may start later today unless one already started today."""
-        self.s["phase"] = "done" if self.s.get("entered") == m.now.date().isoformat() else "waiting"
+        self.s["phase"] = "done" if self._entries_today(m) >= self.cfg.entry.max_per_day else "waiting"
         self.s["pending"] = []
 
     def _queue_reentry(self, pos: Position, leg: Leg, kind: str) -> None:

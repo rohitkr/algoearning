@@ -32,5 +32,5 @@ the index, 4 templates and backtest improvements.
   legs and limits; run and backtest snapshots keep what they ran with, and `time_based` still parses and runs (as
   those rules), so history stays readable.
 
-**Not yet:** condition-based entries, opening-range and previous-day levels, indicators (phases 2-3); exchange holiday
+**Not yet:** indicators (phase 3; conditions and levels arrived in ADR 0023); exchange holiday
 calendars; option-premium indicators. A plain-English strategy writer was considered and not taken up for now.

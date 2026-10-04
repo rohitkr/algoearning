@@ -3,7 +3,7 @@ MTM limits, exit time, and the two proven strategies' rules."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
@@ -526,6 +526,122 @@ def test_a_time_based_run_in_progress_carries_on_after_the_upgrade() -> None:
     sim.prices = {c(25000): 100.0}
     sim.at("09:20")
     state = sim.r.state()
-    del state["final"], state["entered"], state["cycle_realized"]  # what the old runner stored
+    del state["final"], state["entries"], state["entries_day"], state["cycle_realized"]
+    state["entered"] = DAY.isoformat()  # what the old runner stored
     sim.r = TimeBasedRunner(sim.r.cfg, 1, state)
     assert sim.at("12:00") == [] and sim.at("15:15")[0].reason == "exit time 15:15"
+
+
+# -- conditions (ADR 0023) --------------------------------------------------------------------------------------------
+def minute_bars(day: date, frm: str, closes: list[float], spread: float = 2.0) -> list[B]:
+    t0 = datetime.combine(day, time.fromisoformat(frm), tzinfo=IST)
+    out, prev = [], closes[0]
+    for i, px in enumerate(closes):
+        out.append(B(t0 + timedelta(minutes=i), prev, max(prev, px) + spread, min(prev, px) - spread, px))
+        prev = px
+    return out
+
+
+def orb_runner(**over: Any) -> Runner:
+    raw: dict[str, Any] = {
+        "kind": "rules",
+        "entry": {
+            "mode": "conditions", "at": "09:30", "until": "14:30",
+            "signals": [
+                {"direction": "up", "conditions": [{"op": "crosses_above", "candle": 5,
+                    "right": {"kind": "level", "level": "opening_high", "minutes": 15}}]},
+                {"direction": "down", "conditions": [{"op": "crosses_below", "candle": 5,
+                    "right": {"kind": "level", "level": "opening_low", "minutes": 15}}]},
+            ],
+        },
+        "legs": [
+            {"id": "C", "action": "BUY", "option_type": "CE", "direction": "up"},
+            {"id": "P", "action": "BUY", "option_type": "PE", "direction": "down"},
+        ],
+        **over,
+    }  # fmt: skip
+    return make_runner(parse(raw))
+
+
+OPENING = [25000.0] * 15  # 09:15-09:29: range 24998..25002 with the 2-point spread
+
+
+def orb_sim(closes_after: list[float], **over: Any) -> Sim:
+    sim = Sim(orb_runner(**over))
+    sim.bars = minute_bars(DAY, "09:15", OPENING + closes_after)
+    sim.prices = {c(25000): 100.0, c(25000, "PE"): 100.0}
+    return sim
+
+
+def test_opening_range_breakout_buys_a_call_on_an_upside_close() -> None:
+    sim = orb_sim([25001, 25001, 25001, 25001, 25001, 25010, 25020, 25030, 25040, 25050])  # 09:30-09:34 inside
+    assert sim.at("09:35") == [] and sim.r.s["phase"] == "waiting"  # 5-min close 25001 is inside the range
+    sim.bars = minute_bars(DAY, "09:15", OPENING + [25001] * 5 + [25010, 25020, 25030, 25040, 25050])
+    (e,) = sim.at("09:40")  # candle 09:35-09:40 closes at 25050, above the high of 25002
+    assert (e.kind, e.side, e.contract.key, e.reason) == ("entry", "BUY", c(25000), "up signal")
+    assert sim.r.s["direction"] == "up"
+
+
+def test_a_downside_close_buys_the_put_and_nothing_trades_before_the_range_is_formed() -> None:
+    sim = orb_sim([24990] * 5)
+    assert sim.at("09:28") == []  # still inside the first 15 minutes
+    (e,) = sim.at("09:35")
+    assert e.contract.key == c(25000, "PE") and sim.r.s["direction"] == "down"
+
+
+def test_exit_on_the_opposite_signal_and_a_second_trade() -> None:
+    sim = orb_sim(
+        [25020] * 5,
+        exit={"on_opposite_signal": True},
+        entry={**orb_runner().cfg.entry.model_dump(mode="json"), "max_per_day": 2},
+    )
+    (up,) = sim.at("09:35")
+    assert up.contract.key == c(25000)
+    sim.bars = minute_bars(DAY, "09:15", OPENING + [25020] * 5 + [24980] * 5)
+    sim.prices[c(25000, "PE")] = 90.0
+    out = sim.at("09:40")
+    assert out[0].kind == "exit" and out[0].reason == "down signal"
+    out = sim.at("09:41")
+    assert [(i.kind, i.contract.key) for i in out] == [("entry", c(25000, "PE"))]  # the second trade of the day
+    assert sim.r.s["entries"] == 2 and sim.r.s["phase"] == "in"
+
+
+def test_exit_when_the_price_closes_back_inside_the_range() -> None:
+    ex = {"when": {"conditions": [{"op": "below", "candle": 5, "right": {"kind": "level", "level": "opening_high"}}]}}
+    sim = orb_sim([25020] * 5, exit=ex)
+    sim.at("09:35")
+    sim.bars = minute_bars(DAY, "09:15", OPENING + [25020] * 5 + [25001] * 5)
+    out = sim.at("09:40")
+    assert [(i.kind, i.reason) for i in out] == [("exit", "exit condition")]
+
+
+def test_a_signal_waits_for_option_prices_instead_of_being_lost() -> None:
+    sim = orb_sim([25020] * 5)
+    sim.prices = {}
+    assert sim.at("09:35") == [] and sim.r.s["armed"]["dir"] == "up"
+    sim.prices = {c(25000): 80.0}
+    (e,) = sim.at("09:36")  # no new candle, but the armed signal still enters
+    assert e.reason == "up signal"
+
+
+def test_previous_day_levels_and_state_conditions() -> None:
+    cond = {"left": {"kind": "price"}, "op": "above", "candle": 5, "right": {"kind": "level", "level": "prev_high"}}
+    sim = Sim(make_runner(parse({
+        "kind": "rules", "entry": {"mode": "conditions", "at": "09:30",
+                                   "signals": [{"conditions": [cond]}]},
+        "legs": [{"id": "L1", "action": "BUY", "option_type": "CE"}],
+    })))  # fmt: skip
+    assert sim.r.prior_days == 1
+    yesterday = date(2026, 10, 5)
+    prior = minute_bars(yesterday, "09:15", [24900.0] * 10 + [25100.0] + [24950.0] * 10)  # high 25102
+    sim.bars = minute_bars(DAY, "09:15", [25000.0] * 20)
+    sim.prices = {c(25000): 100.0}
+    base = sim.market
+
+    def with_prior(hm: str) -> Market:
+        return replace(base(hm), prior_spot_bars=prior)
+
+    sim.market = with_prior  # type: ignore[method-assign]
+    assert sim.at("09:35") == []  # 25000 is below yesterday's high
+    sim.bars = minute_bars(DAY, "09:15", [25000.0] * 20 + [25200.0] * 5)
+    assert len(sim.at("09:40")) == 1

@@ -101,6 +101,9 @@ class ReEntry(_Model):
     count: int = Field(default=1, ge=1, le=5)
 
 
+Direction = Literal["always", "up", "down"]
+
+
 class Strike(_Model):
     """atm: ATM +/- `offset` strikes (positive = out of the money, negative = in the money).
     premium: the strike whose premium is closest to `premium` at entry.
@@ -125,6 +128,7 @@ class Leg(_Model):
     trailing: Trailing | None = None
     reentry_on_sl: ReEntry | None = None
     reentry_on_target: ReEntry | None = None
+    direction: Direction = "always"  # rules only: trade this leg on every entry, or only on an up / down signal
 
 
 class Timing(_Model):
@@ -150,16 +154,58 @@ class TimeBasedConfig(_Model):
 
 
 # -- rules (the builder, ADR 0022) -------------------------------------------------------------------------------
-class RulesEntry(_Model):
-    """When a new trade may start. `dte`: only on days that many trading days (Mon-Fri) before the first leg's
-    expiry (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for
-    intraday, none for positional), so a late engine start still enters, but not too late."""
+CANDLE_MINUTES = (1, 3, 5, 15, 30, 60)
+LEVELS = ("opening_high", "opening_low", "day_open", "day_high", "day_low", "prev_high", "prev_low", "prev_close")
+Level = Literal["opening_high", "opening_low", "day_open", "day_high", "day_low", "prev_high", "prev_low", "prev_close"]
+Candle = Literal[1, 3, 5, 15, 30, 60]
 
-    mode: Literal["time"] = "time"
+
+class Operand(_Model):
+    """A value on the index: the close of the candle (price), a ready-made level, or a plain number.
+    Levels: the high/low of the first `minutes` of the session (opening_*), today's open, the day's high/low so far
+    (before the candle), and the previous session's high/low/close."""
+
+    kind: Literal["price", "level", "number"] = "price"
+    level: Level | None = None
+    minutes: int = Field(default=15, ge=1, le=180)  # opening range length
+    value: float | None = Field(default=None, ge=-1_000_000, le=1_000_000)
+
+
+class Condition(_Model):
+    """`left` compared with `right` on finished candles of `candle` minutes. crosses_*: it happened on the newest
+    candle (the previous candle was on the other side); above / below: it is true as of the newest candle."""
+
+    left: Operand = Field(default_factory=Operand)
+    op: Literal["crosses_above", "crosses_below", "above", "below"] = "crosses_above"
+    right: Operand = Field(default_factory=lambda: Operand(kind="level", level="opening_high"))
+    candle: Candle = 5
+
+
+class ConditionGroup(_Model):
+    match: Literal["all", "any"] = "all"
+    conditions: list[Condition] = Field(min_length=1, max_length=6)
+
+
+class Signal(ConditionGroup):
+    """Conditions that start a trade. The legs that trade: those for this direction, plus the 'always' legs."""
+
+    direction: Direction = "always"
+
+
+class RulesEntry(_Model):
+    """When a new trade may start. mode time: at `at`. mode conditions: on the first of `signals` that is true
+    between `at` and `until`. `dte`: only on days that many trading days (Mon-Fri) before the first leg's expiry
+    (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for
+    intraday, none for positional), so a late engine start still enters, but not too late. `max_per_day`: trades
+    a day (a stopped-out or exited trade may be followed by another)."""
+
+    mode: Literal["time", "conditions"] = "time"
     at: HHMM = "09:20"
     until: HHMM | None = None
     days: list[Weekday] = Field(default_factory=lambda: list(WEEKDAYS), min_length=1, max_length=5)
     dte: list[Annotated[int, Field(ge=0, le=30)]] | None = Field(default=None, max_length=10)
+    signals: list[Signal] = Field(default_factory=list, max_length=4)
+    max_per_day: int = Field(default=1, ge=1, le=10)
 
 
 class Holding(_Model):
@@ -198,6 +244,14 @@ class RulesRisk(_Model):
     lock_profit: LockProfit | None = None
 
 
+class RulesExit(_Model):
+    """Close the whole trade when `when` is true, or (on_opposite_signal) when an entry signal of the other
+    direction is."""
+
+    when: ConditionGroup | None = None
+    on_opposite_signal: bool = False
+
+
 class RulesConfig(_Model):
     kind: Literal["rules"] = "rules"
     underlying: Underlying = "NIFTY"
@@ -205,6 +259,23 @@ class RulesConfig(_Model):
     holding: Holding = Field(default_factory=Holding)
     legs: list[Leg] = Field(min_length=1, max_length=MAX_LEGS)
     risk: RulesRisk = Field(default_factory=RulesRisk)
+    exit: RulesExit = Field(default_factory=RulesExit)
+
+
+def rules_conditions(c: RulesConfig) -> list[Condition]:
+    """Every condition in the config (entry signals and exit)."""
+    out = [cond for sig in c.entry.signals for cond in sig.conditions]
+    if c.exit.when:
+        out += c.exit.when.conditions
+    return out
+
+
+def uses_previous_day(c: RulesConfig) -> bool:
+    return any(
+        o.kind == "level" and (o.level or "").startswith("prev_")
+        for k in rules_conditions(c)
+        for o in (k.left, k.right)
+    )
 
 
 def rules_from_time_based(c: TimeBasedConfig) -> RulesConfig:
@@ -497,6 +568,7 @@ def _check_rules(c: RulesConfig, inst: Instrument) -> list[Issue]:
         elif e.until is not None and e.until >= h.exit:
             issues.append(Issue(("entry", "until"), f"must be before the exit time ({h.exit})"))
     issues += _check_legs(c.legs, c.underlying, inst, r.exit_all_on_leg_sl)
+    issues += _check_conditions(c, inst)
     if r.combined_stop and not any(leg.action == "SELL" for leg in c.legs):
         issues.append(Issue(("risk", "combined_stop"), "needs at least one sold leg"))
     lp = r.lock_profit
@@ -509,6 +581,56 @@ def _check_rules(c: RulesConfig, inst: Instrument) -> list[Issue]:
             issues.append(Issue(("risk", "lock_profit", "trail_by"), "set both trail values, or neither"))
         if r.mtm_target is not None and lp.at >= r.mtm_target:
             issues.append(Issue(("risk", "lock_profit", "at"), "must be below the MTM target"))
+    return issues
+
+
+def _check_operand(o: Operand, loc: Loc) -> list[Issue]:
+    if o.kind == "level" and o.level is None:
+        return [Issue((*loc, "level"), "pick a level")]
+    if o.kind == "number" and o.value is None:
+        return [Issue((*loc, "value"), "enter a number")]
+    return []
+
+
+def _check_group(g: ConditionGroup, loc: Loc) -> list[Issue]:
+    issues: list[Issue] = []
+    for j, cond in enumerate(g.conditions):
+        cl: Loc = (*loc, "conditions", j)
+        issues += _check_operand(cond.left, (*cl, "left")) + _check_operand(cond.right, (*cl, "right"))
+        if cond.left.kind == "number" and cond.right.kind == "number":
+            issues.append(Issue(cl, "compare the price or a level with something"))
+    return issues
+
+
+def _check_conditions(c: RulesConfig, inst: Instrument) -> list[Issue]:
+    e = c.entry
+    issues: list[Issue] = []
+    if e.mode == "time":
+        if e.signals:
+            issues.append(Issue(("entry", "signals"), "signals only apply when entering on conditions"))
+        if any(leg.direction != "always" for leg in c.legs):
+            issues.append(Issue(("legs",), "up/down legs need entry on conditions"))
+        if c.exit.on_opposite_signal:
+            issues.append(Issue(("exit", "on_opposite_signal"), "needs entry on conditions"))
+    else:
+        if not e.signals:
+            issues.append(Issue(("entry", "signals"), "add a signal: the conditions that start a trade"))
+        for i, sig in enumerate(e.signals):
+            issues += _check_group(sig, ("entry", "signals", i))
+            if sig.direction != "always" and not any(leg.direction in ("always", sig.direction) for leg in c.legs):
+                issues.append(
+                    Issue(("entry", "signals", i, "direction"), f"no leg trades on an {sig.direction} signal")
+                )
+        dirs = {sig.direction for sig in e.signals}
+        for i, leg in enumerate(c.legs):
+            if leg.direction != "always" and leg.direction not in dirs:
+                issues.append(Issue(("legs", i, "direction"), f"no signal says {leg.direction}"))
+        if c.exit.on_opposite_signal and not {"up", "down"} <= dirs:
+            issues.append(Issue(("exit", "on_opposite_signal"), "needs an up and a down signal"))
+    if c.exit.when:
+        issues += _check_group(c.exit.when, ("exit", "when"))
+    if c.holding.mode == "intraday" and e.mode == "conditions" and e.until is None and e.at >= c.holding.exit:
+        issues.append(Issue(("holding", "exit"), "must be after the entry time"))
     return issues
 
 
@@ -616,6 +738,28 @@ def _points_leg(id_: str, action: Literal["BUY", "SELL"], opt: Literal["CE", "PE
 
 _SL30 = Threshold(unit="percent", value=30)
 
+
+def _breakout(high: Level, low: Level) -> RulesConfig:
+    def signal(direction: Direction, op: Literal["crosses_above", "crosses_below"], lvl: Level) -> Signal:
+        cond = Condition(op=op, candle=5, right=Operand(kind="level", level=lvl, minutes=15))
+        return Signal(direction=direction, conditions=[cond])
+
+    return RulesConfig(
+        entry=RulesEntry(
+            mode="conditions",
+            at="09:30",
+            until="14:30",
+            signals=[signal("up", "crosses_above", high), signal("down", "crosses_below", low)],
+            max_per_day=2,
+        ),
+        legs=[
+            _leg("L1", "BUY", "CE", stop_loss=_SL30, direction="up"),
+            _leg("L2", "BUY", "PE", stop_loss=_SL30, direction="down"),
+        ],
+        exit=RulesExit(on_opposite_signal=True),
+    )
+
+
 PRESETS: tuple[Preset, ...] = (
     Preset(
         "blank",
@@ -679,6 +823,20 @@ PRESETS: tuple[Preset, ...] = (
             legs=[_points_leg("L1", "SELL", "CE", 300), _points_leg("L2", "SELL", "PE", 300)],
             risk=RulesRisk(combined_stop=CombinedStop(unit="percent", value=40)),
         ),
+    ),
+    Preset(
+        "opening_range_breakout",
+        "Opening range breakout",
+        "From 09:30, buy an ATM call when a 5-minute candle closes above the first 15 minutes' high, a put below "
+        "its low; 30% stop-loss, exit on the opposite signal or at 15:15.",
+        _breakout("opening_high", "opening_low"),
+    ),
+    Preset(
+        "prev_day_breakout",
+        "Previous day high/low breakout",
+        "From 09:30, buy an ATM call when a 5-minute candle closes above yesterday's high, a put below its low; "
+        "30% stop-loss, exit on the opposite signal or at 15:15.",
+        _breakout("prev_high", "prev_low"),
     ),
     Preset(
         "range_breakout",

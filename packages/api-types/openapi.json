@@ -1577,6 +1577,72 @@
         "title": "CombinedStop",
         "type": "object"
       },
+      "Condition": {
+        "additionalProperties": false,
+        "description": "`left` compared with `right` on finished candles of `candle` minutes. crosses_*: it happened on the newest\ncandle (the previous candle was on the other side); above / below: it is true as of the newest candle.",
+        "properties": {
+          "candle": {
+            "default": 5,
+            "enum": [
+              1,
+              3,
+              5,
+              15,
+              30,
+              60
+            ],
+            "title": "Candle",
+            "type": "integer"
+          },
+          "left": {
+            "$ref": "#/components/schemas/Operand"
+          },
+          "op": {
+            "default": "crosses_above",
+            "enum": [
+              "crosses_above",
+              "crosses_below",
+              "above",
+              "below"
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "right": {
+            "$ref": "#/components/schemas/Operand"
+          }
+        },
+        "title": "Condition",
+        "type": "object"
+      },
+      "ConditionGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/Condition"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Conditions",
+            "type": "array"
+          },
+          "match": {
+            "default": "all",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "title": "Match",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conditions"
+        ],
+        "title": "ConditionGroup",
+        "type": "object"
+      },
       "ConfigIssue": {
         "properties": {
           "loc": {
@@ -2436,6 +2502,16 @@
             "title": "Action",
             "type": "string"
           },
+          "direction": {
+            "default": "always",
+            "enum": [
+              "always",
+              "up",
+              "down"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
           "expiry": {
             "default": "current_week",
             "enum": [
@@ -3238,6 +3314,65 @@
           "target"
         ],
         "title": "OpenPosition",
+        "type": "object"
+      },
+      "Operand": {
+        "additionalProperties": false,
+        "description": "A value on the index: the close of the candle (price), a ready-made level, or a plain number.\nLevels: the high/low of the first `minutes` of the session (opening_*), today's open, the day's high/low so far\n(before the candle), and the previous session's high/low/close.",
+        "properties": {
+          "kind": {
+            "default": "price",
+            "enum": [
+              "price",
+              "level",
+              "number"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "opening_high",
+                  "opening_low",
+                  "day_open",
+                  "day_high",
+                  "day_low",
+                  "prev_high",
+                  "prev_low",
+                  "prev_close"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "minutes": {
+            "default": 15,
+            "maximum": 180.0,
+            "minimum": 1.0,
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "maximum": 1000000.0,
+                "minimum": -1000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "Operand",
         "type": "object"
       },
       "OrderOut": {
@@ -4618,6 +4753,9 @@
           "entry": {
             "$ref": "#/components/schemas/RulesEntry"
           },
+          "exit": {
+            "$ref": "#/components/schemas/RulesExit"
+          },
           "holding": {
             "$ref": "#/components/schemas/Holding"
           },
@@ -4660,7 +4798,7 @@
       },
       "RulesEntry": {
         "additionalProperties": false,
-        "description": "When a new trade may start. `dte`: only on days that many trading days (Mon-Fri) before the first leg's\nexpiry (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for\nintraday, none for positional), so a late engine start still enters, but not too late.",
+        "description": "When a new trade may start. mode time: at `at`. mode conditions: on the first of `signals` that is true\nbetween `at` and `until`. `dte`: only on days that many trading days (Mon-Fri) before the first leg's expiry\n(0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for\nintraday, none for positional), so a late engine start still enters, but not too late. `max_per_day`: trades\na day (a stopped-out or exited trade may be followed by another).",
         "properties": {
           "at": {
             "default": "09:20",
@@ -4701,11 +4839,29 @@
             ],
             "title": "Dte"
           },
+          "max_per_day": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Per Day",
+            "type": "integer"
+          },
           "mode": {
-            "const": "time",
             "default": "time",
+            "enum": [
+              "time",
+              "conditions"
+            ],
             "title": "Mode",
             "type": "string"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/Signal"
+            },
+            "maxItems": 4,
+            "title": "Signals",
+            "type": "array"
           },
           "until": {
             "anyOf": [
@@ -4721,6 +4877,29 @@
           }
         },
         "title": "RulesEntry",
+        "type": "object"
+      },
+      "RulesExit": {
+        "additionalProperties": false,
+        "description": "Close the whole trade when `when` is true, or (on_opposite_signal) when an entry signal of the other\ndirection is.",
+        "properties": {
+          "on_opposite_signal": {
+            "default": false,
+            "title": "On Opposite Signal",
+            "type": "boolean"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConditionGroup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "RulesExit",
         "type": "object"
       },
       "RulesRisk": {
@@ -5081,6 +5260,45 @@
           "ip"
         ],
         "title": "ServerIpOut",
+        "type": "object"
+      },
+      "Signal": {
+        "additionalProperties": false,
+        "description": "Conditions that start a trade. The legs that trade: those for this direction, plus the 'always' legs.",
+        "properties": {
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/Condition"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Conditions",
+            "type": "array"
+          },
+          "direction": {
+            "default": "always",
+            "enum": [
+              "always",
+              "up",
+              "down"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "match": {
+            "default": "all",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "title": "Match",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conditions"
+        ],
+        "title": "Signal",
         "type": "object"
       },
       "SmcBox": {

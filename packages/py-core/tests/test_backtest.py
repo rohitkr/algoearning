@@ -161,3 +161,35 @@ def test_an_overnight_rules_trade_is_held_to_the_next_day() -> None:
     (t,) = r.trades
     assert (t.entry_time, t.exit_time, t.exit_price, t.reason) == (ts("15:00", mon), ts("09:30"), 70, "exit time 09:30")
     assert t.gross == 30 * 65
+
+
+def test_an_opening_range_breakout_trades_through_the_backtester() -> None:
+    h = MemoryHistory()
+    t0 = ts("09:15")
+    # flat until 09:45, then 25040: the 09:45-09:50 candle closes above the opening range high (25001)
+    h.add_spot(
+        "NIFTY",
+        [
+            Candle(t0 + timedelta(minutes=i), 25000, 25001 if i < 30 else 25041, 24999, 25000 if i < 30 else 25040)
+            for i in range(375)
+        ],
+    )
+    h.add_option(
+        KEY, [Candle(ts("09:50"), *flat(100)), Candle(ts("11:00"), *flat(130)), Candle(ts("15:15"), *flat(90))]
+    )
+    config = parse({
+        "kind": "rules",
+        "entry": {"mode": "conditions", "at": "09:30", "until": "14:30", "signals": [
+            {"direction": "up", "conditions": [{"op": "crosses_above", "candle": 5,
+                                                "right": {"kind": "level", "level": "opening_high"}}]}]},
+        "legs": [{"id": "L1", "action": "BUY", "option_type": "CE", "direction": "up", "target": {"value": 20}}],
+    })  # fmt: skip
+    r = run(config, h)
+    (t,) = r.trades
+    assert (t.side, t.entry_time, t.entry_price, t.exit_price, t.reason) == (
+        "BUY",
+        ts("09:50"),
+        100,
+        130,
+        "target",
+    )  # gapped through the 120 target

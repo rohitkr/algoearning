@@ -2,6 +2,7 @@ import type { Instrument, RulesConfig, StrategyLeg, TimeBasedConfig } from "@alg
 import { describe, expect, it } from "vitest";
 
 import {
+  conditionText,
   configSummary,
   describeConfig,
   describeLeg,
@@ -33,6 +34,7 @@ const leg = (over: Partial<StrategyLeg> = {}): StrategyLeg => ({
   lots: 2,
   expiry: "current_week",
   strike: { mode: "atm", offset: 0, premium: null },
+  direction: "always",
   ...over,
 });
 
@@ -52,7 +54,14 @@ describe("strategy text", () => {
     const c: RulesConfig = {
       kind: "rules",
       underlying: "NIFTY",
-      entry: { mode: "time", at: "15:00", days: ["MON", "TUE", "WED", "THU", "FRI"], dte: [0, 1] },
+      entry: {
+        mode: "time",
+        at: "15:00",
+        days: ["MON", "TUE", "WED", "THU", "FRI"],
+        dte: [0, 1],
+        signals: [],
+        max_per_day: 1,
+      },
       holding: { mode: "next_day", exit: "09:30", days: 1 },
       legs: [leg()],
       risk: {
@@ -81,6 +90,24 @@ describe("strategy text", () => {
     expect(r.entry).toMatchObject({ at: "09:30", days: ["MON"] });
     expect(r.holding).toEqual({ mode: "intraday", exit: "15:00", days: 1 });
     expect(configSummary(r)).toBe("NIFTY · 1 leg · 09:30–15:00");
+  });
+
+  it("describes conditions in plain words", () => {
+    expect(
+      conditionText({
+        candle: 5,
+        op: "crosses_above",
+        right: { kind: "level", level: "opening_high", minutes: 15 },
+      }),
+    ).toBe("a 5-minute close crosses above the 15-minute opening range high");
+    expect(
+      conditionText({
+        candle: 15,
+        op: "below",
+        left: { kind: "level", level: "day_low", minutes: 15 },
+        right: { kind: "number", value: 24500, minutes: 15 },
+      }),
+    ).toBe("day low so far is below 24500");
   });
 
   it("describes a leg with quantity and exits", () => {

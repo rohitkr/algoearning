@@ -1759,6 +1759,38 @@ export interface components {
             /** Value */
             value: number;
         };
+        /**
+         * Condition
+         * @description `left` compared with `right` on finished candles of `candle` minutes. crosses_*: it happened on the newest
+         *     candle (the previous candle was on the other side); above / below: it is true as of the newest candle.
+         */
+        Condition: {
+            /**
+             * Candle
+             * @default 5
+             * @enum {integer}
+             */
+            candle: 1 | 3 | 5 | 15 | 30 | 60;
+            left?: components["schemas"]["Operand"];
+            /**
+             * Op
+             * @default crosses_above
+             * @enum {string}
+             */
+            op: "crosses_above" | "crosses_below" | "above" | "below";
+            right?: components["schemas"]["Operand"];
+        };
+        /** ConditionGroup */
+        ConditionGroup: {
+            /** Conditions */
+            conditions: components["schemas"]["Condition"][];
+            /**
+             * Match
+             * @default all
+             * @enum {string}
+             */
+            match: "all" | "any";
+        };
         /** ConfigIssue */
         ConfigIssue: {
             /** Loc */
@@ -2051,6 +2083,12 @@ export interface components {
              */
             action: "BUY" | "SELL";
             /**
+             * Direction
+             * @default always
+             * @enum {string}
+             */
+            direction: "always" | "up" | "down";
+            /**
              * Expiry
              * @default current_week
              * @enum {string}
@@ -2310,6 +2348,29 @@ export interface components {
             tradingsymbol: string;
             /** Underlying */
             underlying: string;
+        };
+        /**
+         * Operand
+         * @description A value on the index: the close of the candle (price), a ready-made level, or a plain number.
+         *     Levels: the high/low of the first `minutes` of the session (opening_*), today's open, the day's high/low so far
+         *     (before the candle), and the previous session's high/low/close.
+         */
+        Operand: {
+            /**
+             * Kind
+             * @default price
+             * @enum {string}
+             */
+            kind: "price" | "level" | "number";
+            /** Level */
+            level?: ("opening_high" | "opening_low" | "day_open" | "day_high" | "day_low" | "prev_high" | "prev_low" | "prev_close") | null;
+            /**
+             * Minutes
+             * @default 15
+             */
+            minutes: number;
+            /** Value */
+            value?: number | null;
         };
         /** OrderOut */
         OrderOut: {
@@ -2815,6 +2876,7 @@ export interface components {
         /** RulesConfig */
         RulesConfig: {
             entry?: components["schemas"]["RulesEntry"];
+            exit?: components["schemas"]["RulesExit"];
             holding?: components["schemas"]["Holding"];
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -2833,9 +2895,11 @@ export interface components {
         };
         /**
          * RulesEntry
-         * @description When a new trade may start. `dte`: only on days that many trading days (Mon-Fri) before the first leg's
-         *     expiry (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for
-         *     intraday, none for positional), so a late engine start still enters, but not too late.
+         * @description When a new trade may start. mode time: at `at`. mode conditions: on the first of `signals` that is true
+         *     between `at` and `until`. `dte`: only on days that many trading days (Mon-Fri) before the first leg's expiry
+         *     (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for
+         *     intraday, none for positional), so a late engine start still enters, but not too late. `max_per_day`: trades
+         *     a day (a stopped-out or exited trade may be followed by another).
          */
         RulesEntry: {
             /**
@@ -2848,13 +2912,33 @@ export interface components {
             /** Dte */
             dte?: number[] | null;
             /**
+             * Max Per Day
+             * @default 1
+             */
+            max_per_day: number;
+            /**
              * Mode
              * @default time
-             * @constant
+             * @enum {string}
              */
-            mode: "time";
+            mode: "time" | "conditions";
+            /** Signals */
+            signals?: components["schemas"]["Signal"][];
             /** Until */
             until?: string | null;
+        };
+        /**
+         * RulesExit
+         * @description Close the whole trade when `when` is true, or (on_opposite_signal) when an entry signal of the other
+         *     direction is.
+         */
+        RulesExit: {
+            /**
+             * On Opposite Signal
+             * @default false
+             */
+            on_opposite_signal: boolean;
+            when?: components["schemas"]["ConditionGroup"] | null;
         };
         /**
          * RulesRisk
@@ -2980,6 +3064,26 @@ export interface components {
             ip: string | null;
             /** Previous */
             previous?: string | null;
+        };
+        /**
+         * Signal
+         * @description Conditions that start a trade. The legs that trade: those for this direction, plus the 'always' legs.
+         */
+        Signal: {
+            /** Conditions */
+            conditions: components["schemas"]["Condition"][];
+            /**
+             * Direction
+             * @default always
+             * @enum {string}
+             */
+            direction: "always" | "up" | "down";
+            /**
+             * Match
+             * @default all
+             * @enum {string}
+             */
+            match: "all" | "any";
         };
         /** SmcBox */
         SmcBox: {

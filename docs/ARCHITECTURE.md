@@ -104,7 +104,7 @@ user's rows. Trusted paths use `ae_system`: the engine, the worker, webhooks and
 
 **Trading domain (`packages/py-core`).** Pure code with no database or network, so it can be tested in
 isolation. A strategy is a typed config (`strategy.py`); the builder's kind is `rules` (entry time, intraday or
-overnight holding, legs, trade limits; ADR 0022), next to the fixed `range_breakout`, `zero_dte` and `smc_scalp`.
+overnight holding, entry on conditions, legs, trade limits; ADR 0022, 0023), next to the fixed `range_breakout`, `zero_dte` and `smc_scalp`.
 Its _runner_ (`trading/runners.py`, `smc_runner.py`) decides entries and exits from prices. `risk.py` applies stop-losses, targets and daily limits. The same runners
 drive live trading, paper trading and backtests (ADR 0017), so all three behave the same.
 

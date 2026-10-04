@@ -143,6 +143,44 @@ describe("StrategyBuilder", () => {
     expect(saved.config.legs[1]!.strike).toEqual({ mode: "points", offset: 0, premium: null, points: 300 });
   });
 
+  it("builds a breakout from the opening range preset and edits its signals", async () => {
+    render(<StrategyBuilder catalog={catalog} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Opening range breakout/ }));
+    expect(legs()).toHaveLength(2);
+    expect(
+      screen.getByText(/Up signal: when a 5-minute close crosses above the 15-minute opening range high\./),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Down signal: when a 5-minute close crosses below the 15-minute opening range low\./),
+    ).toBeTruthy();
+    expect(screen.getByText(/Exit everything on a signal in the other direction\./)).toBeTruthy();
+    expect(
+      screen.getByText(/Leg 1: Buy 1 lot \(65 qty\) NIFTY ATM CE · Current week · SL 30% · on an up signal/),
+    ).toBeTruthy();
+
+    fireEvent.change(screen.getAllByLabelText("Candle")[0]!, { target: { value: "15" } });
+    fireEvent.change(screen.getAllByLabelText("Compared with")[0]!, { target: { value: "prev_high" } });
+    expect(
+      screen.getByText(/Up signal: when a 15-minute close crosses above previous day high\./),
+    ).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: /Add condition/ })[0]!);
+    expect(
+      screen.getByText(/ and a 5-minute close crosses above the 15-minute opening range high\./),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+    await flush();
+    const saved = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies")!.body as {
+      config: { entry: { mode: string; signals: { direction: string; conditions: { candle: number }[] }[] } };
+    };
+    expect(saved.config.entry.mode).toBe("conditions");
+    expect(saved.config.entry.signals[0]).toMatchObject({ direction: "up" });
+    expect(saved.config.entry.signals[0]!.conditions.map((c) => c.candle)).toEqual([15, 5]);
+
+    fireEvent.change(screen.getByLabelText("Enter"), { target: { value: "time" } });
+    expect(screen.queryByRole("heading", { name: "Signals" })).toBeNull();
+  });
+
   it("opens an old time-based strategy as rules", () => {
     const old = {
       kind: "time_based" as const,
