@@ -144,3 +144,20 @@ def test_an_index_stop_fires_on_the_minute_extreme_and_fills_at_the_option_extre
     })  # fmt: skip
     (t,) = run(config, h).trades
     assert (t.exit_time, t.exit_price, t.reason) == (dip, 80, "stop-loss")  # the open (25000) never reached it
+
+
+def test_an_overnight_rules_trade_is_held_to_the_next_day() -> None:
+    mon = DAY - timedelta(days=1)
+    h = history({"15:00": flat(100)}, day=mon)
+    h.add_spot("NIFTY", [Candle(ts("09:15") + timedelta(minutes=i), 25000, 25001, 24999, 25000) for i in range(375)])
+    h.add_option(KEY, [Candle(ts("09:30"), *flat(70))])
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "15:00"},
+        "holding": {"mode": "next_day", "exit": "09:30"},
+        "legs": [{"id": "L1", "action": "SELL", "option_type": "CE"}],
+    })  # fmt: skip
+    r = simulate(config, h, mon, DAY, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
+    (t,) = r.trades
+    assert (t.entry_time, t.exit_time, t.exit_price, t.reason) == (ts("15:00", mon), ts("09:30"), 70, "exit time 09:30")
+    assert t.gross == 30 * 65

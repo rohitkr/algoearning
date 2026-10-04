@@ -7,12 +7,11 @@ import type {
   Strategy,
   StrategyCatalog,
   StrategyConfig,
-  TimeBasedConfig,
   ZeroDteConfig,
 } from "@algoearning/api-types";
 import { Button, Card, CardTitle, StatusPill, Switch, cn } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
-import { ArrowLeft, Plus, Save } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -20,20 +19,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
 import {
   KIND_LABEL,
-  WEEKDAYS,
-  type Weekday,
   describeConfig,
   issueKey,
   issueLabel,
   issueMap,
-  newLeg,
-  riskOf,
-  timingOf,
+  rulesFromTimeBased,
   type Underlying,
 } from "@/lib/strategy";
 
 import { Check, Field, NumberField, SelectField, TimeField, inputClass } from "./fields";
-import { LegEditor } from "./leg-editor";
+import { RulesEditor } from "./rules-editor";
 import { SmcParams } from "./smc-params";
 
 type Errs = Record<string, string>;
@@ -136,9 +131,10 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
   const [presetId, setPresetId] = useState<string | null>(strategy ? null : (presets[0]?.id ?? null));
   const [name, setName] = useState(strategy?.name ?? "");
   const [description, setDescription] = useState(strategy?.description ?? "");
-  const [config, setConfig] = useState<StrategyConfig>(
-    strategy?.config ?? presets[0]?.config ?? { kind: "time_based", underlying: "NIFTY", legs: [] },
-  );
+  const [config, setConfig] = useState<StrategyConfig>(() => {
+    const c = strategy?.config ?? presets[0]?.config ?? { kind: "rules", underlying: "NIFTY", legs: [] };
+    return c.kind === "time_based" ? rulesFromTimeBased(c) : c; // one builder (ADR 0022)
+  });
   const [ready, setReady] = useState(strategy?.status === "ready");
   const [check, setCheck] = useState<ConfigValidation | null>(null);
   const [saveErrors, setSaveErrors] = useState<Errs>({});
@@ -190,10 +186,6 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
     setPresetId(id);
     update(p.config);
     if (!name || presets.some((x) => x.name === name)) setName(p.id === "blank" ? "" : p.name);
-  }
-
-  function setTimeBased(fn: (c: TimeBasedConfig) => TimeBasedConfig) {
-    if (config.kind === "time_based") update(fn(config));
   }
 
   async function save() {
@@ -302,7 +294,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                   {p.config.kind === "smc_scalp" ? (
                     <StatusPill tone="info">SMC</StatusPill>
                   ) : (
-                    p.config.kind !== "time_based" && <StatusPill tone="info">Proven</StatusPill>
+                    p.config.kind !== "rules" && <StatusPill tone="info">Proven</StatusPill>
                   )}
                 </span>
                 <span className="mt-1 block text-xs text-muted">{p.description}</span>
@@ -346,7 +338,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                 }))}
                 onChange={(v) => {
                   const next = catalog.instruments.find((i) => i.code === v);
-                  if (config.kind === "time_based" && next && !next.weekly_expiry)
+                  if (config.kind === "rules" && next && !next.weekly_expiry)
                     update({
                       ...config,
                       underlying: v,
@@ -378,158 +370,16 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
             </Field>
           </Card>
 
-          {config.kind === "time_based" ? (
-            <>
-              <Card className="flex flex-col gap-4">
-                <h2 className="font-semibold">Timing</h2>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <TimeField
-                    label="Entry time"
-                    value={config.timing?.entry}
-                    {...hours}
-                    error={errs["timing.entry"]}
-                    onChange={(v) => setTimeBased((c) => ({ ...c, timing: { ...timingOf(c), entry: v } }))}
-                  />
-                  <TimeField
-                    label="Exit time"
-                    value={config.timing?.exit}
-                    {...hours}
-                    error={errs["timing.exit"]}
-                    onChange={(v) => setTimeBased((c) => ({ ...c, timing: { ...timingOf(c), exit: v } }))}
-                  />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted" id="days-label">
-                    Trade on
-                  </p>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-labelledby="days-label">
-                    {WEEKDAYS.map((d) => {
-                      const days = (config.timing?.days ?? [...WEEKDAYS]) as Weekday[];
-                      const on = days.includes(d);
-                      return (
-                        <button
-                          key={d}
-                          type="button"
-                          aria-pressed={on}
-                          onClick={() =>
-                            setTimeBased((c) => ({
-                              ...c,
-                              timing: {
-                                ...timingOf(c),
-                                days: on
-                                  ? days.filter((x) => x !== d)
-                                  : WEEKDAYS.filter((x) => x === d || days.includes(x)),
-                              },
-                            }))
-                          }
-                          className={cn(
-                            "h-8 min-w-12 rounded-lg border px-2 text-xs font-semibold",
-                            on
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border text-muted hover:bg-surface-2",
-                          )}
-                        >
-                          {d.slice(0, 1) + d.slice(1).toLowerCase()}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {errs["timing.days"] && <p className="mt-1 text-xs text-loss">{errs["timing.days"]}</p>}
-                </div>
-              </Card>
-
-              <section className="flex flex-col gap-3" aria-label="Legs">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-semibold">
-                    Legs{" "}
-                    <span className="text-sm font-normal text-muted">
-                      ({config.legs.length} of {catalog.limits.max_legs})
-                    </span>
-                  </h2>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={config.legs.length >= catalog.limits.max_legs}
-                    onClick={() =>
-                      setTimeBased((c) => ({
-                        ...c,
-                        legs: [...c.legs, newLeg(c, inst?.weekly_expiry ?? true)],
-                      }))
-                    }
-                  >
-                    <Plus className="size-4" aria-hidden /> Add leg
-                  </Button>
-                </div>
-                {errs.legs && <p className="text-sm text-loss">{errs.legs}</p>}
-                {config.legs.map((leg, i) => (
-                  <LegEditor
-                    key={leg.id + i}
-                    leg={leg}
-                    index={i}
-                    instrument={inst}
-                    maxOffset={catalog.limits.max_strike_offset}
-                    errs={errs}
-                    warns={warns}
-                    canRemove={config.legs.length > 1}
-                    onChange={(l) =>
-                      setTimeBased((c) => ({ ...c, legs: c.legs.map((x, j) => (j === i ? l : x)) }))
-                    }
-                    onDuplicate={
-                      config.legs.length < catalog.limits.max_legs
-                        ? () =>
-                            setTimeBased((c) => {
-                              const copy = { ...c.legs[i]!, id: newLeg(c, true).id };
-                              return {
-                                ...c,
-                                legs: [...c.legs.slice(0, i + 1), copy, ...c.legs.slice(i + 1)],
-                              };
-                            })
-                        : undefined
-                    }
-                    onRemove={() => setTimeBased((c) => ({ ...c, legs: c.legs.filter((_, j) => j !== i) }))}
-                  />
-                ))}
-              </section>
-
-              <Card className="flex flex-col gap-4">
-                <div>
-                  <h2 className="font-semibold">Strategy risk</h2>
-                  <p className="text-sm text-muted">
-                    Limits on the combined profit or loss of all legs. Leave empty for none.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <NumberField
-                    label="Max loss"
-                    value={config.risk?.mtm_stop_loss}
-                    optional
-                    min={0}
-                    suffix="₹"
-                    error={errs["risk.mtm_stop_loss"]}
-                    onChange={(v) =>
-                      setTimeBased((c) => ({ ...c, risk: { ...riskOf(c), mtm_stop_loss: v } }))
-                    }
-                  />
-                  <NumberField
-                    label="Profit target"
-                    value={config.risk?.mtm_target}
-                    optional
-                    min={0}
-                    suffix="₹"
-                    error={errs["risk.mtm_target"]}
-                    onChange={(v) => setTimeBased((c) => ({ ...c, risk: { ...riskOf(c), mtm_target: v } }))}
-                  />
-                </div>
-                <Check
-                  label="When any leg's stop-loss hits, exit every leg"
-                  checked={!!config.risk?.exit_all_on_leg_sl}
-                  error={errs["risk.exit_all_on_leg_sl"]}
-                  onChange={(on) =>
-                    setTimeBased((c) => ({ ...c, risk: { ...riskOf(c), exit_all_on_leg_sl: on } }))
-                  }
-                />
-              </Card>
-            </>
+          {config.kind === "rules" ? (
+            <RulesEditor
+              config={config}
+              catalog={catalog}
+              inst={inst}
+              hours={hours}
+              errs={errs}
+              warns={warns}
+              onChange={update}
+            />
           ) : config.kind === "smc_scalp" ? (
             <SmcParams
               config={config}
@@ -553,7 +403,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                   warns={warns}
                   onChange={update}
                 />
-              ) : (
+              ) : config.kind === "zero_dte" ? (
                 <ProvenParams
                   config={config}
                   specs={ZERO_DTE_PARAMS}
@@ -562,7 +412,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                   warns={warns}
                   onChange={update}
                 />
-              )}
+              ) : null}
             </Card>
           )}
         </div>

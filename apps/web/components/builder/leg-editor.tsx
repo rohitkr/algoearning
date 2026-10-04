@@ -22,8 +22,12 @@ const STRIKE_CHOICES = (max: number) => [
   ...Array.from({ length: max }, (_, i) => max - i).map((n) => ({ value: String(-n), label: `ITM ${n}` })),
   { value: "0", label: "ATM" },
   ...Array.from({ length: max }, (_, i) => i + 1).map((n) => ({ value: String(n), label: `OTM ${n}` })),
-  { value: "premium", label: "Closest premium" },
+  { value: "premium", label: "Premium near" },
+  { value: "premium_gte", label: "Premium at least" },
+  { value: "premium_lte", label: "Premium at most" },
+  { value: "points", label: "Points from index" },
 ];
+const BY_PRICE = new Set(["premium", "premium_gte", "premium_lte"]);
 
 /** A toggleable block of options (stop-loss, target, ...): off = null in the config. */
 function Optional({
@@ -139,7 +143,7 @@ export function LegEditor({
 }) {
   const p = `legs.${index}`;
   const set = <K extends keyof StrategyLeg>(k: K, v: StrategyLeg[K]) => onChange({ ...leg, [k]: v });
-  const strike: LegStrike = leg.strike ?? { mode: "atm", offset: 0, premium: null };
+  const strike: LegStrike = leg.strike ?? { mode: "atm", offset: 0, premium: null, points: null };
   const qty = legQuantity(leg, instrument);
   const weekly = instrument?.weekly_expiry ?? true;
   const sl: LegThreshold = { unit: "percent", value: 30, basis: "premium" };
@@ -212,26 +216,38 @@ export function LegEditor({
         />
         <SelectField
           label="Strike"
-          value={strike.mode === "premium" ? "premium" : String(strike.offset ?? 0)}
+          value={strike.mode === "atm" ? String(strike.offset ?? 0) : strike.mode}
           options={STRIKE_CHOICES(maxOffset)}
-          error={errs[`${p}.strike.offset`]}
+          error={errs[`${p}.strike.offset`] ?? errs[`${p}.strike.mode`]}
           onChange={(v) =>
             set(
               "strike",
-              v === "premium"
-                ? { mode: "premium", offset: 0, premium: strike.premium ?? 100 }
-                : { mode: "atm", offset: Number(v), premium: null },
+              BY_PRICE.has(v)
+                ? { mode: v as LegStrike["mode"], offset: 0, premium: strike.premium ?? 100, points: null }
+                : v === "points"
+                  ? { mode: "points", offset: 0, premium: null, points: strike.points ?? 200 }
+                  : { mode: "atm", offset: Number(v), premium: null, points: null },
             )
           }
         />
-        {strike.mode === "premium" ? (
+        {BY_PRICE.has(strike.mode) ? (
           <NumberField
-            label="Premium near"
+            label="Premium"
             value={strike.premium}
             min={0}
             suffix="₹"
             error={errs[`${p}.strike.premium`]}
             onChange={(v) => set("strike", { ...strike, premium: v })}
+          />
+        ) : strike.mode === "points" ? (
+          <NumberField
+            label="Points"
+            value={strike.points}
+            step={50}
+            suffix="pts"
+            hint="+ out of the money, − in the money"
+            error={errs[`${p}.strike.points`]}
+            onChange={(v) => set("strike", { ...strike, points: v })}
           />
         ) : (
           <div className="hidden sm:block" />

@@ -115,6 +115,26 @@ def closest_premium(prices: dict[int, float], premium: float) -> int | None:
     return min(prices, key=lambda k: (abs(prices[k] - premium), prices[k]))
 
 
+def add_weekdays(day: date, n: int) -> date:
+    """The weekday `n` weekdays after `day` (exchange holidays are not known here: a trade due out on one exits at
+    the next session's first step)."""
+    while n > 0:
+        day += timedelta(days=1)
+        if day.weekday() < 5:
+            n -= 1
+    return day
+
+
+def weekdays_between(day: date, later: date) -> int:
+    """Weekdays after `day` up to and including `later`: 0 on expiry day, 1 the day before (Mon-Fri, no holidays)."""
+    n, d = 0, day
+    while d < later:
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            n += 1
+    return n
+
+
 def distance(value: float, unit: str, ref: float) -> float:
     return value if unit == "points" else ref * value / 100
 

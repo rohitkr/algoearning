@@ -1551,6 +1551,32 @@
         "title": "CheckoutOut",
         "type": "object"
       },
+      "CombinedStop": {
+        "additionalProperties": false,
+        "description": "Exit everything when the sold legs' premiums together rise this much above their total at entry.",
+        "properties": {
+          "unit": {
+            "default": "percent",
+            "enum": [
+              "points",
+              "percent"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000.0,
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "CombinedStop",
+        "type": "object"
+      },
       "ConfigIssue": {
         "properties": {
           "loc": {
@@ -2099,6 +2125,38 @@
         "title": "HistoryCoverage",
         "type": "object"
       },
+      "Holding": {
+        "additionalProperties": false,
+        "description": "How long a trade lives. intraday: exit at `exit` the same day. next_day: at `exit` on the next trading day.\ndays: at `exit` `days` trading days after entry. expiry: at `exit` on the first leg's expiry day.",
+        "properties": {
+          "days": {
+            "default": 1,
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "exit": {
+            "default": "15:15",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Exit",
+            "type": "string"
+          },
+          "mode": {
+            "default": "intraday",
+            "enum": [
+              "intraday",
+              "next_day",
+              "days",
+              "expiry"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "Holding",
+        "type": "object"
+      },
       "InstrumentAdminOut": {
         "properties": {
           "code": {
@@ -2569,6 +2627,56 @@
           "unlocked"
         ],
         "title": "LiveUnlockIn",
+        "type": "object"
+      },
+      "LockProfit": {
+        "additionalProperties": false,
+        "description": "Once the trade's profit reaches `at`, never give back below `lock`; every further `trail_every`, raise the\nfloor by `trail_by` (both empty: lock only). Rupees.",
+        "properties": {
+          "at": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000000.0,
+            "title": "At",
+            "type": "number"
+          },
+          "lock": {
+            "maximum": 100000000.0,
+            "minimum": 0.0,
+            "title": "Lock",
+            "type": "number"
+          },
+          "trail_by": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trail By"
+          },
+          "trail_every": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trail Every"
+          }
+        },
+        "required": [
+          "at",
+          "lock"
+        ],
+        "title": "LockProfit",
         "type": "object"
       },
       "MarketDataAdmin": {
@@ -3965,6 +4073,7 @@
             "discriminator": {
               "mapping": {
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "rules": "#/components/schemas/RulesConfig",
                 "smc_scalp": "#/components/schemas/SmcScalpConfig",
                 "time_based": "#/components/schemas/TimeBasedConfig",
                 "zero_dte": "#/components/schemas/ZeroDteConfig"
@@ -3972,6 +4081,9 @@
               "propertyName": "kind"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/RulesConfig"
+              },
               {
                 "$ref": "#/components/schemas/TimeBasedConfig"
               },
@@ -4498,6 +4610,176 @@
           }
         },
         "title": "RiskSettingsIO",
+        "type": "object"
+      },
+      "RulesConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "entry": {
+            "$ref": "#/components/schemas/RulesEntry"
+          },
+          "holding": {
+            "$ref": "#/components/schemas/Holding"
+          },
+          "kind": {
+            "const": "rules",
+            "default": "rules",
+            "title": "Kind",
+            "type": "string"
+          },
+          "legs": {
+            "items": {
+              "$ref": "#/components/schemas/Leg"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Legs",
+            "type": "array"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/RulesRisk"
+          },
+          "underlying": {
+            "default": "NIFTY",
+            "enum": [
+              "NIFTY",
+              "BANKNIFTY",
+              "FINNIFTY",
+              "MIDCPNIFTY",
+              "SENSEX"
+            ],
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "required": [
+          "legs"
+        ],
+        "title": "RulesConfig",
+        "type": "object"
+      },
+      "RulesEntry": {
+        "additionalProperties": false,
+        "description": "When a new trade may start. `dte`: only on days that many trading days (Mon-Fri) before the first leg's\nexpiry (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for\nintraday, none for positional), so a late engine start still enters, but not too late.",
+        "properties": {
+          "at": {
+            "default": "09:20",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "At",
+            "type": "string"
+          },
+          "days": {
+            "items": {
+              "enum": [
+                "MON",
+                "TUE",
+                "WED",
+                "THU",
+                "FRI"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Days",
+            "type": "array"
+          },
+          "dte": {
+            "anyOf": [
+              {
+                "items": {
+                  "maximum": 30.0,
+                  "minimum": 0.0,
+                  "type": "integer"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dte"
+          },
+          "mode": {
+            "const": "time",
+            "default": "time",
+            "title": "Mode",
+            "type": "string"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          }
+        },
+        "title": "RulesEntry",
+        "type": "object"
+      },
+      "RulesRisk": {
+        "additionalProperties": false,
+        "description": "Limits on the whole trade (all legs, from entry to final exit), in rupees unless stated.",
+        "properties": {
+          "combined_stop": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CombinedStop"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exit_all_on_leg_sl": {
+            "default": false,
+            "title": "Exit All On Leg Sl",
+            "type": "boolean"
+          },
+          "lock_profit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LockProfit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mtm_stop_loss": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mtm Stop Loss"
+          },
+          "mtm_target": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mtm Target"
+          }
+        },
+        "title": "RulesRisk",
         "type": "object"
       },
       "RunDetail": {
@@ -5447,6 +5729,7 @@
             "discriminator": {
               "mapping": {
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "rules": "#/components/schemas/RulesConfig",
                 "smc_scalp": "#/components/schemas/SmcScalpConfig",
                 "time_based": "#/components/schemas/TimeBasedConfig",
                 "zero_dte": "#/components/schemas/ZeroDteConfig"
@@ -5454,6 +5737,9 @@
               "propertyName": "kind"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/RulesConfig"
+              },
               {
                 "$ref": "#/components/schemas/TimeBasedConfig"
               },
@@ -5535,6 +5821,7 @@
             "discriminator": {
               "mapping": {
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "rules": "#/components/schemas/RulesConfig",
                 "smc_scalp": "#/components/schemas/SmcScalpConfig",
                 "time_based": "#/components/schemas/TimeBasedConfig",
                 "zero_dte": "#/components/schemas/ZeroDteConfig"
@@ -5542,6 +5829,9 @@
               "propertyName": "kind"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/RulesConfig"
+              },
               {
                 "$ref": "#/components/schemas/TimeBasedConfig"
               },
@@ -5580,6 +5870,7 @@
           },
           "kind": {
             "enum": [
+              "rules",
               "time_based",
               "range_breakout",
               "zero_dte",
@@ -5639,6 +5930,7 @@
                 "discriminator": {
                   "mapping": {
                     "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                    "rules": "#/components/schemas/RulesConfig",
                     "smc_scalp": "#/components/schemas/SmcScalpConfig",
                     "time_based": "#/components/schemas/TimeBasedConfig",
                     "zero_dte": "#/components/schemas/ZeroDteConfig"
@@ -5646,6 +5938,9 @@
                   "propertyName": "kind"
                 },
                 "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/RulesConfig"
+                  },
                   {
                     "$ref": "#/components/schemas/TimeBasedConfig"
                   },
@@ -5805,13 +6100,16 @@
       },
       "Strike": {
         "additionalProperties": false,
-        "description": "atm: ATM +/- `offset` strikes (positive = out of the money, negative = in the money).\npremium: the strike whose premium is closest to `premium` at entry.",
+        "description": "atm: ATM +/- `offset` strikes (positive = out of the money, negative = in the money).\npremium: the strike whose premium is closest to `premium` at entry.\npremium_gte / premium_lte: the cheapest strike costing at least `premium` / the dearest costing at most it.\npoints: the strike nearest the index +/- `points` (positive = out of the money).",
         "properties": {
           "mode": {
             "default": "atm",
             "enum": [
               "atm",
-              "premium"
+              "premium",
+              "premium_gte",
+              "premium_lte",
+              "points"
             ],
             "title": "Mode",
             "type": "string"
@@ -5822,6 +6120,19 @@
             "minimum": -20.0,
             "title": "Offset",
             "type": "integer"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "maximum": 20000.0,
+                "minimum": -20000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points"
           },
           "premium": {
             "anyOf": [

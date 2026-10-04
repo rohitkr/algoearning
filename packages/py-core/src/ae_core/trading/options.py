@@ -42,12 +42,27 @@ def pick(m: Market, right: Right, strike: Strike, expiry: date, offset_shift: in
     if strike.mode == "atm":
         k = rules.offset_strike(m.spot, right, strike.offset + offset_shift, m.strike_step)
         return Contract(m.underlying, expiry, k, right)
+    if strike.mode == "points":
+        # the strike nearest the index +/- points, out of the money for positive points (calls up, puts down)
+        target = m.spot + (strike.points or 0) * (1 if right == "CE" else -1)
+        return Contract(m.underlying, expiry, rules.atm_strike(target, m.strike_step), right)
     prices = {c.strike: m.price(c) for c in candidates(m, right, expiry)}
     known = {k: v for k, v in prices.items() if v is not None}
     if len(known) < len(prices) // 2 or not known:
         return "waiting for option prices to choose the strike"
-    chosen = rules.closest_premium(known, float(strike.premium or 0))
-    return Contract(m.underlying, expiry, int(chosen or 0), right)
+    want = float(strike.premium or 0)
+    if strike.mode == "premium_gte":
+        known = {k: v for k, v in known.items() if v >= want}
+        chosen = min(known, key=lambda k: known[k]) if known else None
+    elif strike.mode == "premium_lte":
+        known = {k: v for k, v in known.items() if v <= want}
+        chosen = max(known, key=lambda k: known[k]) if known else None
+    else:
+        chosen = rules.closest_premium(known, want)
+    if chosen is None:
+        side = "at least" if strike.mode == "premium_gte" else "at most"
+        return f"no {right} strike costs {side} ₹{want:g}"
+    return Contract(m.underlying, expiry, int(chosen), right)
 
 
 def illiquid(q: Quote | None, min_volume: int, min_oi: int, max_spread_pct: float) -> str | None:

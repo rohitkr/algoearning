@@ -1,4 +1,4 @@
-import type { Instrument, StrategyLeg, TimeBasedConfig } from "@algoearning/api-types";
+import type { Instrument, RulesConfig, StrategyLeg, TimeBasedConfig } from "@algoearning/api-types";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,6 +10,7 @@ import {
   issueMap,
   newLeg,
   nextLegId,
+  rulesFromTimeBased,
   strikeLabel,
 } from "./strategy";
 
@@ -41,6 +42,45 @@ describe("strategy text", () => {
     expect(strikeLabel({ mode: "atm", offset: 2 })).toBe("OTM 2");
     expect(strikeLabel({ mode: "atm", offset: -1 })).toBe("ITM 1");
     expect(strikeLabel({ mode: "premium", offset: 0, premium: 50 })).toBe("Premium ≈ ₹50");
+    expect(strikeLabel({ mode: "premium_gte", offset: 0, premium: 60 })).toBe("Premium ≥ ₹60");
+    expect(strikeLabel({ mode: "premium_lte", offset: 0, premium: 60 })).toBe("Premium ≤ ₹60");
+    expect(strikeLabel({ mode: "points", offset: 0, points: 300 })).toBe("300 pts OTM");
+    expect(strikeLabel({ mode: "points", offset: 0, points: -100 })).toBe("100 pts ITM");
+  });
+
+  it("describes rules held overnight and converts time-based configs", () => {
+    const c: RulesConfig = {
+      kind: "rules",
+      underlying: "NIFTY",
+      entry: { mode: "time", at: "15:00", days: ["MON", "TUE", "WED", "THU", "FRI"], dte: [0, 1] },
+      holding: { mode: "next_day", exit: "09:30", days: 1 },
+      legs: [leg()],
+      risk: {
+        exit_all_on_leg_sl: false,
+        mtm_stop_loss: 3000,
+        lock_profit: { at: 2000, lock: 1000, trail_every: 500, trail_by: 250 },
+      },
+    };
+    const lines = describeConfig(c, [NIFTY]);
+    expect(lines[0]).toBe(
+      "Enter at 15:00, every weekday, only on expiry day or 1 trading day before expiry; hold overnight and exit at 09:30 the next trading day.",
+    );
+    expect(lines).toContain("Exit everything if the trade's loss reaches ₹3000.");
+    expect(lines).toContain(
+      "Once the profit reaches ₹2000, keep at least ₹1000, raised by ₹250 for every ₹500 more.",
+    );
+    expect(configSummary(c)).toBe("NIFTY · 1 leg · 15:00–next day 09:30");
+
+    const old: TimeBasedConfig = {
+      kind: "time_based",
+      underlying: "NIFTY",
+      timing: { entry: "09:30", exit: "15:00", days: ["MON"] },
+      legs: [leg()],
+    };
+    const r = rulesFromTimeBased(old);
+    expect(r.entry).toMatchObject({ at: "09:30", days: ["MON"] });
+    expect(r.holding).toEqual({ mode: "intraday", exit: "15:00", days: 1 });
+    expect(configSummary(r)).toBe("NIFTY · 1 leg · 09:30–15:00");
   });
 
   it("describes a leg with quantity and exits", () => {

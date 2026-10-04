@@ -28,7 +28,7 @@ from ae_brokers.kite import ContractBook, KiteClient
 from ae_core.backtest import Candle
 from ae_core.notifications import FROM_ENGINE, compose
 from ae_core.secrets import SecretBox
-from ae_core.strategy import migrate, parse
+from ae_core.strategy import holds_overnight, migrate, parse
 from ae_core.trading.model import IST, Contract, Intent, Market, Position, Quote
 from ae_core.trading.risk import RiskContext, RiskSettings, breach, check_entry
 from ae_core.trading.runners import Runner, make_runner
@@ -61,6 +61,18 @@ STALE = timedelta(minutes=2)
 HALT_KEY = "trading_halted"
 RETRY_EXIT = timedelta(seconds=5)
 RECONCILE_EVERY = timedelta(seconds=60)
+
+
+def _product(rn: Runner | None) -> str:
+    """NRML for a strategy that may hold overnight (MIS is squared off by the broker before the close), else MIS."""
+    return "NRML" if rn is not None and holds_overnight(rn.cfg) else "MIS"
+
+
+def _product_of(r: StrategyRun) -> str:
+    try:
+        return "NRML" if holds_overnight(parse(migrate(r.schema_version, r.config_snapshot))) else "MIS"
+    except ValueError:
+        return "MIS"
 
 
 @dataclass
@@ -457,8 +469,7 @@ class Engine:
                 continue
             batch.append(i)
         if batch:
-            product = "NRML" if r.kind == "range_breakout" else "MIS"
-            acct.submit(Batch(r.id, batch, product, r.dry_run, inst.freeze_qty))
+            acct.submit(Batch(r.id, batch, _product(rn), r.dry_run, inst.freeze_qty))
             inflight += batch
         for note in rn.notes:
             self._event(s, r, note.pop("event"), **note)
@@ -653,7 +664,7 @@ class Engine:
                     strike=Decimal(p.contract.strike),
                     option_type=p.contract.right,
                     side=side,
-                    product="NRML" if r.kind == "range_breakout" else "MIS",
+                    product=_product(self.runners.get(r.id)) if r.id in self.runners else _product_of(r),
                     lots=p.lots,
                     lot_size=inst.lot_size,
                     quantity=p.qty,

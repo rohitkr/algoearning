@@ -1745,6 +1745,20 @@ export interface components {
              */
             provider: "razorpay";
         };
+        /**
+         * CombinedStop
+         * @description Exit everything when the sold legs' premiums together rise this much above their total at entry.
+         */
+        CombinedStop: {
+            /**
+             * Unit
+             * @default percent
+             * @enum {string}
+             */
+            unit: "points" | "percent";
+            /** Value */
+            value: number;
+        };
         /** ConfigIssue */
         ConfigIssue: {
             /** Loc */
@@ -1918,6 +1932,29 @@ export interface components {
             /** Underlying */
             underlying: string;
         };
+        /**
+         * Holding
+         * @description How long a trade lives. intraday: exit at `exit` the same day. next_day: at `exit` on the next trading day.
+         *     days: at `exit` `days` trading days after entry. expiry: at `exit` on the first leg's expiry day.
+         */
+        Holding: {
+            /**
+             * Days
+             * @default 1
+             */
+            days: number;
+            /**
+             * Exit
+             * @default 15:15
+             */
+            exit: string;
+            /**
+             * Mode
+             * @default intraday
+             * @enum {string}
+             */
+            mode: "intraday" | "next_day" | "days" | "expiry";
+        };
         /** InstrumentAdminOut */
         InstrumentAdminOut: {
             /** Code */
@@ -2076,6 +2113,21 @@ export interface components {
         LiveUnlockIn: {
             /** Unlocked */
             unlocked: boolean;
+        };
+        /**
+         * LockProfit
+         * @description Once the trade's profit reaches `at`, never give back below `lock`; every further `trail_every`, raise the
+         *     floor by `trail_by` (both empty: lock only). Rupees.
+         */
+        LockProfit: {
+            /** At */
+            at: number;
+            /** Lock */
+            lock: number;
+            /** Trail By */
+            trail_by?: number | null;
+            /** Trail Every */
+            trail_every?: number | null;
         };
         /** MarketDataAdmin */
         MarketDataAdmin: {
@@ -2542,7 +2594,7 @@ export interface components {
         /** PresetOut */
         PresetOut: {
             /** Config */
-            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            config: components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
             /** Description */
             description: string;
             /** Id */
@@ -2759,6 +2811,67 @@ export interface components {
             max_open_positions?: number | null;
             /** Max Trades Per Day */
             max_trades_per_day?: number | null;
+        };
+        /** RulesConfig */
+        RulesConfig: {
+            entry?: components["schemas"]["RulesEntry"];
+            holding?: components["schemas"]["Holding"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rules";
+            /** Legs */
+            legs: components["schemas"]["Leg"][];
+            risk?: components["schemas"]["RulesRisk"];
+            /**
+             * Underlying
+             * @default NIFTY
+             * @enum {string}
+             */
+            underlying: "NIFTY" | "BANKNIFTY" | "FINNIFTY" | "MIDCPNIFTY" | "SENSEX";
+        };
+        /**
+         * RulesEntry
+         * @description When a new trade may start. `dte`: only on days that many trading days (Mon-Fri) before the first leg's
+         *     expiry (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for
+         *     intraday, none for positional), so a late engine start still enters, but not too late.
+         */
+        RulesEntry: {
+            /**
+             * At
+             * @default 09:20
+             */
+            at: string;
+            /** Days */
+            days?: ("MON" | "TUE" | "WED" | "THU" | "FRI")[];
+            /** Dte */
+            dte?: number[] | null;
+            /**
+             * Mode
+             * @default time
+             * @constant
+             */
+            mode: "time";
+            /** Until */
+            until?: string | null;
+        };
+        /**
+         * RulesRisk
+         * @description Limits on the whole trade (all legs, from entry to final exit), in rupees unless stated.
+         */
+        RulesRisk: {
+            combined_stop?: components["schemas"]["CombinedStop"] | null;
+            /**
+             * Exit All On Leg Sl
+             * @default false
+             */
+            exit_all_on_leg_sl: boolean;
+            lock_profit?: components["schemas"]["LockProfit"] | null;
+            /** Mtm Stop Loss */
+            mtm_stop_loss?: number | null;
+            /** Mtm Target */
+            mtm_target?: number | null;
         };
         /** RunDetail */
         RunDetail: {
@@ -3244,7 +3357,7 @@ export interface components {
         /** StrategyIn */
         StrategyIn: {
             /** Config */
-            config?: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            config?: components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
             /** Description */
             description?: string | null;
             /** Name */
@@ -3264,7 +3377,7 @@ export interface components {
         /** StrategyOut */
         StrategyOut: {
             /** Config */
-            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            config: components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
             /**
              * Created At
              * Format: date-time
@@ -3281,7 +3394,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "time_based" | "range_breakout" | "zero_dte" | "smc_scalp";
+            kind: "rules" | "time_based" | "range_breakout" | "zero_dte" | "smc_scalp";
             /** Name */
             name: string;
             /** Schema Version */
@@ -3302,7 +3415,7 @@ export interface components {
         /** StrategyPatch */
         StrategyPatch: {
             /** Config */
-            config?: (components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"]) | null;
+            config?: (components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"]) | null;
             /** Description */
             description?: string | null;
             /** Name */
@@ -3344,6 +3457,8 @@ export interface components {
          * Strike
          * @description atm: ATM +/- `offset` strikes (positive = out of the money, negative = in the money).
          *     premium: the strike whose premium is closest to `premium` at entry.
+         *     premium_gte / premium_lte: the cheapest strike costing at least `premium` / the dearest costing at most it.
+         *     points: the strike nearest the index +/- `points` (positive = out of the money).
          */
         Strike: {
             /**
@@ -3351,12 +3466,14 @@ export interface components {
              * @default atm
              * @enum {string}
              */
-            mode: "atm" | "premium";
+            mode: "atm" | "premium" | "premium_gte" | "premium_lte" | "points";
             /**
              * Offset
              * @default 0
              */
             offset: number;
+            /** Points */
+            points?: number | null;
             /** Premium */
             premium?: number | null;
         };

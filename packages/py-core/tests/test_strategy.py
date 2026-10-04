@@ -7,14 +7,17 @@ from ae_core.strategy import (
     SCHEMA_VERSION,
     Instrument,
     RangeBreakoutConfig,
+    RulesConfig,
     TimeBasedConfig,
     ZeroDteConfig,
     check,
     default_config,
+    holds_overnight,
     migrate,
     parse,
     parse_issues,
     plan_warnings,
+    rules_from_time_based,
 )
 from pydantic import ValidationError
 
@@ -132,3 +135,46 @@ def test_rules_follow_the_instruments_passed_in() -> None:
     monthly = {"SENSEX": Instrument("SENSEX", "BSE Sensex", "BFO", 20, 100, False)}
     assert [i.loc for i in check(cfg, monthly)] == [("legs", 0, "expiry")]
     assert [i.loc for i in check(cfg, {})] == [("underlying",)]
+
+
+def rules_cfg(**over: Any) -> dict[str, Any]:
+    return {"kind": "rules", "legs": [leg()], **over}
+
+
+def test_rules_checks() -> None:
+    assert locs(rules_cfg()) == []
+    assert locs(rules_cfg(entry={"at": "15:20"}, holding={"exit": "15:15"})) == [("holding", "exit")]
+    assert locs(rules_cfg(entry={"at": "15:20"}, holding={"mode": "next_day", "exit": "09:30"})) == []
+    assert locs(rules_cfg(entry={"at": "10:00", "until": "09:30"})) == [("entry", "until")]
+    assert locs(rules_cfg(entry={"at": "10:00", "until": "15:20"})) == [("entry", "until")]  # after the exit
+    assert locs(rules_cfg(entry={"dte": [1, 1]})) == [("entry", "dte")]
+    assert locs(rules_cfg(legs=[leg(strike={"mode": "points"})])) == [("legs", 0, "strike", "points")]
+    assert locs(rules_cfg(legs=[leg(strike={"mode": "premium_lte"})])) == [("legs", 0, "strike", "premium")]
+    assert locs(rules_cfg(legs=[leg(action="BUY")], risk={"combined_stop": {"value": 30}})) == [
+        ("risk", "combined_stop")
+    ]
+    assert locs(rules_cfg(risk={"lock_profit": {"at": 1000, "lock": 1000}})) == [("risk", "lock_profit", "lock")]
+    assert locs(rules_cfg(risk={"lock_profit": {"at": 1000, "lock": 500, "trail_by": 100}})) == [
+        ("risk", "lock_profit", "trail_by")
+    ]
+    assert locs({"kind": "smc_scalp", "option": {"strike": {"mode": "points", "points": 100}}}) == [
+        ("option", "strike", "mode")
+    ]
+
+
+def test_time_based_becomes_intraday_rules_and_overnight_needs_nrml() -> None:
+    old = parse(time_based(risk={"mtm_stop_loss": 2000}))
+    assert isinstance(old, TimeBasedConfig)
+    new = rules_from_time_based(old)
+    assert isinstance(new, RulesConfig) and check(new, DEFAULT_INSTRUMENTS) == []
+    assert (new.entry.at, new.entry.days, new.holding.mode, new.holding.exit) == (
+        "09:20",
+        ["MON", "TUE"],
+        "intraday",
+        "15:15",
+    )
+    assert new.legs == old.legs and new.risk.mtm_stop_loss == 2000
+    assert not holds_overnight(old) and not holds_overnight(new)
+    assert holds_overnight(parse(rules_cfg(holding={"mode": "next_day", "exit": "09:30"})))
+    assert holds_overnight(parse({"kind": "range_breakout"}))
+    assert not holds_overnight(parse({"kind": "range_breakout", "intraday_only": True}))

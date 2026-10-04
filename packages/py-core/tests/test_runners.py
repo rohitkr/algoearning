@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
-from ae_core.strategy import parse
-from ae_core.trading import rules
+from ae_core.strategy import Strike, parse
+from ae_core.trading import options, rules
 from ae_core.trading.model import IST, Contract, Intent, Market
 from ae_core.trading.runners import RangeBreakoutRunner, Runner, TimeBasedRunner, ZeroDteRunner, make_runner
 
@@ -372,3 +372,160 @@ def test_range_breakout_waits_for_prices_of_freshly_chosen_contracts() -> None:
     late.at("11:21")
     late.at("11:27")  # still no prices after more than 5 minutes: the breakout is skipped, with a reason
     assert late.r.notes[-1]["event"] == "no_price_for_entry"
+
+
+# -- rules (ADR 0022) -------------------------------------------------------------------------------------------------
+THU, FRI, MON = date(2026, 10, 8), date(2026, 10, 9), date(2026, 10, 12)
+WEEK2 = date(2026, 10, 13)
+
+
+def rr(**over: Any) -> Runner:
+    raw: dict[str, Any] = {
+        "kind": "rules",
+        "entry": {"at": "15:00"},
+        "holding": {"mode": "next_day", "exit": "09:30"},
+        "legs": [{"id": "L1", "action": "SELL", "option_type": "CE", "lots": 1}],
+        **over,
+    }
+    r = make_runner(parse(raw))
+    assert r.kind == "rules"
+    return r
+
+
+def premium_ladder(sim: Sim, hm: str) -> None:
+    """CE and PE prices that fall 10 per 50 points out of the money from 160 at the money."""
+    for k in sim.r.wanted(sim.market(hm)):
+        ct = Contract.from_key(k)
+        away = (ct.strike - 25000) if ct.right == "CE" else (25000 - ct.strike)
+        sim.prices[k] = max(1.0, 160 - away / 5)
+
+
+def test_overnight_straddle_by_premium_exits_next_day_then_enters_again() -> None:
+    legs = [
+        {"id": "L1", "action": "SELL", "option_type": "CE", "strike": {"mode": "premium", "premium": 60}},
+        {"id": "L2", "action": "SELL", "option_type": "PE", "strike": {"mode": "premium", "premium": 60}},
+    ]
+    sim = Sim(rr(legs=legs), day=THU)
+    premium_ladder(sim, "15:00")
+    assert sim.at("14:59") == []
+    out = sim.at("15:00")
+    assert sorted(i.contract.key for i in out) == [c(24500, "PE", WEEK2), c(25500, "CE", WEEK2)]  # 160 - 100 = 60
+    assert sim.at("15:29") == []
+    sim.day = FRI
+    assert sim.at("09:15") == [] and sim.r.s["phase"] == "in"  # held over the night
+    assert len(sim.r.open_positions()) == 2
+    out = sim.at("09:30")
+    assert [i.reason for i in out] == ["exit time 09:30", "exit time 09:30"]
+    assert sim.r.s["phase"] == "waiting"  # entered yesterday: today's entry is still to come
+    premium_ladder(sim, "15:00")
+    assert len(sim.at("15:00")) == 2 and sim.r.s["phase"] == "in"
+    sim.day = MON  # over the weekend
+    assert sim.at("09:29") == [] and len(sim.at("09:30")) == 2
+
+
+def test_a_missed_exit_happens_at_the_next_step() -> None:
+    sim = Sim(rr(), day=THU)
+    sim.prices = {c(25000, "CE", WEEK2): 100.0}
+    sim.at("15:00")
+    sim.day = MON  # Friday was a holiday (or the engine was off)
+    (ex,) = sim.at("09:15")
+    assert ex.reason == "exit time 09:30"
+
+
+def test_hold_to_expiry_only_on_chosen_days_before_it() -> None:
+    raw = {"entry": {"at": "09:30", "dte": [3]}, "holding": {"mode": "expiry", "exit": "15:15"}}
+    sim = Sim(rr(**raw), day=date(2026, 10, 7))  # Wed: 4 weekdays before Tue 13th
+    sim.prices = {c(25000, "CE", WEEK2): 100.0}
+    assert sim.at("09:30") == [] and sim.r.notes[-1]["event"] == "not_a_chosen_day_before_expiry"
+    sim = Sim(rr(**raw), day=THU)
+    sim.prices = {c(25000, "CE", WEEK2): 100.0}
+    assert len(sim.at("09:30")) == 1
+    for day in (FRI, MON):
+        sim.day = day
+        assert sim.at("15:15") == []
+    sim.day = WEEK2
+    assert sim.at("15:14") == [] and sim.at("15:15")[0].reason == "exit time 15:15"
+
+
+def test_intraday_rules_do_not_enter_after_until() -> None:
+    sim = Sim(rr(entry={"at": "09:20", "until": "09:30"}, holding={"mode": "intraday", "exit": "15:15"}))
+    sim.prices = {c(25000): 100.0}
+    assert sim.at("09:31") == [] and sim.r.s["phase"] == "done"
+
+
+def test_combined_premium_stop() -> None:
+    legs = [
+        {"id": "L1", "action": "SELL", "option_type": "CE"},
+        {"id": "L2", "action": "SELL", "option_type": "PE"},
+    ]
+    sim = Sim(rr(legs=legs, entry={"at": "09:20"}, holding={"mode": "intraday"},
+                 risk={"combined_stop": {"unit": "percent", "value": 20}}))  # fmt: skip
+    sim.prices = {c(25000): 100.0, c(25000, "PE"): 100.0}
+    sim.at("09:20")
+    sim.prices = {c(25000): 150.0, c(25000, "PE"): 89.0}  # 239 < 240
+    assert sim.at("10:00") == []
+    sim.prices[c(25000, "PE")] = 91.0
+    out = sim.at("10:01")
+    assert len(out) == 2 and out[0].reason == "sold premiums up 20%"
+
+
+def test_lock_profit_trails_and_exits_on_giveback() -> None:
+    sim = Sim(rr(entry={"at": "09:20"}, holding={"mode": "intraday"},
+                 risk={"lock_profit": {"at": 1000, "lock": 500, "trail_every": 500, "trail_by": 250}}))  # fmt: skip
+    sim.prices = {c(25000): 100.0}
+    sim.at("09:20")
+    sim.prices[c(25000)] = 84.0  # +1040: locks 500
+    assert sim.at("10:00") == [] and sim.r.s["lock_floor"] == 500
+    sim.prices[c(25000)] = 76.0  # +1560: floor 750
+    assert sim.at("10:01") == [] and sim.r.s["lock_floor"] == 750
+    sim.prices[c(25000)] = 89.0  # +715
+    (ex,) = sim.at("10:02")
+    assert ex.reason == "profit fell to the locked ₹750"
+
+
+def test_mtm_limits_count_only_the_current_trade() -> None:
+    sim = Sim(rr(risk={"mtm_stop_loss": 1000}), day=THU)
+    sim.prices = {c(25000, "CE", WEEK2): 100.0}
+    sim.at("15:00")
+    sim.prices[c(25000, "CE", WEEK2)] = 110.0
+    sim.day = FRI
+    sim.at("09:30")  # -650 on the first trade
+    assert sim.r.realized == -650.0
+    sim.at("15:00")
+    sim.prices[c(25000, "CE", WEEK2)] = 115.0  # -325 on this one; -975 in all
+    assert sim.at("15:10") == []
+
+
+def test_new_strike_modes() -> None:
+    sim = Sim(rr())
+    m = sim.market("09:20")
+    pick = options.pick
+    assert pick(m, "CE", Strike(mode="points", points=300), DAY).strike == 25300  # type: ignore[union-attr]
+    assert pick(m, "PE", Strike(mode="points", points=300), DAY).strike == 24700  # type: ignore[union-attr]
+    assert pick(m, "PE", Strike(mode="points", points=-120), DAY).strike == 25100  # type: ignore[union-attr]
+    keys = {ct.key: ct for ct in options.candidates(m, "CE", DAY)}
+    m = Market(
+        m.now, "NIFTY", 25000, [], {k: 160 - (ct.strike - 25000) / 5 for k, ct in keys.items()}, EXPIRIES, 65, 50
+    )
+    assert pick(m, "CE", Strike(mode="premium_gte", premium=65), DAY).strike == 25450  # type: ignore[union-attr]
+    assert pick(m, "CE", Strike(mode="premium_lte", premium=65), DAY).strike == 25500  # type: ignore[union-attr]
+    assert pick(m, "CE", Strike(mode="premium_gte", premium=500), DAY) == "no CE strike costs at least ₹500"
+
+
+def test_no_overnight_entry_in_an_option_that_expires_first() -> None:
+    sim = Sim(rr())  # Tuesday, expiry day: the current week's options expire tonight
+    sim.prices = {c(25000): 100.0}
+    assert sim.at("15:00") == [] and sim.r.notes[-1]["event"] == "leg_expires_before_the_exit"
+    sim = Sim(rr(legs=[{"id": "L1", "action": "SELL", "option_type": "CE", "expiry": "next_week"}]))
+    sim.prices = {c(25000, expiry=WEEK2): 100.0}
+    assert len(sim.at("15:00")) == 1
+
+
+def test_a_time_based_run_in_progress_carries_on_after_the_upgrade() -> None:
+    sim = Sim(tb())
+    sim.prices = {c(25000): 100.0}
+    sim.at("09:20")
+    state = sim.r.state()
+    del state["final"], state["entered"], state["cycle_realized"]  # what the old runner stored
+    sim.r = TimeBasedRunner(sim.r.cfg, 1, state)
+    assert sim.at("12:00") == [] and sim.at("15:15")[0].reason == "exit time 15:15"

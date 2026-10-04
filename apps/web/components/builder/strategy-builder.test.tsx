@@ -75,7 +75,7 @@ describe("StrategyBuilder", () => {
     const cfg = (post?.body as { config: { legs: { id: string; action: string; strike: unknown }[] } })
       .config;
     expect(cfg.legs.map((l) => `${l.id}:${l.action}`)).toEqual(["L1:SELL", "L2:SELL", "L3:BUY"]);
-    expect(cfg.legs[2]!.strike).toEqual({ mode: "atm", offset: 4, premium: null });
+    expect(cfg.legs[2]!.strike).toEqual({ mode: "atm", offset: 4, premium: null, points: null });
     expect(push).toHaveBeenCalledWith("/builder/11111111-1111-1111-1111-111111111111?saved=1");
   });
 
@@ -89,7 +89,7 @@ describe("StrategyBuilder", () => {
   it("shows the server's errors next to the field and plan warnings", async () => {
     validateReply = {
       valid: false,
-      errors: [{ loc: ["timing", "exit"], msg: "must be after the entry time", type: "value_error" }],
+      errors: [{ loc: ["holding", "exit"], msg: "must be after the entry time", type: "value_error" }],
       warnings: [
         { loc: ["legs", 0, "lots"], msg: "your plan allows 10 lot(s) per order", type: "plan_limit" },
       ],
@@ -100,6 +100,68 @@ describe("StrategyBuilder", () => {
     expect(screen.getByText("1 to fix")).toBeTruthy();
     expect(screen.getAllByText(/your plan allows 10 lot\(s\) per order/).length).toBeGreaterThan(0);
     validateReply = { valid: true, errors: [], warnings: [] };
+  });
+
+  it("builds an overnight straddle by premium and saves its schedule", async () => {
+    render(<StrategyBuilder catalog={catalog} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Overnight straddle/ }));
+    expect(legs()).toHaveLength(2);
+    expect(
+      screen.getByText(
+        /Enter at 15:00 \(not after 15:20\), every weekday; hold overnight and exit at 09:30 the next trading day\./,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(/Leg 1: Sell 1 lot \(65 qty\) NIFTY Premium ≈ ₹60 CE/)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Hold"), { target: { value: "days" } });
+    fireEvent.change(screen.getByLabelText("Trading days"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "2d" }));
+    expect(
+      screen.getByText(/only 2 trading days before expiry; hold and exit at 09:30, 2 trading days later/),
+    ).toBeTruthy();
+    fireEvent.change(within(legs()[1]!).getByLabelText("Strike"), { target: { value: "points" } });
+    fireEvent.change(within(legs()[1]!).getByLabelText("Points"), { target: { value: "300" } });
+    expect(screen.getByText(/Leg 2: Sell 1 lot \(65 qty\) NIFTY 300 pts OTM PE/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Combined premium stop (sold legs together)"));
+    fireEvent.click(screen.getByLabelText("Lock profit"));
+    expect(screen.getByText(/sold premiums together rise 30% above/)).toBeTruthy();
+    expect(screen.getByText(/Once the profit reaches ₹2000, keep at least ₹1000\./)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+    await flush();
+    const saved = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies")!.body as {
+      config: {
+        kind: string;
+        entry: { at: string; dte: number[] };
+        holding: object;
+        legs: { strike: object }[];
+      };
+    };
+    expect(saved.config.kind).toBe("rules");
+    expect(saved.config.entry).toMatchObject({ at: "15:00", dte: [2] });
+    expect(saved.config.holding).toEqual({ mode: "days", exit: "09:30", days: 2 });
+    expect(saved.config.legs[1]!.strike).toEqual({ mode: "points", offset: 0, premium: null, points: 300 });
+  });
+
+  it("opens an old time-based strategy as rules", () => {
+    const old = {
+      kind: "time_based" as const,
+      underlying: "NIFTY" as const,
+      timing: { entry: "09:30", exit: "15:00", days: ["MON" as const] },
+      legs: [
+        {
+          id: "L1",
+          action: "SELL" as const,
+          option_type: "CE" as const,
+          lots: 1,
+          expiry: "current_week" as const,
+        },
+      ],
+    };
+    const strategy = { id: "s1", name: "Old", description: null, config: old, status: "draft", version: 1 };
+    render(<StrategyBuilder catalog={catalog} strategy={strategy as never} />);
+    expect(screen.getByText("Rule builder", { exact: false })).toBeTruthy();
+    expect(screen.getByText(/Enter at 09:30, Mon; exit at 15:00 the same day\./)).toBeTruthy();
   });
 
   it("shows the proven strategies' parameters instead of legs", () => {

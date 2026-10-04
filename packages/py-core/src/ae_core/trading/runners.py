@@ -10,7 +10,17 @@ from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from ..strategy import AnyConfig, Leg, RangeBreakoutConfig, SmcScalpConfig, TimeBasedConfig, ZeroDteConfig
+from ..strategy import (
+    PREMIUM_MODES,
+    AnyConfig,
+    Leg,
+    RangeBreakoutConfig,
+    RulesConfig,
+    SmcScalpConfig,
+    TimeBasedConfig,
+    ZeroDteConfig,
+    rules_from_time_based,
+)
 from . import options, rules
 from .model import IST, Contract, Intent, Market, Position, Side
 from .rules import Right
@@ -127,22 +137,32 @@ def _buy_first(intents: list[Intent]) -> list[Intent]:
     return sorted(intents, key=lambda i: i.side != "BUY")
 
 
-# -- time based (the builder) -----------------------------------------------------------------------------------------
-class TimeBasedRunner(Runner):
-    """Enter every leg at the entry time on chosen weekdays; each leg has its own stop-loss, target, trailing stop and
-    re-entries; strategy-wide MTM stop-loss / target; everything exits at the exit time the same day."""
+# -- rules (the builder, ADR 0022) ------------------------------------------------------------------------------------
+class RulesRunner(Runner):
+    """Enter every leg at the entry time on chosen weekdays (and days before expiry); each leg has its own stop-loss,
+    target, trailing stop and re-entries; trade-wide MTM stop-loss / target, combined-premium stop and profit lock;
+    everything exits at the holding's exit: the same day, the next trading day, N trading days later or on expiry.
 
-    kind = "time_based"
-    cfg: TimeBasedConfig
+    One trade (a cycle) at a time and at most one entry a day. A held trade carries over the night with its
+    positions, pending re-entries and limits; when it closes, a new one may start the same day (exit 09:30, enter
+    again 15:00)."""
+
+    kind = "rules"
+    cfg: RulesConfig
 
     def _leg(self, leg_id: str) -> Leg | None:
         return next((leg for leg in self.cfg.legs if leg.id == leg_id), None)
 
     def _new_day(self, m: Market) -> None:
         today = m.now.date()
-        if self.s.get("day") != today.isoformat():
-            self.drop_closed_before(today)
-            self.s.update(day=today.isoformat(), phase="waiting", reentries={}, pending=[], contracts={})
+        if self.s.get("day") == today.isoformat():
+            return
+        self.drop_closed_before(today)
+        self.s["day"] = today.isoformat()
+        self.s.pop("waiting_reason", None)
+        if self.s.get("phase") == "in" and (self.open_positions() or self.s.get("pending")):
+            return  # a held trade carries on
+        self.s.update(phase="waiting", reentries={}, pending=[])
 
     def _resolve(self, m: Market, leg: Leg) -> Contract | str:
         """The leg's contract right now, or why it cannot be chosen yet."""
@@ -150,9 +170,6 @@ class TimeBasedRunner(Runner):
         if expiry is None:
             return f"no {leg.expiry.replace('_', ' ')} expiry listed"
         return options.pick(m, leg.option_type, leg.strike, expiry)
-
-    def _candidates(self, m: Market, leg: Leg, expiry: date) -> list[Contract]:
-        return options.candidates(m, leg.option_type, expiry)
 
     def wanted(self, m: Market) -> set[str]:
         keys = super().wanted(m)
@@ -162,8 +179,8 @@ class TimeBasedRunner(Runner):
                 expiry = rules.pick_expiry(m.expiries, m.now.date(), leg.expiry)
                 if expiry is None or m.spot is None:
                     continue
-                if leg.strike.mode == "premium":
-                    keys |= {c.key for c in self._candidates(m, leg, expiry)}
+                if leg.strike.mode in PREMIUM_MODES:
+                    keys |= {c.key for c in options.candidates(m, leg.option_type, expiry)}
                 else:
                     r = self._resolve(m, leg)
                     if isinstance(r, Contract):
@@ -174,6 +191,8 @@ class TimeBasedRunner(Runner):
         leg = self._leg(pos.leg)
         if leg is None:
             return
+        if pos.side == "SELL" and not intent.reason.startswith("re-entry"):
+            self.s.setdefault("sold", {})[pos.id] = [pos.entry_price, None]
         spot = m.spot or 0.0
         adverse = -pos.sign  # premium: a buyer loses when it falls, a seller when it rises
         # on the index, a long call / short put loses when it falls
@@ -189,6 +208,11 @@ class TimeBasedRunner(Runner):
             d = rules.distance(leg.target.value, leg.target.unit, base)
             sign = -adverse if leg.target.basis == "premium" else -idx_adverse
             pos.target, pos.target_basis = round(max(0.05, base + sign * d), 2), leg.target.basis
+
+    def on_exit(self, pos: Position, m: Market) -> None:
+        sold = self.s.get("sold", {})
+        if pos.id in sold:
+            sold[pos.id][1] = pos.exit_price
 
     def _value(self, pos: Position, basis: str, m: Market) -> float | None:
         return m.price(pos.contract) if basis == "premium" else m.spot
@@ -216,43 +240,135 @@ class TimeBasedRunner(Runner):
             pos.sl = round(pos.sl + fav * step * (after - before), 2)
             self.note("trailing_sl_moved", leg=pos.leg, sl=pos.sl)
 
+    # -- entry ------------------------------------------------------------------------------------------------------
+    def _until(self) -> str | None:
+        e, h = self.cfg.entry, self.cfg.holding
+        return e.until or (h.exit if h.mode == "intraday" else None)
+
+    def _final(self, m: Market) -> datetime | str:
+        """When the trade entered now must be out, or why it cannot be worked out."""
+        h, today = self.cfg.holding, m.now.date()
+        if h.mode == "intraday":
+            day = today
+        elif h.mode == "next_day":
+            day = rules.add_weekdays(today, 1)
+        elif h.mode == "days":
+            day = rules.add_weekdays(today, h.days)
+        else:
+            leg = self.cfg.legs[0]
+            found = rules.pick_expiry(m.expiries, today, leg.expiry)
+            if found is None:
+                return f"no {leg.expiry.replace('_', ' ')} expiry listed"
+            day = found
+        return rules.at(day, h.exit, IST)
+
+    def _skip_today(self, m: Market) -> str | None:
+        """Why no trade starts today (wrong weekday, not the chosen days before expiry), or None."""
+        e, today = self.cfg.entry, m.now.date()
+        if today.strftime("%a").upper()[:3] not in e.days:
+            return "not_a_trading_day_for_this_strategy"
+        if e.dte is not None:
+            expiry = rules.pick_expiry(m.expiries, today, self.cfg.legs[0].expiry)
+            if expiry is None or rules.weekdays_between(today, expiry) not in e.dte:
+                return "not_a_chosen_day_before_expiry"
+        return None
+
+    def _try_enter(self, m: Market) -> list[Intent]:
+        if self.open_positions() or self.exiting:
+            return []  # the last trade is still closing
+        now, e, today = m.now, self.cfg.entry, m.now.date().isoformat()
+        t, until = rules.hhmm(now), self._until()
+        why = self._skip_today(m)
+        if why:
+            self.s["phase"] = "done"
+            self.note(why, weekday=now.strftime("%A"))
+            return []
+        if t < e.at:
+            return []
+        if until is not None and t >= until:
+            self.s["phase"] = "done"
+            return []
+        final = self._final(m)
+        if isinstance(final, datetime) and final <= now:
+            final = f"the exit ({final:%a %d %b} {self.cfg.holding.exit}) has passed"
+        contracts: list[tuple[Leg, Contract]] = []
+        for leg in self.cfg.legs:
+            r = final if isinstance(final, str) else self._resolve(m, leg)
+            if isinstance(r, str):
+                if self.s.get("waiting_reason") != r:
+                    self.s["waiting_reason"] = r
+                    self.note("waiting_to_enter", reason=r)
+                return []
+            contracts.append((leg, r))
+        assert isinstance(final, datetime)
+        expiring = next(((leg, c) for leg, c in contracts if c.expiry < final.date()), None)
+        if expiring:
+            self.s["phase"] = "done"
+            leg, c = expiring
+            self.note("leg_expires_before_the_exit", leg=leg.id, expiry=c.expiry.isoformat(), exit=final.isoformat())
+            return []
+        if any(m.price(c) is None for _, c in contracts):
+            return []  # the prices were just requested: enter once they stream
+        self.s.update(phase="in", entered=today, final=final.isoformat(), cycle_realized=self.realized,
+                      reentries={}, pending=[], sold={}, lock_floor=None)  # fmt: skip
+        why_in = f"entry at {e.at}"
+        return _buy_first([self._enter(m, c, leg.action, leg.lots, leg.id, why_in) for leg, c in contracts])
+
+    # -- in a trade -------------------------------------------------------------------------------------------------
+    def _close(self, m: Market, reason: str, event: str | None = None, **detail: Any) -> list[Intent]:
+        self._end_cycle(m)
+        if event:
+            self.note(event, **detail)
+        return self.exit_all(reason, m)
+
+    def _cycle_pnl(self, m: Market) -> float:
+        return round(self.realized - float(self.s.get("cycle_realized") or 0.0) + self.unrealized(m), 2)
+
+    def _combined_hit(self, m: Market) -> bool:
+        cs, sold = self.cfg.risk.combined_stop, self.s.get("sold", {})
+        if cs is None or not sold:
+            return False
+        base = sum(entry for entry, _ in sold.values())
+        now = 0.0
+        for pid, (_, exit_price) in sold.items():
+            if exit_price is not None:
+                now += exit_price
+                continue
+            pos = self.position(pid)
+            px = m.price(pos.contract) if pos else None
+            if px is None:
+                return False
+            now += px
+        return bool(now >= base + rules.distance(cs.value, cs.unit, base))
+
+    def _lock_hit(self, pnl: float) -> bool:
+        lp = self.cfg.risk.lock_profit
+        if lp is None:
+            return False
+        floor = self.s.get("lock_floor")
+        if floor is None and pnl >= lp.at:
+            floor = lp.lock
+            self.note("profit_locked", pnl=pnl, floor=floor)
+        if floor is not None and lp.trail_every and lp.trail_by and pnl >= lp.at:
+            raised = lp.lock + int((pnl - lp.at) // lp.trail_every) * lp.trail_by
+            if raised > floor:
+                floor = raised
+                self.note("profit_lock_raised", pnl=pnl, floor=floor)
+        self.s["lock_floor"] = floor
+        return floor is not None and pnl <= floor
+
     def step(self, m: Market) -> list[Intent]:
         self._new_day(m)
-        now, cfg = m.now, self.cfg
-        t = rules.hhmm(now)
-        timing = cfg.timing
-        out: list[Intent] = []
         phase = self.s["phase"]
         if phase == "waiting":
-            if now.strftime("%a").upper()[:3] not in timing.days:
-                self.s["phase"] = "done"
-                self.note("not_a_trading_day_for_this_strategy", weekday=now.strftime("%A"))
-                return []
-            if t < timing.entry or t >= timing.exit:
-                if t >= timing.exit:
-                    self.s["phase"] = "done"
-                return []
-            contracts: list[tuple[Leg, Contract]] = []
-            for leg in cfg.legs:
-                r = self._resolve(m, leg)
-                if isinstance(r, str):
-                    if self.s.get("waiting_reason") != r:
-                        self.s["waiting_reason"] = r
-                        self.note("waiting_to_enter", reason=r)
-                    return []
-                contracts.append((leg, r))
-            if any(m.price(c) is None for _, c in contracts):
-                return []  # the prices were just requested: enter once they stream
-            self.s["phase"] = "in"
-            return _buy_first(
-                [self._enter(m, c, leg.action, leg.lots, leg.id, f"entry at {timing.entry}") for leg, c in contracts]
-            )
-
+            return self._try_enter(m)
         if phase != "in":
             return []
-        if t >= timing.exit:
-            self.s["phase"], self.s["pending"] = "done", []
-            return self.exit_all(f"exit time {timing.exit}")
+        cfg, risk, out = self.cfg, self.cfg.risk, []
+        if "final" not in self.s:  # a trade started before ADR 0022 (time_based): it ends today
+            self.s["final"] = rules.at(m.now.date(), cfg.holding.exit, IST).isoformat()
+        if m.now >= datetime.fromisoformat(self.s["final"]):
+            return self._close(m, f"exit time {cfg.holding.exit}")
 
         # leg stop-loss / target / trailing
         sl_hit = False
@@ -280,23 +396,23 @@ class TimeBasedRunner(Runner):
                     if i:
                         out.append(i)
                         self._queue_reentry(pos, leg, "target")
-        if sl_hit and cfg.risk.exit_all_on_leg_sl:
-            self.s["pending"] = []
-            out += self.exit_all("another leg hit its stop-loss")
-            self.s["phase"] = "done"
-            return out
+        if sl_hit and risk.exit_all_on_leg_sl:
+            return out + self._close(m, "another leg hit its stop-loss")
 
-        # strategy MTM
-        total = self.realized + self.unrealized(m)
-        risk = cfg.risk
-        if risk.mtm_stop_loss and total <= -risk.mtm_stop_loss:
-            self.s["phase"], self.s["pending"] = "done", []
-            self.note("mtm_stop_loss", pnl=round(total, 2))
-            return out + self.exit_all(f"strategy loss reached ₹{risk.mtm_stop_loss:g}")
-        if risk.mtm_target and total >= risk.mtm_target:
-            self.s["phase"], self.s["pending"] = "done", []
-            self.note("mtm_target", pnl=round(total, 2))
-            return out + self.exit_all(f"strategy profit reached ₹{risk.mtm_target:g}")
+        # the whole trade
+        pnl = self._cycle_pnl(m)
+        if risk.mtm_stop_loss and pnl <= -risk.mtm_stop_loss:
+            return out + self._close(m, f"strategy loss reached ₹{risk.mtm_stop_loss:g}", "mtm_stop_loss", pnl=pnl)
+        if risk.mtm_target and pnl >= risk.mtm_target:
+            return out + self._close(m, f"strategy profit reached ₹{risk.mtm_target:g}", "mtm_target", pnl=pnl)
+        if self._combined_hit(m):
+            cs = risk.combined_stop
+            assert cs is not None
+            u = "%" if cs.unit == "percent" else " points"
+            return out + self._close(m, f"sold premiums up {cs.value:g}{u}", "combined_stop", pnl=pnl)
+        if self._lock_hit(pnl):
+            floor = self.s["lock_floor"]
+            return out + self._close(m, f"profit fell to the locked ₹{floor:g}", "profit_lock_exit", pnl=pnl)
 
         # re-entries
         keep = []
@@ -315,8 +431,13 @@ class TimeBasedRunner(Runner):
             keep.append(r)
         self.s["pending"] = keep
         if not self.open_positions() and not keep and not any(i.kind == "entry" for i in out) and not self.exiting:
-            self.s["phase"] = "done"
+            self._end_cycle(m)
         return out
+
+    def _end_cycle(self, m: Market) -> None:
+        """The trade is over: another may start later today unless one already started today."""
+        self.s["phase"] = "done" if self.s.get("entered") == m.now.date().isoformat() else "waiting"
+        self.s["pending"] = []
 
     def _queue_reentry(self, pos: Position, leg: Leg, kind: str) -> None:
         cfg = leg.reentry_on_sl if kind == "sl" else leg.reentry_on_target
@@ -330,6 +451,17 @@ class TimeBasedRunner(Runner):
             {"leg": leg.id, "contract": pos.contract.key, "mode": cfg.mode, "kind": kind,
              "entry_price": pos.entry_price, "side": pos.side}
         )  # fmt: skip
+
+
+class TimeBasedRunner(RulesRunner):
+    """The builder before ADR 0022 (enter and exit at fixed times the same day): runs as the intraday rules it is."""
+
+    kind = "time_based"
+
+    def __init__(self, config: Any, multiplier: int = 1, state: Mapping[str, Any] | None = None) -> None:
+        if isinstance(config, TimeBasedConfig):
+            config = rules_from_time_based(config)
+        super().__init__(config, multiplier, state)
 
 
 # -- positional range breakout ----------------------------------------------------------------------------------------
@@ -608,6 +740,8 @@ def make_runner(config: AnyConfig, multiplier: int = 1, state: Mapping[str, Any]
         from .smc_runner import SmcScalpRunner  # it builds on this module
 
         return SmcScalpRunner(config, multiplier, state)
+    if isinstance(config, RulesConfig):
+        return RulesRunner(config, multiplier, state)
     if isinstance(config, TimeBasedConfig):
         return TimeBasedRunner(config, multiplier, state)
     if isinstance(config, RangeBreakoutConfig):

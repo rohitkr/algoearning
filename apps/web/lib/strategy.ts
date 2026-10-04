@@ -4,6 +4,10 @@ import type {
   Instrument,
   LegStrike,
   LegThreshold,
+  RulesConfig,
+  RulesEntry,
+  RulesHolding,
+  RulesRisk,
   SmcScalpConfig,
   StrategyConfig,
   StrategyLeg,
@@ -11,6 +15,7 @@ import type {
 } from "@algoearning/api-types";
 
 export const KIND_LABEL: Record<StrategyConfig["kind"], string> = {
+  rules: "Rule builder",
   time_based: "Time based",
   range_breakout: "Range breakout",
   zero_dte: "Expiry-day straddle",
@@ -31,6 +36,47 @@ export type Underlying = StrategyConfig["underlying"];
 type Timing = NonNullable<TimeBasedConfig["timing"]>;
 type Risk = NonNullable<TimeBasedConfig["risk"]>;
 
+export const HOLD_LABEL: Record<RulesHolding["mode"], string> = {
+  intraday: "Same day (intraday)",
+  next_day: "Next trading day",
+  days: "Some trading days",
+  expiry: "Until expiry day",
+};
+
+/** A rules config's parts with the API's defaults filled in, ready to spread and change. */
+export function entryOf(c: RulesConfig): RulesEntry {
+  return { mode: "time", at: "09:20", until: null, days: [...WEEKDAYS], dte: null, ...c.entry };
+}
+
+export function holdingOf(c: RulesConfig): RulesHolding {
+  return { mode: "intraday", exit: "15:15", days: 1, ...c.holding };
+}
+
+export function rulesRiskOf(c: RulesConfig): RulesRisk {
+  return {
+    mtm_stop_loss: null,
+    mtm_target: null,
+    exit_all_on_leg_sl: false,
+    combined_stop: null,
+    lock_profit: null,
+    ...c.risk,
+  };
+}
+
+/** A builder config from before ADR 0022 as the intraday rules it always meant (the API stores it so too). */
+export function rulesFromTimeBased(c: TimeBasedConfig): RulesConfig {
+  const t = timingOf(c);
+  const r = riskOf(c);
+  return {
+    kind: "rules",
+    underlying: c.underlying,
+    entry: { mode: "time", at: t.entry, until: null, days: t.days, dte: null },
+    holding: { mode: "intraday", exit: t.exit, days: 1 },
+    legs: c.legs,
+    risk: { ...r, combined_stop: null, lock_profit: null },
+  };
+}
+
 /** A time-based config's timing and risk with the API's defaults filled in, ready to spread and change. */
 export function timingOf(c: TimeBasedConfig): Timing {
   return { entry: "09:20", exit: "15:15", days: [...WEEKDAYS], ...c.timing };
@@ -40,13 +86,18 @@ export function riskOf(c: TimeBasedConfig): Risk {
   return { mtm_stop_loss: null, mtm_target: null, exit_all_on_leg_sl: false, ...c.risk };
 }
 
-/** "ATM", "OTM 2", "ITM 1" (offset > 0 is out of the money), or "Premium ≈ ₹50". */
+/** "ATM", "OTM 2", "ITM 1" (offset > 0 is out of the money), "Premium ≈ ₹50", "Premium ≥ ₹50" or "300 pts OTM". */
 export function strikeLabel(s: LegStrike | undefined): string {
   if (!s || s.mode === "atm") {
     const n = s?.offset ?? 0;
     return n === 0 ? "ATM" : n > 0 ? `OTM ${n}` : `ITM ${-n}`;
   }
-  return `Premium ≈ ₹${s.premium ?? "?"}`;
+  if (s.mode === "points") {
+    const n = s.points ?? 0;
+    return n === 0 ? "ATM" : `${Math.abs(n)} pts ${n > 0 ? "OTM" : "ITM"}`;
+  }
+  const sign = s.mode === "premium_gte" ? "≥" : s.mode === "premium_lte" ? "≤" : "≈";
+  return `Premium ${sign} ₹${s.premium ?? "?"}`;
 }
 
 export function thresholdLabel(t: LegThreshold): string {
@@ -85,6 +136,7 @@ function days(d: readonly string[] | undefined): string {
 /** The whole strategy in a few sentences (builder summary panel). */
 export function describeConfig(c: StrategyConfig, instruments: Instrument[]): string[] {
   const inst = instruments.find((i) => i.code === c.underlying);
+  if (c.kind === "rules") return describeRules(c, inst);
   if (c.kind === "time_based") {
     const t = c.timing;
     const lines = [
@@ -116,6 +168,49 @@ export function describeConfig(c: StrategyConfig, instruments: Instrument[]): st
   ];
 }
 
+function dteText(dte: number[]): string {
+  return [...dte]
+    .sort((x, y) => x - y)
+    .map((n) => (n === 0 ? "on expiry day" : `${n} trading day${n === 1 ? "" : "s"} before expiry`))
+    .join(" or ");
+}
+
+/** "exit at 09:30 the next trading day" */
+export function holdingText(h: RulesHolding): string {
+  if (h.mode === "intraday") return `exit at ${h.exit} the same day`;
+  if (h.mode === "next_day") return `hold overnight and exit at ${h.exit} the next trading day`;
+  if (h.mode === "days")
+    return `hold and exit at ${h.exit}, ${h.days} trading day${h.days === 1 ? "" : "s"} later`;
+  return `hold and exit at ${h.exit} on expiry day`;
+}
+
+function describeRules(c: RulesConfig, inst: Instrument | undefined): string[] {
+  const e = entryOf(c);
+  const h = holdingOf(c);
+  const r = rulesRiskOf(c);
+  const when = e.dte?.length ? `, only ${dteText(e.dte)}` : "";
+  const until = e.until ? ` (not after ${e.until})` : "";
+  const lines = [
+    `Enter at ${e.at}${until}, ${days(e.days)}${when}; ${holdingText(h)}.`,
+    ...c.legs.map((l, i) => `Leg ${i + 1}: ${describeLeg(l, c.underlying, inst)}`),
+  ];
+  if (r.mtm_stop_loss) lines.push(`Exit everything if the trade's loss reaches ₹${r.mtm_stop_loss}.`);
+  if (r.mtm_target) lines.push(`Exit everything if the trade's profit reaches ₹${r.mtm_target}.`);
+  if (r.exit_all_on_leg_sl) lines.push("When any leg's stop-loss hits, exit every leg.");
+  const cs = r.combined_stop;
+  if (cs)
+    lines.push(
+      `Exit everything if the sold premiums together rise ${cs.value}${cs.unit === "percent" ? "%" : " points"} above their total at entry.`,
+    );
+  const lp = r.lock_profit;
+  if (lp) {
+    const trail =
+      lp.trail_every && lp.trail_by ? `, raised by ₹${lp.trail_by} for every ₹${lp.trail_every} more` : "";
+    lines.push(`Once the profit reaches ₹${lp.at}, keep at least ₹${lp.lock}${trail}.`);
+  }
+  return lines;
+}
+
 function describeSmc(c: SmcScalpConfig, inst: Instrument | undefined): string[] {
   const tf = { bias: 15, setup: 5, entry: 1, ...c.timeframes };
   const r = { lots: 1, rr: 2, tranches: true, max_trades_per_day: 2, max_losses_per_day: 2, ...c.risk };
@@ -133,6 +228,13 @@ function describeSmc(c: SmcScalpConfig, inst: Instrument | undefined): string[] 
 
 /** One line for the strategies list: "NIFTY · 2 legs · 09:20–15:15". */
 export function configSummary(c: StrategyConfig): string {
+  if (c.kind === "rules") {
+    const n = c.legs.length;
+    const e = entryOf(c);
+    const h = holdingOf(c);
+    const hold = { intraday: "", next_day: "next day ", days: `+${h.days}d `, expiry: "expiry " }[h.mode];
+    return `${c.underlying} · ${n} leg${n === 1 ? "" : "s"} · ${e.at}–${hold}${h.exit}`;
+  }
   if (c.kind === "time_based") {
     const n = c.legs.length;
     return `${c.underlying} · ${n} leg${n === 1 ? "" : "s"} · ${c.timing?.entry ?? "09:20"}–${c.timing?.exit ?? "15:15"}`;
@@ -153,14 +255,14 @@ export function nextLegId(legs: StrategyLeg[]): string {
   return `L${n}`;
 }
 
-export function newLeg(c: TimeBasedConfig, weekly: boolean): StrategyLeg {
+export function newLeg(c: { legs: StrategyLeg[] }, weekly: boolean): StrategyLeg {
   return {
     id: nextLegId(c.legs),
     action: "SELL",
     option_type: "CE",
     lots: 1,
     expiry: weekly ? "current_week" : "current_month",
-    strike: { mode: "atm", offset: 0, premium: null },
+    strike: { mode: "atm", offset: 0, premium: null, points: null },
     stop_loss: null,
     target: null,
     trailing: null,

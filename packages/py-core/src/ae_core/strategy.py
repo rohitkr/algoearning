@@ -3,8 +3,12 @@ reads configs with it, so the two can never disagree about a field (ADR 0010).
 
 A config is one of three kinds, told apart by `kind`:
 
-    time_based      the builder: 1-6 option legs entered at a fixed time on chosen weekdays, each with its own
-                    strike rule, stop-loss, target, trailing stop and re-entry, plus strategy-wide MTM limits
+    rules           the builder (ADR 0022): 1-6 option legs entered at a time on chosen weekdays (optionally only
+                    N days before expiry), held intraday or overnight (next day, N days, to expiry), each leg with
+                    its own strike rule, stop-loss, target, trailing stop and re-entry, plus strategy-wide limits:
+                    MTM stop-loss and target, a combined-premium stop and profit locking
+    time_based      the builder before ADR 0022: the same legs, entered and exited at fixed times the same day.
+                    Kept so older runs and backtests still parse; it runs as an intraday `rules` config
     range_breakout  the proven positional 2h range breakout seller (algo-trading-claude, RangeBreakoutParams)
     zero_dte        the proven expiry-day ITM straddle seller (algo-trading-claude, ZeroDteParams)
     smc_scalp       intraday options buyer on Smart Money Concepts read from the index (ADR 0018)
@@ -65,6 +69,7 @@ DEFAULT_INSTRUMENTS: dict[str, Instrument] = {
 Underlying = Literal["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]
 Weekday = Literal["MON", "TUE", "WED", "THU", "FRI"]
 WEEKDAYS: tuple[Weekday, ...] = ("MON", "TUE", "WED", "THU", "FRI")
+PREMIUM_MODES = frozenset({"premium", "premium_gte", "premium_lte"})
 HHMM = Annotated[str, StringConstraints(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]  # "09:20"; compares as text
 Expiry = Literal["current_week", "next_week", "current_month", "next_month"]
 WEEKLY_EXPIRIES = ("current_week", "next_week")
@@ -98,11 +103,14 @@ class ReEntry(_Model):
 
 class Strike(_Model):
     """atm: ATM +/- `offset` strikes (positive = out of the money, negative = in the money).
-    premium: the strike whose premium is closest to `premium` at entry."""
+    premium: the strike whose premium is closest to `premium` at entry.
+    premium_gte / premium_lte: the cheapest strike costing at least `premium` / the dearest costing at most it.
+    points: the strike nearest the index +/- `points` (positive = out of the money)."""
 
-    mode: Literal["atm", "premium"] = "atm"
+    mode: Literal["atm", "premium", "premium_gte", "premium_lte", "points"] = "atm"
     offset: int = Field(default=0, ge=-MAX_STRIKE_OFFSET, le=MAX_STRIKE_OFFSET)
     premium: float | None = Field(default=None, gt=0, le=100_000)
+    points: int | None = Field(default=None, ge=-20_000, le=20_000)
 
 
 class Leg(_Model):
@@ -139,6 +147,79 @@ class TimeBasedConfig(_Model):
     timing: Timing = Field(default_factory=Timing)
     legs: list[Leg] = Field(min_length=1, max_length=MAX_LEGS)
     risk: StrategyRisk = Field(default_factory=StrategyRisk)
+
+
+# -- rules (the builder, ADR 0022) -------------------------------------------------------------------------------
+class RulesEntry(_Model):
+    """When a new trade may start. `dte`: only on days that many trading days (Mon-Fri) before the first leg's
+    expiry (0 = expiry day); None = any day. `until`: no new trade from this time on (default: the exit time for
+    intraday, none for positional), so a late engine start still enters, but not too late."""
+
+    mode: Literal["time"] = "time"
+    at: HHMM = "09:20"
+    until: HHMM | None = None
+    days: list[Weekday] = Field(default_factory=lambda: list(WEEKDAYS), min_length=1, max_length=5)
+    dte: list[Annotated[int, Field(ge=0, le=30)]] | None = Field(default=None, max_length=10)
+
+
+class Holding(_Model):
+    """How long a trade lives. intraday: exit at `exit` the same day. next_day: at `exit` on the next trading day.
+    days: at `exit` `days` trading days after entry. expiry: at `exit` on the first leg's expiry day."""
+
+    mode: Literal["intraday", "next_day", "days", "expiry"] = "intraday"
+    exit: HHMM = "15:15"
+    days: int = Field(default=1, ge=1, le=30)
+
+
+class CombinedStop(_Model):
+    """Exit everything when the sold legs' premiums together rise this much above their total at entry."""
+
+    unit: Literal["points", "percent"] = "percent"
+    value: float = Field(gt=0, le=100_000)
+
+
+class LockProfit(_Model):
+    """Once the trade's profit reaches `at`, never give back below `lock`; every further `trail_every`, raise the
+    floor by `trail_by` (both empty: lock only). Rupees."""
+
+    at: float = Field(gt=0, le=100_000_000)
+    lock: float = Field(ge=0, le=100_000_000)
+    trail_every: float | None = Field(default=None, gt=0, le=100_000_000)
+    trail_by: float | None = Field(default=None, gt=0, le=100_000_000)
+
+
+class RulesRisk(_Model):
+    """Limits on the whole trade (all legs, from entry to final exit), in rupees unless stated."""
+
+    mtm_stop_loss: float | None = Field(default=None, gt=0, le=100_000_000)
+    mtm_target: float | None = Field(default=None, gt=0, le=100_000_000)
+    exit_all_on_leg_sl: bool = False
+    combined_stop: CombinedStop | None = None
+    lock_profit: LockProfit | None = None
+
+
+class RulesConfig(_Model):
+    kind: Literal["rules"] = "rules"
+    underlying: Underlying = "NIFTY"
+    entry: RulesEntry = Field(default_factory=RulesEntry)
+    holding: Holding = Field(default_factory=Holding)
+    legs: list[Leg] = Field(min_length=1, max_length=MAX_LEGS)
+    risk: RulesRisk = Field(default_factory=RulesRisk)
+
+
+def rules_from_time_based(c: TimeBasedConfig) -> RulesConfig:
+    """A pre-ADR-0022 builder config as the rules it always meant: enter at the entry time, exit the same day."""
+    return RulesConfig(
+        underlying=c.underlying,
+        entry=RulesEntry(at=c.timing.entry, days=list(c.timing.days)),
+        holding=Holding(mode="intraday", exit=c.timing.exit),
+        legs=[leg.model_copy(deep=True) for leg in c.legs],
+        risk=RulesRisk(
+            mtm_stop_loss=c.risk.mtm_stop_loss,
+            mtm_target=c.risk.mtm_target,
+            exit_all_on_leg_sl=c.risk.exit_all_on_leg_sl,
+        ),
+    )
 
 
 # -- the two proven strategies from algo-trading-claude --------------------------------------------------------
@@ -269,10 +350,10 @@ class SmcScalpConfig(_Model):
 
 
 StrategyConfig = Annotated[
-    TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig, Field(discriminator="kind")
+    RulesConfig | TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig, Field(discriminator="kind")
 ]
-StrategyKind = Literal["time_based", "range_breakout", "zero_dte", "smc_scalp"]
-AnyConfig = TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig
+StrategyKind = Literal["rules", "time_based", "range_breakout", "zero_dte", "smc_scalp"]
+AnyConfig = RulesConfig | TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig
 _ADAPTER: TypeAdapter[AnyConfig] = TypeAdapter(StrategyConfig)
 
 
@@ -294,7 +375,7 @@ def parse(raw: Any) -> AnyConfig:
 
 def parse_issues(exc: ValidationError) -> list[Issue]:
     """Pydantic errors as Issues, without the union tag Pydantic puts first (("time_based", "legs", 0, ...))."""
-    kinds = {"time_based", "range_breakout", "zero_dte", "smc_scalp"}
+    kinds = {"rules", "time_based", "range_breakout", "zero_dte", "smc_scalp"}
     out = []
     for e in exc.errors():
         loc = tuple(e["loc"])
@@ -336,6 +417,8 @@ def check(c: AnyConfig, instruments: Instruments) -> list[Issue]:
     if inst is None:
         return [Issue(("underlying",), f"{c.underlying} is not available for trading right now")]
     issues: list[Issue] = []
+    if isinstance(c, RulesConfig):
+        return _check_rules(c, inst)
     if isinstance(c, TimeBasedConfig):
         for k in ("entry", "exit"):
             issues += _hours(inst, getattr(c.timing, k), ("timing", k))
@@ -343,31 +426,7 @@ def check(c: AnyConfig, instruments: Instruments) -> list[Issue]:
             issues.append(Issue(("timing", "exit"), "must be after the entry time"))
         if len(set(c.timing.days)) != len(c.timing.days):
             issues.append(Issue(("timing", "days"), "lists a day twice"))
-        seen: set[str] = set()
-        for i, leg in enumerate(c.legs):
-            loc: Loc = ("legs", i)
-            if leg.id in seen:
-                issues.append(Issue((*loc, "id"), f"leg id {leg.id} is used twice"))
-            seen.add(leg.id)
-            if leg.expiry in WEEKLY_EXPIRIES and not inst.weekly_expiry:
-                issues.append(Issue((*loc, "expiry"), f"{c.underlying} has monthly expiries only"))
-            if leg.strike.mode == "premium" and leg.strike.premium is None:
-                issues.append(Issue((*loc, "strike", "premium"), "enter the premium to look for"))
-            if leg.stop_loss:
-                issues += _threshold(leg.stop_loss, (*loc, "stop_loss"), leg.action, is_target=False)
-            if leg.target:
-                issues += _threshold(leg.target, (*loc, "target"), leg.action, is_target=True)
-            if leg.trailing and not leg.stop_loss:
-                issues.append(Issue((*loc, "trailing"), "a trailing stop needs a stop-loss to trail"))
-            if leg.trailing and leg.trailing.unit == "percent" and leg.trailing.step > 100:
-                issues.append(Issue((*loc, "trailing", "step"), "must be at most 100%"))
-            if leg.reentry_on_sl and not leg.stop_loss:
-                issues.append(Issue((*loc, "reentry_on_sl"), "re-entry after a stop-loss needs a stop-loss"))
-            if leg.reentry_on_target and not leg.target:
-                issues.append(Issue((*loc, "reentry_on_target"), "re-entry after a target needs a target"))
-        if c.risk.exit_all_on_leg_sl and not any(leg.stop_loss for leg in c.legs):
-            issues.append(Issue(("risk", "exit_all_on_leg_sl"), "no leg has a stop-loss"))
-        return issues
+        return issues + _check_legs(c.legs, c.underlying, inst, c.risk.exit_all_on_leg_sl)
     if isinstance(c, SmcScalpConfig):
         return issues + _check_smc(c, inst)
 
@@ -390,6 +449,69 @@ def check(c: AnyConfig, instruments: Instruments) -> list[Issue]:
     return issues
 
 
+def _check_legs(legs: list[Leg], underlying: str, inst: Instrument, exit_all_on_leg_sl: bool) -> list[Issue]:
+    issues: list[Issue] = []
+    seen: set[str] = set()
+    for i, leg in enumerate(legs):
+        loc: Loc = ("legs", i)
+        if leg.id in seen:
+            issues.append(Issue((*loc, "id"), f"leg id {leg.id} is used twice"))
+        seen.add(leg.id)
+        if leg.expiry in WEEKLY_EXPIRIES and not inst.weekly_expiry:
+            issues.append(Issue((*loc, "expiry"), f"{underlying} has monthly expiries only"))
+        if leg.strike.mode in PREMIUM_MODES and leg.strike.premium is None:
+            issues.append(Issue((*loc, "strike", "premium"), "enter the premium to look for"))
+        if leg.strike.mode == "points" and leg.strike.points is None:
+            issues.append(Issue((*loc, "strike", "points"), "enter how many points from the index"))
+        if leg.stop_loss:
+            issues += _threshold(leg.stop_loss, (*loc, "stop_loss"), leg.action, is_target=False)
+        if leg.target:
+            issues += _threshold(leg.target, (*loc, "target"), leg.action, is_target=True)
+        if leg.trailing and not leg.stop_loss:
+            issues.append(Issue((*loc, "trailing"), "a trailing stop needs a stop-loss to trail"))
+        if leg.trailing and leg.trailing.unit == "percent" and leg.trailing.step > 100:
+            issues.append(Issue((*loc, "trailing", "step"), "must be at most 100%"))
+        if leg.reentry_on_sl and not leg.stop_loss:
+            issues.append(Issue((*loc, "reentry_on_sl"), "re-entry after a stop-loss needs a stop-loss"))
+        if leg.reentry_on_target and not leg.target:
+            issues.append(Issue((*loc, "reentry_on_target"), "re-entry after a target needs a target"))
+    if exit_all_on_leg_sl and not any(leg.stop_loss for leg in legs):
+        issues.append(Issue(("risk", "exit_all_on_leg_sl"), "no leg has a stop-loss"))
+    return issues
+
+
+def _check_rules(c: RulesConfig, inst: Instrument) -> list[Issue]:
+    e, h, r = c.entry, c.holding, c.risk
+    issues = _hours(inst, e.at, ("entry", "at")) + _hours(inst, h.exit, ("holding", "exit"))
+    if e.until is not None:
+        issues += _hours(inst, e.until, ("entry", "until"))
+        if e.until < e.at:
+            issues.append(Issue(("entry", "until"), f"must not be before the entry time ({e.at})"))
+    if len(set(e.days)) != len(e.days):
+        issues.append(Issue(("entry", "days"), "lists a day twice"))
+    if e.dte is not None and len(set(e.dte)) != len(e.dte):
+        issues.append(Issue(("entry", "dte"), "lists a day twice"))
+    if h.mode == "intraday":
+        if e.at >= h.exit:
+            issues.append(Issue(("holding", "exit"), "must be after the entry time"))
+        elif e.until is not None and e.until >= h.exit:
+            issues.append(Issue(("entry", "until"), f"must be before the exit time ({h.exit})"))
+    issues += _check_legs(c.legs, c.underlying, inst, r.exit_all_on_leg_sl)
+    if r.combined_stop and not any(leg.action == "SELL" for leg in c.legs):
+        issues.append(Issue(("risk", "combined_stop"), "needs at least one sold leg"))
+    lp = r.lock_profit
+    if lp:
+        if lp.lock >= lp.at:
+            issues.append(
+                Issue(("risk", "lock_profit", "lock"), f"must be below the profit that starts it (₹{lp.at:g})")
+            )
+        if (lp.trail_every is None) != (lp.trail_by is None):
+            issues.append(Issue(("risk", "lock_profit", "trail_by"), "set both trail values, or neither"))
+        if r.mtm_target is not None and lp.at >= r.mtm_target:
+            issues.append(Issue(("risk", "lock_profit", "at"), "must be below the MTM target"))
+    return issues
+
+
 def _check_smc(c: SmcScalpConfig, inst: Instrument) -> list[Issue]:
     issues: list[Issue] = []
     ss = c.session
@@ -407,7 +529,9 @@ def _check_smc(c: SmcScalpConfig, inst: Instrument) -> list[Issue]:
     r = c.risk
     if r.min_risk_pct >= r.max_risk_pct:
         issues.append(Issue(("risk", "max_risk_pct"), "must be above the minimum risk"))
-    if c.option.strike.mode == "premium" and c.option.strike.premium is None:
+    if c.option.strike.mode not in ("atm", "premium"):
+        issues.append(Issue(("option", "strike", "mode"), "SMC picks the strike by ATM offset or premium only"))
+    elif c.option.strike.mode == "premium" and c.option.strike.premium is None:
         issues.append(Issue(("option", "strike", "premium"), "enter the premium to look for"))
     if c.option.expiry == "next" and c.option.expiry_day_cutoff is not None:
         issues.append(Issue(("option", "expiry_day_cutoff"), "only applies to the nearest expiry; clear it"))
@@ -419,7 +543,7 @@ def plan_warnings(c: AnyConfig, max_lots_per_order: int | None) -> list[Issue]:
     if max_lots_per_order is None:
         return []
     msg = f"your plan allows {max_lots_per_order} lot(s) per order"
-    if isinstance(c, TimeBasedConfig):
+    if isinstance(c, RulesConfig | TimeBasedConfig):
         return [
             Issue(("legs", i, "lots"), msg, "plan_limit")
             for i, leg in enumerate(c.legs)
@@ -431,9 +555,18 @@ def plan_warnings(c: AnyConfig, max_lots_per_order: int | None) -> list[Issue]:
     return [Issue(("lots",), msg, "plan_limit")] if c.lots > max_lots_per_order else []
 
 
+def holds_overnight(c: AnyConfig) -> bool:
+    """Whether positions may be carried past the close, so orders need the NRML product (MIS is squared off)."""
+    if isinstance(c, RulesConfig):
+        return c.holding.mode != "intraday"
+    if isinstance(c, RangeBreakoutConfig):
+        return not c.intraday_only
+    return False
+
+
 def max_order_lots(c: AnyConfig) -> int:
     """The most lots this config puts in one order."""
-    if isinstance(c, TimeBasedConfig):
+    if isinstance(c, RulesConfig | TimeBasedConfig):
         return max(leg.lots for leg in c.legs)
     if isinstance(c, SmcScalpConfig):
         return max(smc_tranches(c.risk.lots, c.risk.tranches))
@@ -473,6 +606,14 @@ def _leg(id_: str, action: Literal["BUY", "SELL"], opt: Literal["CE", "PE"], off
     return Leg(id=id_, action=action, option_type=opt, strike=Strike(offset=offset), **kw)
 
 
+def _premium_leg(id_: str, action: Literal["BUY", "SELL"], opt: Literal["CE", "PE"], premium: float, **kw: Any) -> Leg:
+    return Leg(id=id_, action=action, option_type=opt, strike=Strike(mode="premium", premium=premium), **kw)
+
+
+def _points_leg(id_: str, action: Literal["BUY", "SELL"], opt: Literal["CE", "PE"], points: int, **kw: Any) -> Leg:
+    return Leg(id=id_, action=action, option_type=opt, strike=Strike(mode="points", points=points), **kw)
+
+
 _SL30 = Threshold(unit="percent", value=30)
 
 PRESETS: tuple[Preset, ...] = (
@@ -480,19 +621,19 @@ PRESETS: tuple[Preset, ...] = (
         "blank",
         "Start from scratch",
         "One leg to build on: buy the ATM call at 09:20, exit at 15:15.",
-        TimeBasedConfig(legs=[_leg("L1", "BUY", "CE")]),
+        RulesConfig(legs=[_leg("L1", "BUY", "CE")]),
     ),
     Preset(
         "short_straddle",
         "Short straddle",
         "Sell the ATM call and put at 09:20 with a 30% stop-loss on each, exit at 15:15.",
-        TimeBasedConfig(legs=[_leg("L1", "SELL", "CE", stop_loss=_SL30), _leg("L2", "SELL", "PE", stop_loss=_SL30)]),
+        RulesConfig(legs=[_leg("L1", "SELL", "CE", stop_loss=_SL30), _leg("L2", "SELL", "PE", stop_loss=_SL30)]),
     ),
     Preset(
         "short_strangle",
         "Short strangle",
         "Sell a call and a put two strikes out of the money with a 40% stop-loss on each.",
-        TimeBasedConfig(
+        RulesConfig(
             legs=[
                 _leg("L1", "SELL", "CE", 2, stop_loss=Threshold(value=40)),
                 _leg("L2", "SELL", "PE", 2, stop_loss=Threshold(value=40)),
@@ -503,14 +644,40 @@ PRESETS: tuple[Preset, ...] = (
         "iron_condor",
         "Iron condor",
         "Sell two strikes out of the money and buy protection six strikes out, on both sides.",
-        TimeBasedConfig(
+        RulesConfig(
             legs=[
                 _leg("L1", "SELL", "CE", 2),
                 _leg("L2", "SELL", "PE", 2),
                 _leg("L3", "BUY", "CE", 6),
                 _leg("L4", "BUY", "PE", 6),
             ],
-            risk=StrategyRisk(mtm_stop_loss=3000),
+            risk=RulesRisk(mtm_stop_loss=3000),
+        ),
+    ),
+    Preset(
+        "overnight_straddle",
+        "Overnight straddle (₹60)",
+        "At 15:00 sell the call and put whose premiums are nearest ₹60, 50% stop-loss on each, exit 09:30 next day.",
+        RulesConfig(
+            entry=RulesEntry(at="15:00", until="15:20"),
+            holding=Holding(mode="next_day", exit="09:30"),
+            legs=[
+                _premium_leg("L1", "SELL", "CE", 60, stop_loss=Threshold(value=50)),
+                _premium_leg("L2", "SELL", "PE", 60, stop_loss=Threshold(value=50)),
+            ],
+            risk=RulesRisk(mtm_stop_loss=3000, mtm_target=2000),
+        ),
+    ),
+    Preset(
+        "positional_strangle",
+        "Positional strangle to expiry",
+        "Three trading days before expiry sell calls and puts 300 points out; exit everything if the two "
+        "premiums together rise 40%, else hold to expiry day 15:15.",
+        RulesConfig(
+            entry=RulesEntry(at="09:30", dte=[3]),
+            holding=Holding(mode="expiry", exit="15:15"),
+            legs=[_points_leg("L1", "SELL", "CE", 300), _points_leg("L2", "SELL", "PE", 300)],
+            risk=RulesRisk(combined_stop=CombinedStop(unit="percent", value=40)),
         ),
     ),
     Preset(
@@ -538,5 +705,5 @@ PRESETS: tuple[Preset, ...] = (
 )
 
 
-def default_config() -> TimeBasedConfig:
-    return TimeBasedConfig(legs=[_leg("L1", "BUY", "CE")])
+def default_config() -> RulesConfig:
+    return RulesConfig(legs=[_leg("L1", "BUY", "CE")])

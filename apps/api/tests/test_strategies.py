@@ -46,6 +46,7 @@ def test_saved_config_is_normalised_and_kind_follows_it(api: TestClient) -> None
             "mode": "atm",
             "offset": 0,
             "premium": None,
+            "points": None,
         }
     )
     assert s["config"]["timing"] == {"entry": "09:20", "exit": "15:15", "days": ["MON", "TUE", "WED", "THU", "FRI"]}
@@ -82,7 +83,7 @@ def test_catalog(api: TestClient) -> None:
     c = r.json()
     assert {i["code"] for i in c["instruments"]} == {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"}
     assert [p["id"] for p in c["presets"]][:2] == ["blank", "short_straddle"]
-    assert {p["config"]["kind"] for p in c["presets"]} == {"time_based", "range_breakout", "zero_dte", "smc_scalp"}
+    assert {p["config"]["kind"] for p in c["presets"]} == {"rules", "range_breakout", "zero_dte", "smc_scalp"}
     assert c["limits"]["max_legs"] == 6 and c["limits"]["max_lots_per_order"] == 10  # free plan
     assert api.get("/v1/strategies/catalog").status_code == 401
     for p in c["presets"][:3]:  # presets save as-is

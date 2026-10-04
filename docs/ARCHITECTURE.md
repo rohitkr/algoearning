@@ -103,8 +103,9 @@ as the `ae_app` role with `app.user_id` set, so a query that forgets a `WHERE us
 user's rows. Trusted paths use `ae_system`: the engine, the worker, webhooks and admin.
 
 **Trading domain (`packages/py-core`).** Pure code with no database or network, so it can be tested in
-isolation. A strategy is a typed config (`strategy.py`). Its _runner_ (`trading/runners.py`, `smc_runner.py`)
-decides entries and exits from prices. `risk.py` applies stop-losses, targets and daily limits. The same runners
+isolation. A strategy is a typed config (`strategy.py`); the builder's kind is `rules` (entry time, intraday or
+overnight holding, legs, trade limits; ADR 0022), next to the fixed `range_breakout`, `zero_dte` and `smc_scalp`.
+Its _runner_ (`trading/runners.py`, `smc_runner.py`) decides entries and exits from prices. `risk.py` applies stop-losses, targets and daily limits. The same runners
 drive live trading, paper trading and backtests (ADR 0017), so all three behave the same.
 
 **Engine (`apps/engine`).** One process steps every active run every second (ADR 0014). Paper runs fill against

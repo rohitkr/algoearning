@@ -151,3 +151,34 @@ async def test_users_read_their_own_overrides_but_cannot_write_them(db: Database
         with pytest.raises(ProgrammingError):
             s.add(UserOverride(user_id=a.id, features={}))
             await s.flush()
+
+
+async def test_migration_0014_turns_time_based_configs_into_intraday_rules(db: Database) -> None:
+    import importlib.util
+    from pathlib import Path
+
+    from ae_core.strategy import RulesConfig, parse
+
+    path = Path(__file__).parents[1] / "src/ae_db/migrations/versions/0014_rules_strategies.py"
+    spec = importlib.util.spec_from_file_location("m0014", path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    old = {"kind": "time_based", "timing": {"entry": "10:00", "exit": "14:00", "days": ["MON"]},
+           "legs": [{"id": "L1", "action": "SELL", "option_type": "PE", "stop_loss": {"value": 25}}],
+           "risk": {"mtm_target": 1500}}  # fmt: skip
+    a, _ = await two_users(db)
+    async with db.user_session(a.id) as s:
+        full = await StrategyRepo(s, a.id).create(name="full", config=old, kind="time_based")
+        bare = await StrategyRepo(s, a.id).create(name="bare", config={"kind": "time_based", "legs": old["legs"]})
+    async with db.system_session() as s:
+        await s.execute(text(mod.UPGRADE))
+    async with db.system_session() as s:
+        rows = {r.name: r for r in (await s.execute(select(Strategy))).scalars()}
+    cfg = parse(rows["full"].config)
+    assert isinstance(cfg, RulesConfig) and rows["full"].kind == "rules" and full.id == rows["full"].id
+    assert (cfg.entry.at, cfg.entry.days, cfg.holding.mode, cfg.holding.exit) == ("10:00", ["MON"], "intraday", "14:00")
+    assert cfg.risk.mtm_target == 1500 and cfg.legs[0].stop_loss and cfg.legs[0].stop_loss.value == 25
+    plain = parse(rows["bare"].config)
+    assert isinstance(plain, RulesConfig) and plain.entry.at == "09:20" and plain.holding.exit == "15:15"
+    assert bare.id == rows["bare"].id
