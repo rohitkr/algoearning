@@ -4,6 +4,9 @@ import type {
   Instrument,
   LegStrike,
   LegThreshold,
+  RulesCondition,
+  RulesConditionGroup,
+  RulesConfig,
   SmcScalpConfig,
   StrategyConfig,
   StrategyLeg,
@@ -15,6 +18,7 @@ export const KIND_LABEL: Record<StrategyConfig["kind"], string> = {
   range_breakout: "Range breakout",
   zero_dte: "Expiry-day straddle",
   smc_scalp: "SMC options scalping",
+  rules: "Rule based",
 };
 
 export const EXPIRY_LABEL: Record<StrategyLeg["expiry"], string> = {
@@ -98,6 +102,7 @@ export function describeConfig(c: StrategyConfig, instruments: Instrument[]): st
     return lines;
   }
   if (c.kind === "smc_scalp") return describeSmc(c, inst);
+  if (c.kind === "rules") return describeRules(c, inst);
   const lots = `${c.lots} lot${c.lots === 1 ? "" : "s"}${inst ? ` (${c.lots * inst.lot_size} qty)` : ""}`;
   const hedge = c.hedge_width ? `, hedged ${c.hedge_width} points further out` : ", unhedged";
   if (c.kind === "range_breakout")
@@ -114,6 +119,67 @@ export function describeConfig(c: StrategyConfig, instruments: Instrument[]): st
     `Entry time: the best of every ${c.step_minutes} minutes from ${c.first_entry} to ${c.last_entry}, judged on the last ${c.lookback} expiry days.`,
     `Stop-loss ${c.stop_loss_pct}% on each leg's premium${c.reentry ? ", with one re-entry" : ""}; exit at ${c.exit_time}.`,
   ];
+}
+
+type Operand = RulesCondition["left"];
+
+function operandLabel(o: Operand): string {
+  if (o.kind === "number") return String(o.value);
+  if (o.kind === "price") return o.field ?? "close";
+  if (o.kind === "level") {
+    if (o.name === "opening_range_high") return `the first ${o.minutes ?? 15} minutes' high`;
+    if (o.name === "opening_range_low") return `the first ${o.minutes ?? 15} minutes' low`;
+    return o.name.replace("prev_", "previous day's ").replace("day_", "today's ").replace("_", " ");
+  }
+  const p = o.period ?? 14;
+  if (o.name === "macd") return o.line && o.line !== "value" ? `MACD ${o.line}` : "MACD";
+  if (o.name === "bollinger") return `Bollinger ${o.line ?? "middle"} band (${p})`;
+  if (o.name === "adx")
+    return o.line === "plus_di" ? `+DI(${p})` : o.line === "minus_di" ? `-DI(${p})` : `ADX(${p})`;
+  return `${o.name.toUpperCase()}(${p})`;
+}
+
+function describeGroup(g: RulesConditionGroup | null | undefined): string {
+  const conds = g?.conditions ?? [];
+  if (conds.length === 0) return "";
+  const parts = conds.map(
+    (c) =>
+      `the ${c.timeframe ?? 5}-minute ${operandLabel(c.left)} ${c.op.replace("_", " ")} ${operandLabel(c.right)}`,
+  );
+  return parts.join(g?.match === "any" ? " or " : " and ");
+}
+
+function describeRules(c: RulesConfig, inst: Instrument | undefined): string[] {
+  const t = { start: "09:20", last_entry: "14:30", max_entries_per_day: 1, ...c.timing };
+  const h = { mode: "intraday", exit: "15:15", days: 1, ...c.holding };
+  const lines = [
+    `Trade ${days(t.days)}${t.dte?.length ? ` with ${t.dte.join("/")} days to expiry` : ""}, entries ${t.start}–${t.last_entry}, at most ${t.max_entries_per_day} a day, one trade at a time.`,
+  ];
+  for (const s of c.signals) {
+    const when = describeGroup(s.when);
+    const legs = s.legs.map((l) => describeLeg(l, c.underlying, inst)).join("; ");
+    lines.push(`${when ? `When ${when}` : `At ${t.start}`}: ${legs}.`);
+    const exit = describeGroup(s.exit_when);
+    if (exit) lines.push(`Exit that trade when ${exit}.`);
+  }
+  const hold: Record<string, string> = {
+    intraday: `Exit at ${h.exit} the same day.`,
+    next_day: `Hold overnight and exit at ${h.exit} on the next trading day.`,
+    days: `Hold ${h.days} trading days and exit at ${h.exit}.`,
+    expiry: `Hold to the legs' expiry day and exit at ${h.exit}.`,
+  };
+  lines.push(hold[h.mode] ?? "");
+  const r = c.risk;
+  if (r?.mtm_stop_loss) lines.push(`Exit the trade if its loss reaches ₹${r.mtm_stop_loss}.`);
+  if (r?.mtm_target) lines.push(`Exit the trade if its profit reaches ₹${r.mtm_target}.`);
+  if (r?.profit_lock)
+    lines.push(
+      `Once the profit reaches ₹${r.profit_lock.reach}, keep at least ₹${r.profit_lock.lock}${r.profit_lock.trail_every ? `, raised ₹${r.profit_lock.trail_by} for every ₹${r.profit_lock.trail_every} more` : ""}.`,
+    );
+  if (r?.exit_all_on_leg_sl) lines.push("When any leg's stop-loss hits, exit every leg.");
+  if (r?.sl_to_cost_on_leg_sl)
+    lines.push("When a leg's stop-loss hits, move the others' stop-losses to cost.");
+  return lines;
 }
 
 function describeSmc(c: SmcScalpConfig, inst: Instrument | undefined): string[] {
@@ -138,6 +204,10 @@ export function configSummary(c: StrategyConfig): string {
     return `${c.underlying} · ${n} leg${n === 1 ? "" : "s"} · ${c.timing?.entry ?? "09:20"}–${c.timing?.exit ?? "15:15"}`;
   }
   if (c.kind === "range_breakout") return `${c.underlying} · range ${c.range_start}–${c.range_end}`;
+  if (c.kind === "rules") {
+    const n = c.signals.length;
+    return `${c.underlying} · ${n} signal${n === 1 ? "" : "s"} · ${c.timing?.start ?? "09:20"}–${c.timing?.last_entry ?? "14:30"} · ${(c.holding?.mode ?? "intraday").replace("_", " ")}`;
+  }
   if (c.kind === "smc_scalp") {
     const tf = c.timeframes;
     return `${c.underlying} · SMC ${tf?.bias ?? 15}/${tf?.setup ?? 5}/${tf?.entry ?? 1}m · 1:${c.risk?.rr ?? 2} · ${c.session?.start ?? "09:30"}–${c.session?.last_entry ?? "14:30"}`;

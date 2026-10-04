@@ -1745,6 +1745,39 @@ export interface components {
              */
             provider: "razorpay";
         };
+        /**
+         * Condition
+         * @description `left op right`, read on the latest completed candle of `timeframe`. above/below hold while true; a cross is
+         *     true only on the candle that crossed (the previous candle was on the other side).
+         */
+        Condition: {
+            /** Left */
+            left: components["schemas"]["NumberOperand"] | components["schemas"]["PriceOperand"] | components["schemas"]["IndicatorOperand"] | components["schemas"]["LevelOperand"];
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "above" | "below" | "crosses_above" | "crosses_below";
+            /** Right */
+            right: components["schemas"]["NumberOperand"] | components["schemas"]["PriceOperand"] | components["schemas"]["IndicatorOperand"] | components["schemas"]["LevelOperand"];
+            /**
+             * Timeframe
+             * @default 5
+             * @enum {integer}
+             */
+            timeframe: 1 | 3 | 5 | 10 | 15 | 30 | 60;
+        };
+        /** ConditionGroup */
+        ConditionGroup: {
+            /** Conditions */
+            conditions?: components["schemas"]["Condition"][];
+            /**
+             * Match
+             * @default all
+             * @enum {string}
+             */
+            match: "all" | "any";
+        };
         /** ConfigIssue */
         ConfigIssue: {
             /** Loc */
@@ -1918,6 +1951,75 @@ export interface components {
             /** Underlying */
             underlying: string;
         };
+        /**
+         * Holding
+         * @description How long a trade is held: exit at `exit` the same day (intraday), on the next trading day, after `days`
+         *     trading days, or on the expiry day of its legs. Stop-losses and targets apply the whole time.
+         */
+        Holding: {
+            /**
+             * Days
+             * @default 1
+             */
+            days: number;
+            /**
+             * Exit
+             * @default 15:15
+             */
+            exit: string;
+            /**
+             * Mode
+             * @default intraday
+             * @enum {string}
+             */
+            mode: "intraday" | "next_day" | "days" | "expiry";
+        };
+        /**
+         * IndicatorOperand
+         * @description An indicator of the index on the condition's timeframe. `line` picks one output of a multi-line indicator:
+         *     macd: value (MACD line) / signal / hist; bollinger: upper / middle / lower; adx: value / plus_di / minus_di.
+         *     `multiplier`: the band width of bollinger (default 2) and the ATR multiple of supertrend (default 3).
+         */
+        IndicatorOperand: {
+            /**
+             * Fast
+             * @default 12
+             */
+            fast: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "indicator";
+            /**
+             * Line
+             * @default value
+             * @enum {string}
+             */
+            line: "value" | "signal" | "hist" | "upper" | "middle" | "lower" | "plus_di" | "minus_di";
+            /** Multiplier */
+            multiplier?: number | null;
+            /**
+             * Name
+             * @enum {string}
+             */
+            name: "ema" | "sma" | "rsi" | "macd" | "supertrend" | "bollinger" | "atr" | "adx";
+            /**
+             * Period
+             * @default 14
+             */
+            period: number;
+            /**
+             * Signal
+             * @default 9
+             */
+            signal: number;
+            /**
+             * Slow
+             * @default 26
+             */
+            slow: number;
+        };
         /** InstrumentAdminOut */
         InstrumentAdminOut: {
             /** Code */
@@ -2037,6 +2139,28 @@ export interface components {
             strike?: components["schemas"]["Strike"];
             target?: components["schemas"]["Threshold"] | null;
             trailing?: components["schemas"]["Trailing"] | null;
+        };
+        /**
+         * LevelOperand
+         * @description A price level of the day: the opening range (the first `minutes` from 09:15), today's open/high/low so far,
+         *     or the previous session's high/low/close.
+         */
+        LevelOperand: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "level";
+            /**
+             * Minutes
+             * @default 15
+             */
+            minutes: number;
+            /**
+             * Name
+             * @enum {string}
+             */
+            name: "opening_range_high" | "opening_range_low" | "day_open" | "day_high" | "day_low" | "prev_high" | "prev_low" | "prev_close";
         };
         /** LiveBroker */
         LiveBroker: {
@@ -2203,6 +2327,16 @@ export interface components {
             telegram_connected: boolean;
             /** Telegram Enabled */
             telegram_enabled: boolean;
+        };
+        /** NumberOperand */
+        NumberOperand: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "number";
+            /** Value */
+            value: number;
         };
         /** OpenPosition */
         OpenPosition: {
@@ -2542,13 +2676,45 @@ export interface components {
         /** PresetOut */
         PresetOut: {
             /** Config */
-            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"] | components["schemas"]["RulesConfig"];
             /** Description */
             description: string;
             /** Id */
             id: string;
             /** Name */
             name: string;
+        };
+        /**
+         * PriceOperand
+         * @description The index candle's open/high/low/close on the condition's timeframe.
+         */
+        PriceOperand: {
+            /**
+             * Field
+             * @default close
+             * @enum {string}
+             */
+            field: "open" | "high" | "low" | "close";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "price";
+        };
+        /**
+         * ProfitLock
+         * @description Once the trade's profit reaches `reach` (₹), never give back below `lock`; then every `trail_every` more
+         *     raises the locked amount by `trail_by`.
+         */
+        ProfitLock: {
+            /** Lock */
+            lock: number;
+            /** Reach */
+            reach: number;
+            /** Trail By */
+            trail_by?: number | null;
+            /** Trail Every */
+            trail_every?: number | null;
         };
         /** PurchaseOut */
         PurchaseOut: {
@@ -2760,6 +2926,74 @@ export interface components {
             /** Max Trades Per Day */
             max_trades_per_day?: number | null;
         };
+        /**
+         * RulesConfig
+         * @description A strategy assembled from building blocks: when to trade (timing), how to get in (signals: conditions on the
+         *     index, its indicators and the day's levels, each with its own legs), how long to hold (holding) and the
+         *     trade-wide risk. One trade at a time; a signal is read when a candle completes (ADR 0022).
+         */
+        RulesConfig: {
+            holding?: components["schemas"]["Holding"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rules";
+            risk?: components["schemas"]["RulesRisk"];
+            /** Signals */
+            signals: components["schemas"]["Signal"][];
+            timing?: components["schemas"]["RulesTiming"];
+            /**
+             * Underlying
+             * @default NIFTY
+             * @enum {string}
+             */
+            underlying: "NIFTY" | "BANKNIFTY" | "FINNIFTY" | "MIDCPNIFTY" | "SENSEX";
+        };
+        /**
+         * RulesRisk
+         * @description Per trade (all legs of one entry, with their re-entries): stop-loss / target in ₹, a profit lock, and what a
+         *     leg's stop-loss does to the other legs.
+         */
+        RulesRisk: {
+            /**
+             * Exit All On Leg Sl
+             * @default false
+             */
+            exit_all_on_leg_sl: boolean;
+            /** Mtm Stop Loss */
+            mtm_stop_loss?: number | null;
+            /** Mtm Target */
+            mtm_target?: number | null;
+            profit_lock?: components["schemas"]["ProfitLock"] | null;
+            /**
+             * Sl To Cost On Leg Sl
+             * @default false
+             */
+            sl_to_cost_on_leg_sl: boolean;
+        };
+        /** RulesTiming */
+        RulesTiming: {
+            /** Days */
+            days?: ("MON" | "TUE" | "WED" | "THU" | "FRI")[];
+            /** Dte */
+            dte?: number[] | null;
+            /**
+             * Last Entry
+             * @default 14:30
+             */
+            last_entry: string;
+            /**
+             * Max Entries Per Day
+             * @default 1
+             */
+            max_entries_per_day: number;
+            /**
+             * Start
+             * @default 09:20
+             */
+            start: string;
+        };
         /** RunDetail */
         RunDetail: {
             /** Events */
@@ -2867,6 +3101,19 @@ export interface components {
             ip: string | null;
             /** Previous */
             previous?: string | null;
+        };
+        /**
+         * Signal
+         * @description One way into a trade: when `when` holds, enter `legs`. Several signals let the market pick the direction,
+         *     e.g. an upside breakout buys a call and a downside breakout buys a put. `exit_when` closes this signal's trade.
+         */
+        Signal: {
+            exit_when?: components["schemas"]["ConditionGroup"] | null;
+            /** Id */
+            id: string;
+            /** Legs */
+            legs: components["schemas"]["Leg"][];
+            when?: components["schemas"]["ConditionGroup"];
         };
         /** SmcBox */
         SmcBox: {
@@ -3244,7 +3491,7 @@ export interface components {
         /** StrategyIn */
         StrategyIn: {
             /** Config */
-            config?: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            config?: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"] | components["schemas"]["RulesConfig"];
             /** Description */
             description?: string | null;
             /** Name */
@@ -3264,7 +3511,7 @@ export interface components {
         /** StrategyOut */
         StrategyOut: {
             /** Config */
-            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            config: components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"] | components["schemas"]["RulesConfig"];
             /**
              * Created At
              * Format: date-time
@@ -3281,7 +3528,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "time_based" | "range_breakout" | "zero_dte" | "smc_scalp";
+            kind: "time_based" | "range_breakout" | "zero_dte" | "smc_scalp" | "rules";
             /** Name */
             name: string;
             /** Schema Version */
@@ -3302,7 +3549,7 @@ export interface components {
         /** StrategyPatch */
         StrategyPatch: {
             /** Config */
-            config?: (components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"]) | null;
+            config?: (components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"] | components["schemas"]["RulesConfig"]) | null;
             /** Description */
             description?: string | null;
             /** Name */

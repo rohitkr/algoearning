@@ -10,7 +10,15 @@ from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from ..strategy import AnyConfig, Leg, RangeBreakoutConfig, SmcScalpConfig, TimeBasedConfig, ZeroDteConfig
+from ..strategy import (
+    AnyConfig,
+    Leg,
+    RangeBreakoutConfig,
+    RulesConfig,
+    SmcScalpConfig,
+    TimeBasedConfig,
+    ZeroDteConfig,
+)
 from . import options, rules
 from .model import IST, Contract, Intent, Market, Position, Side
 from .rules import Right
@@ -128,21 +136,12 @@ def _buy_first(intents: list[Intent]) -> list[Intent]:
 
 
 # -- time based (the builder) -----------------------------------------------------------------------------------------
-class TimeBasedRunner(Runner):
-    """Enter every leg at the entry time on chosen weekdays; each leg has its own stop-loss, target, trailing stop and
-    re-entries; strategy-wide MTM stop-loss / target; everything exits at the exit time the same day."""
-
-    kind = "time_based"
-    cfg: TimeBasedConfig
+class LegRunner(Runner):
+    """What a builder leg does once it is open, shared by the time-based builder and rule-based strategies: its
+    stop-loss and target (on the premium or the index), trailing stop, and re-entries after a stop-loss or target."""
 
     def _leg(self, leg_id: str) -> Leg | None:
-        return next((leg for leg in self.cfg.legs if leg.id == leg_id), None)
-
-    def _new_day(self, m: Market) -> None:
-        today = m.now.date()
-        if self.s.get("day") != today.isoformat():
-            self.drop_closed_before(today)
-            self.s.update(day=today.isoformat(), phase="waiting", reentries={}, pending=[], contracts={})
+        raise NotImplementedError
 
     def _resolve(self, m: Market, leg: Leg) -> Contract | str:
         """The leg's contract right now, or why it cannot be chosen yet."""
@@ -151,26 +150,77 @@ class TimeBasedRunner(Runner):
             return f"no {leg.expiry.replace('_', ' ')} expiry listed"
         return options.pick(m, leg.option_type, leg.strike, expiry)
 
-    def _candidates(self, m: Market, leg: Leg, expiry: date) -> list[Contract]:
-        return options.candidates(m, leg.option_type, expiry)
+    def _leg_keys(self, m: Market, leg: Leg) -> set[str]:
+        """Contracts to stream so the leg can be chosen: every candidate for a premium strike, else the one strike."""
+        expiry = rules.pick_expiry(m.expiries, m.now.date(), leg.expiry)
+        if expiry is None or m.spot is None:
+            return set()
+        if leg.strike.mode == "premium":
+            return {c.key for c in options.candidates(m, leg.option_type, expiry)}
+        r = self._resolve(m, leg)
+        return {r.key} if isinstance(r, Contract) else set()
 
-    def wanted(self, m: Market) -> set[str]:
-        keys = super().wanted(m)
-        keys |= {p["contract"] for p in self.s.get("pending", [])}
-        if self.s.get("phase", "waiting") == "waiting":
-            for leg in self.cfg.legs:
-                expiry = rules.pick_expiry(m.expiries, m.now.date(), leg.expiry)
-                if expiry is None or m.spot is None:
-                    continue
-                if leg.strike.mode == "premium":
-                    keys |= {c.key for c in self._candidates(m, leg, expiry)}
-                else:
-                    r = self._resolve(m, leg)
-                    if isinstance(r, Contract):
-                        keys.add(r.key)
-        return keys
+    def _leg_exits(self, m: Market) -> tuple[list[Intent], list[Position]]:
+        """Stop-losses, targets and trailing stops of the open legs: (exit intents, positions stopped out)."""
+        out: list[Intent] = []
+        stopped: list[Position] = []
+        for pos in self.open_positions():
+            found = self._leg(pos.leg)
+            if found is None or pos.id in self.exiting:
+                continue
+            leg = found
+            if pos.sl is not None:
+                v = self._value(pos, pos.sl_basis, m)
+                if v is not None:
+                    self._trail(pos, leg, v)
+                    if (v - pos.sl) * self._favourable(pos) <= 0:
+                        i = self._exit(pos, "stop-loss")
+                        if i:
+                            out.append(i)
+                            stopped.append(pos)
+                            self._queue_reentry(pos, leg, "sl")
+                        continue
+            if pos.target is not None:
+                v = self._value(pos, pos.target_basis, m)
+                fav = pos.sign if pos.target_basis == "premium" else self._favourable(pos)
+                if v is not None and (v - pos.target) * fav >= 0:
+                    i = self._exit(pos, "target")
+                    if i:
+                        out.append(i)
+                        self._queue_reentry(pos, leg, "target")
+        return out, stopped
+
+    def _reentries(self, m: Market) -> list[Intent]:
+        """Re-enter legs whose re-entry condition is met; keep waiting for the others."""
+        out: list[Intent] = []
+        keep = []
+        for r in self.s.get("pending", []):
+            if r.get("sent"):  # ordered, waiting for the fill (or a refusal, which re-arms it)
+                keep.append(r)
+                continue
+            c = Contract.from_key(r["contract"])
+            px = m.price(c)
+            # at cost: back at the entry price (after a stop-loss: from the losing side; after a target: the other)
+            side = 1 if r["side"] == "BUY" else -1
+            kind = 1 if r["kind"] == "sl" else -1
+            ready = r["mode"] == "immediate" or (px is not None and (px - r["entry_price"]) * side * kind >= 0)
+            again = self._leg(r["leg"])
+            if ready and px is not None and again is not None:
+                why = "re-entry after " + ("stop-loss" if r["kind"] == "sl" else "target")
+                intent = self._enter(m, c, again.action, again.lots, again.id, why)
+                r["sent"] = intent.position_id
+                out.append(intent)
+            keep.append(r)
+        self.s["pending"] = keep
+        return out
+
+    def on_reject(self, intent: Intent, reason: str) -> None:
+        for r in self.s.get("pending", []):
+            if r.get("sent") == intent.position_id:
+                r.pop("sent")  # try again on a later step
 
     def on_entry(self, pos: Position, intent: Intent, m: Market) -> None:
+        self.s["pending"] = [r for r in self.s.get("pending", []) if r.get("sent") != pos.id]
         leg = self._leg(pos.leg)
         if leg is None:
             return
@@ -216,6 +266,44 @@ class TimeBasedRunner(Runner):
             pos.sl = round(pos.sl + fav * step * (after - before), 2)
             self.note("trailing_sl_moved", leg=pos.leg, sl=pos.sl)
 
+    def _queue_reentry(self, pos: Position, leg: Leg, kind: str) -> None:
+        cfg = leg.reentry_on_sl if kind == "sl" else leg.reentry_on_target
+        if cfg is None:
+            return
+        used = self.s.setdefault("reentries", {}).get(f"{leg.id}:{kind}", 0)
+        if used >= cfg.count:
+            return
+        self.s["reentries"][f"{leg.id}:{kind}"] = used + 1
+        self.s.setdefault("pending", []).append(
+            {"leg": leg.id, "contract": pos.contract.key, "mode": cfg.mode, "kind": kind,
+             "entry_price": pos.entry_price, "side": pos.side}
+        )  # fmt: skip
+
+
+class TimeBasedRunner(LegRunner):
+    """Enter every leg at the entry time on chosen weekdays; each leg has its own stop-loss, target, trailing stop and
+    re-entries; strategy-wide MTM stop-loss / target; everything exits at the exit time the same day."""
+
+    kind = "time_based"
+    cfg: TimeBasedConfig
+
+    def _leg(self, leg_id: str) -> Leg | None:
+        return next((leg for leg in self.cfg.legs if leg.id == leg_id), None)
+
+    def _new_day(self, m: Market) -> None:
+        today = m.now.date()
+        if self.s.get("day") != today.isoformat():
+            self.drop_closed_before(today)
+            self.s.update(day=today.isoformat(), phase="waiting", reentries={}, pending=[], contracts={})
+
+    def wanted(self, m: Market) -> set[str]:
+        keys = super().wanted(m)
+        keys |= {p["contract"] for p in self.s.get("pending", [])}
+        if self.s.get("phase", "waiting") == "waiting":
+            for leg in self.cfg.legs:
+                keys |= self._leg_keys(m, leg)
+        return keys
+
     def step(self, m: Market) -> list[Intent]:
         self._new_day(m)
         now, cfg = m.now, self.cfg
@@ -255,31 +343,8 @@ class TimeBasedRunner(Runner):
             return self.exit_all(f"exit time {timing.exit}")
 
         # leg stop-loss / target / trailing
-        sl_hit = False
-        for pos in self.open_positions():
-            found = self._leg(pos.leg)
-            if found is None or pos.id in self.exiting:
-                continue
-            leg = found
-            if pos.sl is not None:
-                v = self._value(pos, pos.sl_basis, m)
-                if v is not None:
-                    self._trail(pos, leg, v)
-                    if (v - pos.sl) * self._favourable(pos) <= 0:
-                        i = self._exit(pos, "stop-loss")
-                        if i:
-                            out.append(i)
-                            sl_hit = True
-                            self._queue_reentry(pos, leg, "sl")
-                        continue
-            if pos.target is not None:
-                v = self._value(pos, pos.target_basis, m)
-                fav = pos.sign if pos.target_basis == "premium" else self._favourable(pos)
-                if v is not None and (v - pos.target) * fav >= 0:
-                    i = self._exit(pos, "target")
-                    if i:
-                        out.append(i)
-                        self._queue_reentry(pos, leg, "target")
+        out, stopped = self._leg_exits(m)
+        sl_hit = bool(stopped)
         if sl_hit and cfg.risk.exit_all_on_leg_sl:
             self.s["pending"] = []
             out += self.exit_all("another leg hit its stop-loss")
@@ -299,37 +364,11 @@ class TimeBasedRunner(Runner):
             return out + self.exit_all(f"strategy profit reached ₹{risk.mtm_target:g}")
 
         # re-entries
-        keep = []
-        for r in self.s.get("pending", []):
-            c = Contract.from_key(r["contract"])
-            px = m.price(c)
-            # at cost: back at the entry price (after a stop-loss: from the losing side; after a target: the other)
-            side = 1 if r["side"] == "BUY" else -1
-            kind = 1 if r["kind"] == "sl" else -1
-            ready = r["mode"] == "immediate" or (px is not None and (px - r["entry_price"]) * side * kind >= 0)
-            again = self._leg(r["leg"])
-            if ready and px is not None and again is not None:
-                why = "re-entry after " + ("stop-loss" if r["kind"] == "sl" else "target")
-                out.append(self._enter(m, c, again.action, again.lots, again.id, why))
-                continue
-            keep.append(r)
-        self.s["pending"] = keep
+        out += self._reentries(m)
+        keep = self.s["pending"]
         if not self.open_positions() and not keep and not any(i.kind == "entry" for i in out) and not self.exiting:
             self.s["phase"] = "done"
         return out
-
-    def _queue_reentry(self, pos: Position, leg: Leg, kind: str) -> None:
-        cfg = leg.reentry_on_sl if kind == "sl" else leg.reentry_on_target
-        if cfg is None:
-            return
-        used = self.s.setdefault("reentries", {}).get(f"{leg.id}:{kind}", 0)
-        if used >= cfg.count:
-            return
-        self.s["reentries"][f"{leg.id}:{kind}"] = used + 1
-        self.s.setdefault("pending", []).append(
-            {"leg": leg.id, "contract": pos.contract.key, "mode": cfg.mode, "kind": kind,
-             "entry_price": pos.entry_price, "side": pos.side}
-        )  # fmt: skip
 
 
 # -- positional range breakout ----------------------------------------------------------------------------------------
@@ -604,6 +643,10 @@ class ZeroDteRunner(Runner):
 
 
 def make_runner(config: AnyConfig, multiplier: int = 1, state: Mapping[str, Any] | None = None) -> Runner:
+    if isinstance(config, RulesConfig):
+        from .rules_runner import RulesRunner  # it builds on this module
+
+        return RulesRunner(config, multiplier, state)
     if isinstance(config, SmcScalpConfig):
         from .smc_runner import SmcScalpRunner  # it builds on this module
 

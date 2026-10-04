@@ -530,6 +530,14 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                 />
               </Card>
             </>
+          ) : config.kind === "rules" ? (
+            <Card>
+              <h2 className="mb-2 font-semibold">Rule-based strategy</h2>
+              <p className="text-sm text-muted">
+                Rule-based strategies get their own builder in the next phase. Until then this page shows the
+                strategy (see the summary) and can deploy and backtest it; its rules cannot be edited here.
+              </p>
+            </Card>
           ) : config.kind === "smc_scalp" ? (
             <SmcParams
               config={config}

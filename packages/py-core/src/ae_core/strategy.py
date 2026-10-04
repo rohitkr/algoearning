@@ -1,13 +1,15 @@
 """What a saved strategy means. The API validates every save with this module and the trading engine (phase 9)
 reads configs with it, so the two can never disagree about a field (ADR 0010).
 
-A config is one of three kinds, told apart by `kind`:
+A config is one of these kinds, told apart by `kind`:
 
     time_based      the builder: 1-6 option legs entered at a fixed time on chosen weekdays, each with its own
                     strike rule, stop-loss, target, trailing stop and re-entry, plus strategy-wide MTM limits
     range_breakout  the proven positional 2h range breakout seller (algo-trading-claude, RangeBreakoutParams)
     zero_dte        the proven expiry-day ITM straddle seller (algo-trading-claude, ZeroDteParams)
     smc_scalp       intraday options buyer on Smart Money Concepts read from the index (ADR 0018)
+    rules           building blocks (ADR 0022): signals made of conditions on the index, its indicators and the
+                    day's levels, each with its own legs; intraday or held for days; trade-wide risk
 
 Validation has two layers: the Pydantic models check types and bounds; `check()` checks rules that span
 fields (entry before exit, weekly expiry only where the exchange lists one, trailing needs a stop-loss, ...).
@@ -268,11 +270,142 @@ class SmcScalpConfig(_Model):
     session: SmcSession = Field(default_factory=SmcSession)
 
 
-StrategyConfig = Annotated[
-    TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig, Field(discriminator="kind")
+# -- rule-based strategies (ADR 0022): building blocks instead of fixed strategies -----------------------------
+Timeframe = Literal[1, 3, 5, 10, 15, 30, 60]  # minutes; candles aligned to 09:15
+IndicatorName = Literal["ema", "sma", "rsi", "macd", "supertrend", "bollinger", "atr", "adx"]
+LevelName = Literal[
+    "opening_range_high", "opening_range_low", "day_open", "day_high", "day_low", "prev_high", "prev_low", "prev_close"
 ]
-StrategyKind = Literal["time_based", "range_breakout", "zero_dte", "smc_scalp"]
-AnyConfig = TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig
+MAX_SIGNALS = 4
+MAX_CONDITIONS = 6
+
+
+class NumberOperand(_Model):
+    kind: Literal["number"] = "number"
+    value: float = Field(ge=-1_000_000, le=1_000_000)
+
+
+class PriceOperand(_Model):
+    """The index candle's open/high/low/close on the condition's timeframe."""
+
+    kind: Literal["price"] = "price"
+    field: Literal["open", "high", "low", "close"] = "close"
+
+
+class IndicatorOperand(_Model):
+    """An indicator of the index on the condition's timeframe. `line` picks one output of a multi-line indicator:
+    macd: value (MACD line) / signal / hist; bollinger: upper / middle / lower; adx: value / plus_di / minus_di.
+    `multiplier`: the band width of bollinger (default 2) and the ATR multiple of supertrend (default 3)."""
+
+    kind: Literal["indicator"] = "indicator"
+    name: IndicatorName
+    period: int = Field(default=14, ge=1, le=200)
+    line: Literal["value", "signal", "hist", "upper", "middle", "lower", "plus_di", "minus_di"] = "value"
+    multiplier: float | None = Field(default=None, gt=0, le=10)
+    fast: int = Field(default=12, ge=1, le=100)  # macd only
+    slow: int = Field(default=26, ge=2, le=200)  # macd only
+    signal: int = Field(default=9, ge=1, le=100)  # macd only
+
+
+class LevelOperand(_Model):
+    """A price level of the day: the opening range (the first `minutes` from 09:15), today's open/high/low so far,
+    or the previous session's high/low/close."""
+
+    kind: Literal["level"] = "level"
+    name: LevelName
+    minutes: int = Field(default=15, ge=1, le=180)  # opening range only
+
+
+Operand = Annotated[NumberOperand | PriceOperand | IndicatorOperand | LevelOperand, Field(discriminator="kind")]
+Comparison = Literal["above", "below", "crosses_above", "crosses_below"]
+
+
+class Condition(_Model):
+    """`left op right`, read on the latest completed candle of `timeframe`. above/below hold while true; a cross is
+    true only on the candle that crossed (the previous candle was on the other side)."""
+
+    timeframe: Timeframe = 5
+    left: Operand
+    op: Comparison
+    right: Operand
+
+
+class ConditionGroup(_Model):
+    match: Literal["all", "any"] = "all"
+    conditions: list[Condition] = Field(default_factory=list, max_length=MAX_CONDITIONS)  # empty: always true
+
+
+class Signal(_Model):
+    """One way into a trade: when `when` holds, enter `legs`. Several signals let the market pick the direction,
+    e.g. an upside breakout buys a call and a downside breakout buys a put. `exit_when` closes this signal's trade."""
+
+    id: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]{1,12}$")]
+    when: ConditionGroup = Field(default_factory=ConditionGroup)
+    legs: list[Leg] = Field(min_length=1, max_length=MAX_LEGS)
+    exit_when: ConditionGroup | None = None
+
+
+class Holding(_Model):
+    """How long a trade is held: exit at `exit` the same day (intraday), on the next trading day, after `days`
+    trading days, or on the expiry day of its legs. Stop-losses and targets apply the whole time."""
+
+    mode: Literal["intraday", "next_day", "days", "expiry"] = "intraday"
+    exit: HHMM = "15:15"
+    days: int = Field(default=1, ge=1, le=30)  # mode "days" only
+
+
+class ProfitLock(_Model):
+    """Once the trade's profit reaches `reach` (₹), never give back below `lock`; then every `trail_every` more
+    raises the locked amount by `trail_by`."""
+
+    reach: float = Field(gt=0, le=100_000_000)
+    lock: float = Field(ge=0, le=100_000_000)
+    trail_every: float | None = Field(default=None, gt=0, le=100_000_000)
+    trail_by: float | None = Field(default=None, gt=0, le=100_000_000)
+
+
+class RulesRisk(_Model):
+    """Per trade (all legs of one entry, with their re-entries): stop-loss / target in ₹, a profit lock, and what a
+    leg's stop-loss does to the other legs."""
+
+    mtm_stop_loss: float | None = Field(default=None, gt=0, le=100_000_000)
+    mtm_target: float | None = Field(default=None, gt=0, le=100_000_000)
+    profit_lock: ProfitLock | None = None
+    exit_all_on_leg_sl: bool = False
+    sl_to_cost_on_leg_sl: bool = False  # when a leg hits its stop-loss, move the other legs' stop-losses to cost
+
+
+class RulesTiming(_Model):
+    start: HHMM = "09:20"  # first entry
+    last_entry: HHMM = "14:30"
+    days: list[Weekday] = Field(default_factory=lambda: list(WEEKDAYS), min_length=1, max_length=5)
+    dte: list[int] | None = Field(
+        default=None, min_length=1, max_length=8
+    )  # days to the nearest expiry, 0 = expiry day
+    max_entries_per_day: int = Field(default=1, ge=1, le=20)
+
+
+class RulesConfig(_Model):
+    """A strategy assembled from building blocks: when to trade (timing), how to get in (signals: conditions on the
+    index, its indicators and the day's levels, each with its own legs), how long to hold (holding) and the
+    trade-wide risk. One trade at a time; a signal is read when a candle completes (ADR 0022)."""
+
+    kind: Literal["rules"] = "rules"
+    underlying: Underlying = "NIFTY"
+    timing: RulesTiming = Field(default_factory=RulesTiming)
+    signals: list[Signal] = Field(min_length=1, max_length=MAX_SIGNALS)
+    holding: Holding = Field(default_factory=Holding)
+    risk: RulesRisk = Field(default_factory=RulesRisk)
+
+    def all_legs(self) -> list[Leg]:
+        return [leg for s in self.signals for leg in s.legs]
+
+
+StrategyConfig = Annotated[
+    TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig | RulesConfig, Field(discriminator="kind")
+]
+StrategyKind = Literal["time_based", "range_breakout", "zero_dte", "smc_scalp", "rules"]
+AnyConfig = TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig | RulesConfig
 _ADAPTER: TypeAdapter[AnyConfig] = TypeAdapter(StrategyConfig)
 
 
@@ -294,7 +427,7 @@ def parse(raw: Any) -> AnyConfig:
 
 def parse_issues(exc: ValidationError) -> list[Issue]:
     """Pydantic errors as Issues, without the union tag Pydantic puts first (("time_based", "legs", 0, ...))."""
-    kinds = {"time_based", "range_breakout", "zero_dte", "smc_scalp"}
+    kinds = {"time_based", "range_breakout", "zero_dte", "smc_scalp", "rules"}
     out = []
     for e in exc.errors():
         loc = tuple(e["loc"])
@@ -343,33 +476,14 @@ def check(c: AnyConfig, instruments: Instruments) -> list[Issue]:
             issues.append(Issue(("timing", "exit"), "must be after the entry time"))
         if len(set(c.timing.days)) != len(c.timing.days):
             issues.append(Issue(("timing", "days"), "lists a day twice"))
-        seen: set[str] = set()
-        for i, leg in enumerate(c.legs):
-            loc: Loc = ("legs", i)
-            if leg.id in seen:
-                issues.append(Issue((*loc, "id"), f"leg id {leg.id} is used twice"))
-            seen.add(leg.id)
-            if leg.expiry in WEEKLY_EXPIRIES and not inst.weekly_expiry:
-                issues.append(Issue((*loc, "expiry"), f"{c.underlying} has monthly expiries only"))
-            if leg.strike.mode == "premium" and leg.strike.premium is None:
-                issues.append(Issue((*loc, "strike", "premium"), "enter the premium to look for"))
-            if leg.stop_loss:
-                issues += _threshold(leg.stop_loss, (*loc, "stop_loss"), leg.action, is_target=False)
-            if leg.target:
-                issues += _threshold(leg.target, (*loc, "target"), leg.action, is_target=True)
-            if leg.trailing and not leg.stop_loss:
-                issues.append(Issue((*loc, "trailing"), "a trailing stop needs a stop-loss to trail"))
-            if leg.trailing and leg.trailing.unit == "percent" and leg.trailing.step > 100:
-                issues.append(Issue((*loc, "trailing", "step"), "must be at most 100%"))
-            if leg.reentry_on_sl and not leg.stop_loss:
-                issues.append(Issue((*loc, "reentry_on_sl"), "re-entry after a stop-loss needs a stop-loss"))
-            if leg.reentry_on_target and not leg.target:
-                issues.append(Issue((*loc, "reentry_on_target"), "re-entry after a target needs a target"))
+        issues += _check_legs([(("legs", i), leg) for i, leg in enumerate(c.legs)], c.underlying, inst)
         if c.risk.exit_all_on_leg_sl and not any(leg.stop_loss for leg in c.legs):
             issues.append(Issue(("risk", "exit_all_on_leg_sl"), "no leg has a stop-loss"))
         return issues
     if isinstance(c, SmcScalpConfig):
         return issues + _check_smc(c, inst)
+    if isinstance(c, RulesConfig):
+        return issues + _check_rules(c, inst)
 
     if not inst.weekly_expiry:
         issues.append(Issue(("underlying",), f"this strategy trades weekly expiries; {c.underlying} has none"))
@@ -387,6 +501,102 @@ def check(c: AnyConfig, instruments: Instruments) -> list[Issue]:
         issues += _times(c, inst, ["first_entry", "last_entry", "exit_time"])
         if c.last_entry == c.exit_time:
             issues.append(Issue(("exit_time",), "must be after the last entry time"))
+    return issues
+
+
+def _check_legs(legs: list[tuple[Loc, Leg]], underlying: str, inst: Instrument) -> list[Issue]:
+    issues: list[Issue] = []
+    seen: set[str] = set()
+    for loc, leg in legs:
+        if leg.id in seen:
+            issues.append(Issue((*loc, "id"), f"leg id {leg.id} is used twice"))
+        seen.add(leg.id)
+        if leg.expiry in WEEKLY_EXPIRIES and not inst.weekly_expiry:
+            issues.append(Issue((*loc, "expiry"), f"{underlying} has monthly expiries only"))
+        if leg.strike.mode == "premium" and leg.strike.premium is None:
+            issues.append(Issue((*loc, "strike", "premium"), "enter the premium to look for"))
+        if leg.stop_loss:
+            issues += _threshold(leg.stop_loss, (*loc, "stop_loss"), leg.action, is_target=False)
+        if leg.target:
+            issues += _threshold(leg.target, (*loc, "target"), leg.action, is_target=True)
+        if leg.trailing and not leg.stop_loss:
+            issues.append(Issue((*loc, "trailing"), "a trailing stop needs a stop-loss to trail"))
+        if leg.trailing and leg.trailing.unit == "percent" and leg.trailing.step > 100:
+            issues.append(Issue((*loc, "trailing", "step"), "must be at most 100%"))
+        if leg.reentry_on_sl and not leg.stop_loss:
+            issues.append(Issue((*loc, "reentry_on_sl"), "re-entry after a stop-loss needs a stop-loss"))
+        if leg.reentry_on_target and not leg.target:
+            issues.append(Issue((*loc, "reentry_on_target"), "re-entry after a target needs a target"))
+    return issues
+
+
+def _check_group(g: ConditionGroup, loc: Loc, inst: Instrument, last_entry: str) -> list[Issue]:
+    issues: list[Issue] = []
+    for i, cond in enumerate(g.conditions):
+        at: Loc = (*loc, "conditions", i)
+        sides = (("left", cond.left), ("right", cond.right))
+        if all(isinstance(o, NumberOperand) for _, o in sides):
+            issues.append(Issue((*at, "right"), "compare the market with something: both sides are numbers"))
+        for side, o in sides:
+            if isinstance(o, IndicatorOperand):
+                lines = {"macd": {"value", "signal", "hist"}, "bollinger": {"upper", "middle", "lower"},
+                         "adx": {"value", "plus_di", "minus_di"}}.get(o.name, {"value"})  # fmt: skip
+                if o.line not in lines:
+                    issues.append(Issue((*at, side, "line"), f"{o.name} has {', '.join(sorted(lines))}"))
+                if o.name == "macd" and o.fast >= o.slow:
+                    issues.append(Issue((*at, side, "slow"), "must be longer than the fast period"))
+                if o.multiplier is not None and o.name not in ("bollinger", "supertrend"):
+                    issues.append(Issue((*at, side, "multiplier"), "only bollinger and supertrend use a multiplier"))
+            if isinstance(o, LevelOperand) and o.name.startswith("opening_range"):
+                ends = _add_minutes(inst.session_open, o.minutes)
+                if ends > last_entry:
+                    issues.append(Issue((*at, side, "minutes"), f"the range ends at {ends}, after the last entry"))
+    return issues
+
+
+def _add_minutes(hm: str, minutes: int) -> str:
+    h, m = (int(x) for x in hm.split(":"))
+    total = h * 60 + m + minutes
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def _check_rules(c: RulesConfig, inst: Instrument) -> list[Issue]:
+    issues: list[Issue] = []
+    t = c.timing
+    for k in ("start", "last_entry"):
+        issues += _hours(inst, getattr(t, k), ("timing", k))
+    issues += _hours(inst, c.holding.exit, ("holding", "exit"))
+    if t.start > t.last_entry:
+        issues.append(Issue(("timing", "last_entry"), f"must not be before the first entry ({t.start})"))
+    if c.holding.mode == "intraday" and c.holding.exit <= t.last_entry:
+        issues.append(Issue(("holding", "exit"), "an intraday trade must exit after the last entry time"))
+    if len(set(t.days)) != len(t.days):
+        issues.append(Issue(("timing", "days"), "lists a day twice"))
+    if t.dte is not None and any(not 0 <= d <= 30 for d in t.dte):
+        issues.append(Issue(("timing", "dte"), "days to expiry go from 0 (expiry day) to 30"))
+    ids = [s.id for s in c.signals]
+    for i, sig in enumerate(c.signals):
+        if ids.count(sig.id) > 1:
+            issues.append(Issue(("signals", i, "id"), f"signal id {sig.id} is used twice"))
+        issues += _check_group(sig.when, ("signals", i, "when"), inst, t.last_entry)
+        if sig.exit_when is not None:
+            if not sig.exit_when.conditions:
+                issues.append(Issue(("signals", i, "exit_when"), "add a condition, or remove the exit rule"))
+            issues += _check_group(sig.exit_when, ("signals", i, "exit_when"), inst, "23:59")
+    legs: list[tuple[Loc, Leg]] = [
+        (("signals", i, "legs", j), leg) for i, sig in enumerate(c.signals) for j, leg in enumerate(sig.legs)
+    ]
+    issues += _check_legs(legs, c.underlying, inst)
+    if c.risk.exit_all_on_leg_sl and not any(leg.stop_loss for _, leg in legs):
+        issues.append(Issue(("risk", "exit_all_on_leg_sl"), "no leg has a stop-loss"))
+    if c.risk.sl_to_cost_on_leg_sl and not any(leg.stop_loss for _, leg in legs):
+        issues.append(Issue(("risk", "sl_to_cost_on_leg_sl"), "no leg has a stop-loss"))
+    lock = c.risk.profit_lock
+    if lock is not None:
+        if lock.lock >= lock.reach:
+            issues.append(Issue(("risk", "profit_lock", "lock"), "must be below the profit that turns the lock on"))
+        if (lock.trail_every is None) != (lock.trail_by is None):
+            issues.append(Issue(("risk", "profit_lock", "trail_by"), "set both trail amounts, or neither"))
     return issues
 
 
@@ -425,6 +635,13 @@ def plan_warnings(c: AnyConfig, max_lots_per_order: int | None) -> list[Issue]:
             for i, leg in enumerate(c.legs)
             if leg.lots > max_lots_per_order
         ]
+    if isinstance(c, RulesConfig):
+        return [
+            Issue(("signals", i, "legs", j, "lots"), msg, "plan_limit")
+            for i, sig in enumerate(c.signals)
+            for j, leg in enumerate(sig.legs)
+            if leg.lots > max_lots_per_order
+        ]
     if isinstance(c, SmcScalpConfig):
         # tranches are separate orders, but the plan limit is about one order's size: the largest tranche
         return [Issue(("risk", "lots"), msg, "plan_limit")] if max_order_lots(c) > max_lots_per_order else []
@@ -435,6 +652,8 @@ def max_order_lots(c: AnyConfig) -> int:
     """The most lots this config puts in one order."""
     if isinstance(c, TimeBasedConfig):
         return max(leg.lots for leg in c.legs)
+    if isinstance(c, RulesConfig):
+        return max(leg.lots for leg in c.all_legs())
     if isinstance(c, SmcScalpConfig):
         return max(smc_tranches(c.risk.lots, c.risk.tranches))
     return c.lots
@@ -524,6 +743,266 @@ PRESETS: tuple[Preset, ...] = (
         "Expiry-day ITM straddle",
         "Proven 0DTE seller: sell ITM call and put on expiry day at the best recent entry time.",
         ZeroDteConfig(),
+    ),
+    *(
+        Preset(pid, name, description, RulesConfig.model_validate(raw))
+        for pid, name, description, raw in (
+            (
+                "rules_overnight_straddle",
+                "Overnight premium straddle (SENSEX)",
+                "At 15:15 sell the SENSEX call and put priced about ₹60, 50% stop-loss on each, exit 09:30 next day.",
+                {
+                    "underlying": "SENSEX",
+                    "timing": {"start": "15:15", "last_entry": "15:20"},
+                    "signals": [
+                        {
+                            "id": "S1",
+                            "legs": [
+                                {
+                                    "id": "CE",
+                                    "action": "SELL",
+                                    "option_type": "CE",
+                                    "strike": {"mode": "premium", "premium": 60},
+                                    "stop_loss": {"value": 50},
+                                },
+                                {
+                                    "id": "PE",
+                                    "action": "SELL",
+                                    "option_type": "PE",
+                                    "strike": {"mode": "premium", "premium": 60},
+                                    "stop_loss": {"value": 50},
+                                },
+                            ],
+                        }
+                    ],
+                    "holding": {"mode": "next_day", "exit": "09:30"},
+                },
+            ),
+            (
+                "rules_opening_range_breakout",
+                "Opening range breakout",
+                "A 5-minute close above the first 15 minutes' high buys the ATM call; below the low, the ATM put. "
+                "30% stop, 60% target, one trade a day.",
+                {
+                    "timing": {"start": "09:30", "last_entry": "14:00"},
+                    "signals": [
+                        {
+                            "id": "UP",
+                            "when": {
+                                "conditions": [
+                                    {
+                                        "timeframe": 5,
+                                        "left": {"kind": "price"},
+                                        "op": "crosses_above",
+                                        "right": {"kind": "level", "name": "opening_range_high"},
+                                    }
+                                ]
+                            },
+                            "legs": [
+                                {
+                                    "id": "CE",
+                                    "action": "BUY",
+                                    "option_type": "CE",
+                                    "stop_loss": {"value": 30},
+                                    "target": {"value": 60},
+                                }
+                            ],
+                        },
+                        {
+                            "id": "DOWN",
+                            "when": {
+                                "conditions": [
+                                    {
+                                        "timeframe": 5,
+                                        "left": {"kind": "price"},
+                                        "op": "crosses_below",
+                                        "right": {"kind": "level", "name": "opening_range_low"},
+                                    }
+                                ]
+                            },
+                            "legs": [
+                                {
+                                    "id": "PE",
+                                    "action": "BUY",
+                                    "option_type": "PE",
+                                    "stop_loss": {"value": 30},
+                                    "target": {"value": 60},
+                                }
+                            ],
+                        },
+                    ],
+                },
+            ),
+            (
+                "rules_ema_crossover",
+                "EMA 9/21 crossover option buyer",
+                "On 5-minute candles, EMA 9 crossing above EMA 21 with RSI above 55 buys the ATM call (the mirror "
+                "image buys the put); exit on the opposite cross, 30% stop, up to 3 trades a day.",
+                {
+                    "timing": {"start": "09:30", "last_entry": "14:30", "max_entries_per_day": 3},
+                    "signals": [
+                        {
+                            "id": "LONG",
+                            "when": {
+                                "conditions": [
+                                    {
+                                        "timeframe": 5,
+                                        "left": {"kind": "indicator", "name": "ema", "period": 9},
+                                        "op": "crosses_above",
+                                        "right": {"kind": "indicator", "name": "ema", "period": 21},
+                                    },
+                                    {
+                                        "timeframe": 5,
+                                        "left": {"kind": "indicator", "name": "rsi", "period": 14},
+                                        "op": "above",
+                                        "right": {"kind": "number", "value": 55},
+                                    },
+                                ]
+                            },
+                            "legs": [{"id": "CE", "action": "BUY", "option_type": "CE", "stop_loss": {"value": 30}}],
+                            "exit_when": {
+                                "conditions": [
+                                    {
+                                        "timeframe": 5,
+                                        "left": {"kind": "indicator", "name": "ema", "period": 9},
+                                        "op": "crosses_below",
+                                        "right": {"kind": "indicator", "name": "ema", "period": 21},
+                                    }
+                                ]
+                            },
+                        },
+                        {
+                            "id": "SHORT",
+                            "when": {
+                                "conditions": [
+                                    {
+                                        "timeframe": 5,
+                                        "left": {"kind": "indicator", "name": "ema", "period": 9},
+                                        "op": "crosses_below",
+                                        "right": {"kind": "indicator", "name": "ema", "period": 21},
+                                    },
+                                    {
+                                        "timeframe": 5,
+                                        "left": {"kind": "indicator", "name": "rsi", "period": 14},
+                                        "op": "below",
+                                        "right": {"kind": "number", "value": 45},
+                                    },
+                                ]
+                            },
+                            "legs": [{"id": "PE", "action": "BUY", "option_type": "PE", "stop_loss": {"value": 30}}],
+                            "exit_when": {
+                                "conditions": [
+                                    {
+                                        "timeframe": 5,
+                                        "left": {"kind": "indicator", "name": "ema", "period": 9},
+                                        "op": "crosses_above",
+                                        "right": {"kind": "indicator", "name": "ema", "period": 21},
+                                    }
+                                ]
+                            },
+                        },
+                    ],
+                },
+            ),
+            (
+                "rules_supertrend",
+                "Supertrend option buyer",
+                "On 15-minute candles, a close crossing above Supertrend(10, 3) buys the ATM call, below it the "
+                "ATM put; exit when it crosses back, 35% stop.",
+                {
+                    "timing": {"start": "09:30", "last_entry": "14:30", "max_entries_per_day": 2},
+                    "signals": [
+                        {
+                            "id": "LONG",
+                            "when": {
+                                "conditions": [
+                                    {
+                                        "timeframe": 15,
+                                        "left": {"kind": "price"},
+                                        "op": "crosses_above",
+                                        "right": {
+                                            "kind": "indicator",
+                                            "name": "supertrend",
+                                            "period": 10,
+                                            "multiplier": 3,
+                                        },
+                                    }
+                                ]
+                            },
+                            "legs": [{"id": "CE", "action": "BUY", "option_type": "CE", "stop_loss": {"value": 35}}],
+                            "exit_when": {
+                                "conditions": [
+                                    {
+                                        "timeframe": 15,
+                                        "left": {"kind": "price"},
+                                        "op": "below",
+                                        "right": {
+                                            "kind": "indicator",
+                                            "name": "supertrend",
+                                            "period": 10,
+                                            "multiplier": 3,
+                                        },
+                                    }
+                                ]
+                            },
+                        },
+                        {
+                            "id": "SHORT",
+                            "when": {
+                                "conditions": [
+                                    {
+                                        "timeframe": 15,
+                                        "left": {"kind": "price"},
+                                        "op": "crosses_below",
+                                        "right": {
+                                            "kind": "indicator",
+                                            "name": "supertrend",
+                                            "period": 10,
+                                            "multiplier": 3,
+                                        },
+                                    }
+                                ]
+                            },
+                            "legs": [{"id": "PE", "action": "BUY", "option_type": "PE", "stop_loss": {"value": 35}}],
+                            "exit_when": {
+                                "conditions": [
+                                    {
+                                        "timeframe": 15,
+                                        "left": {"kind": "price"},
+                                        "op": "above",
+                                        "right": {
+                                            "kind": "indicator",
+                                            "name": "supertrend",
+                                            "period": 10,
+                                            "multiplier": 3,
+                                        },
+                                    }
+                                ]
+                            },
+                        },
+                    ],
+                },
+            ),
+            (
+                "rules_920_straddle",
+                "9:20 straddle, stop-loss to cost",
+                "Sell the ATM call and put at 09:20 with a 25% stop-loss each; when one stops out, the other's "
+                "stop moves to cost. Exit 15:15.",
+                {
+                    "timing": {"start": "09:20", "last_entry": "09:25"},
+                    "signals": [
+                        {
+                            "id": "S1",
+                            "legs": [
+                                {"id": "CE", "action": "SELL", "option_type": "CE", "stop_loss": {"value": 25}},
+                                {"id": "PE", "action": "SELL", "option_type": "PE", "stop_loss": {"value": 25}},
+                            ],
+                        }
+                    ],
+                    "risk": {"sl_to_cost_on_leg_sl": True},
+                },
+            ),
+        )
     ),
     *(
         Preset(

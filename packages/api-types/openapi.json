@@ -1551,6 +1551,119 @@
         "title": "CheckoutOut",
         "type": "object"
       },
+      "Condition": {
+        "additionalProperties": false,
+        "description": "`left op right`, read on the latest completed candle of `timeframe`. above/below hold while true; a cross is\ntrue only on the candle that crossed (the previous candle was on the other side).",
+        "properties": {
+          "left": {
+            "discriminator": {
+              "mapping": {
+                "indicator": "#/components/schemas/IndicatorOperand",
+                "level": "#/components/schemas/LevelOperand",
+                "number": "#/components/schemas/NumberOperand",
+                "price": "#/components/schemas/PriceOperand"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NumberOperand"
+              },
+              {
+                "$ref": "#/components/schemas/PriceOperand"
+              },
+              {
+                "$ref": "#/components/schemas/IndicatorOperand"
+              },
+              {
+                "$ref": "#/components/schemas/LevelOperand"
+              }
+            ],
+            "title": "Left"
+          },
+          "op": {
+            "enum": [
+              "above",
+              "below",
+              "crosses_above",
+              "crosses_below"
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "right": {
+            "discriminator": {
+              "mapping": {
+                "indicator": "#/components/schemas/IndicatorOperand",
+                "level": "#/components/schemas/LevelOperand",
+                "number": "#/components/schemas/NumberOperand",
+                "price": "#/components/schemas/PriceOperand"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NumberOperand"
+              },
+              {
+                "$ref": "#/components/schemas/PriceOperand"
+              },
+              {
+                "$ref": "#/components/schemas/IndicatorOperand"
+              },
+              {
+                "$ref": "#/components/schemas/LevelOperand"
+              }
+            ],
+            "title": "Right"
+          },
+          "timeframe": {
+            "default": 5,
+            "enum": [
+              1,
+              3,
+              5,
+              10,
+              15,
+              30,
+              60
+            ],
+            "title": "Timeframe",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "left",
+          "op",
+          "right"
+        ],
+        "title": "Condition",
+        "type": "object"
+      },
+      "ConditionGroup": {
+        "additionalProperties": false,
+        "properties": {
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/Condition"
+            },
+            "maxItems": 6,
+            "title": "Conditions",
+            "type": "array"
+          },
+          "match": {
+            "default": "all",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "title": "Match",
+            "type": "string"
+          }
+        },
+        "title": "ConditionGroup",
+        "type": "object"
+      },
       "ConfigIssue": {
         "properties": {
           "loc": {
@@ -2099,6 +2212,125 @@
         "title": "HistoryCoverage",
         "type": "object"
       },
+      "Holding": {
+        "additionalProperties": false,
+        "description": "How long a trade is held: exit at `exit` the same day (intraday), on the next trading day, after `days`\ntrading days, or on the expiry day of its legs. Stop-losses and targets apply the whole time.",
+        "properties": {
+          "days": {
+            "default": 1,
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "exit": {
+            "default": "15:15",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Exit",
+            "type": "string"
+          },
+          "mode": {
+            "default": "intraday",
+            "enum": [
+              "intraday",
+              "next_day",
+              "days",
+              "expiry"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "Holding",
+        "type": "object"
+      },
+      "IndicatorOperand": {
+        "additionalProperties": false,
+        "description": "An indicator of the index on the condition's timeframe. `line` picks one output of a multi-line indicator:\nmacd: value (MACD line) / signal / hist; bollinger: upper / middle / lower; adx: value / plus_di / minus_di.\n`multiplier`: the band width of bollinger (default 2) and the ATR multiple of supertrend (default 3).",
+        "properties": {
+          "fast": {
+            "default": 12,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Fast",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "indicator",
+            "default": "indicator",
+            "title": "Kind",
+            "type": "string"
+          },
+          "line": {
+            "default": "value",
+            "enum": [
+              "value",
+              "signal",
+              "hist",
+              "upper",
+              "middle",
+              "lower",
+              "plus_di",
+              "minus_di"
+            ],
+            "title": "Line",
+            "type": "string"
+          },
+          "multiplier": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 10.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multiplier"
+          },
+          "name": {
+            "enum": [
+              "ema",
+              "sma",
+              "rsi",
+              "macd",
+              "supertrend",
+              "bollinger",
+              "atr",
+              "adx"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "period": {
+            "default": 14,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Period",
+            "type": "integer"
+          },
+          "signal": {
+            "default": 9,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Signal",
+            "type": "integer"
+          },
+          "slow": {
+            "default": 26,
+            "maximum": 200.0,
+            "minimum": 2.0,
+            "title": "Slow",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "IndicatorOperand",
+        "type": "object"
+      },
       "InstrumentAdminOut": {
         "properties": {
           "code": {
@@ -2469,6 +2701,44 @@
           "option_type"
         ],
         "title": "Leg",
+        "type": "object"
+      },
+      "LevelOperand": {
+        "additionalProperties": false,
+        "description": "A price level of the day: the opening range (the first `minutes` from 09:15), today's open/high/low so far,\nor the previous session's high/low/close.",
+        "properties": {
+          "kind": {
+            "const": "level",
+            "default": "level",
+            "title": "Kind",
+            "type": "string"
+          },
+          "minutes": {
+            "default": 15,
+            "maximum": 180.0,
+            "minimum": 1.0,
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "name": {
+            "enum": [
+              "opening_range_high",
+              "opening_range_low",
+              "day_open",
+              "day_high",
+              "day_low",
+              "prev_high",
+              "prev_low",
+              "prev_close"
+            ],
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "LevelOperand",
         "type": "object"
       },
       "LiveBroker": {
@@ -2953,6 +3223,28 @@
           "telegram_available"
         ],
         "title": "NotificationSettingsOut",
+        "type": "object"
+      },
+      "NumberOperand": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "number",
+            "default": "number",
+            "title": "Kind",
+            "type": "string"
+          },
+          "value": {
+            "maximum": 1000000.0,
+            "minimum": -1000000.0,
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "NumberOperand",
         "type": "object"
       },
       "OpenPosition": {
@@ -3965,6 +4257,7 @@
             "discriminator": {
               "mapping": {
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "rules": "#/components/schemas/RulesConfig",
                 "smc_scalp": "#/components/schemas/SmcScalpConfig",
                 "time_based": "#/components/schemas/TimeBasedConfig",
                 "zero_dte": "#/components/schemas/ZeroDteConfig"
@@ -3983,6 +4276,9 @@
               },
               {
                 "$ref": "#/components/schemas/SmcScalpConfig"
+              },
+              {
+                "$ref": "#/components/schemas/RulesConfig"
               }
             ],
             "title": "Config"
@@ -4007,6 +4303,81 @@
           "config"
         ],
         "title": "PresetOut",
+        "type": "object"
+      },
+      "PriceOperand": {
+        "additionalProperties": false,
+        "description": "The index candle's open/high/low/close on the condition's timeframe.",
+        "properties": {
+          "field": {
+            "default": "close",
+            "enum": [
+              "open",
+              "high",
+              "low",
+              "close"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "kind": {
+            "const": "price",
+            "default": "price",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "PriceOperand",
+        "type": "object"
+      },
+      "ProfitLock": {
+        "additionalProperties": false,
+        "description": "Once the trade's profit reaches `reach` (\u20b9), never give back below `lock`; then every `trail_every` more\nraises the locked amount by `trail_by`.",
+        "properties": {
+          "lock": {
+            "maximum": 100000000.0,
+            "minimum": 0.0,
+            "title": "Lock",
+            "type": "number"
+          },
+          "reach": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000000.0,
+            "title": "Reach",
+            "type": "number"
+          },
+          "trail_by": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trail By"
+          },
+          "trail_every": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trail Every"
+          }
+        },
+        "required": [
+          "reach",
+          "lock"
+        ],
+        "title": "ProfitLock",
         "type": "object"
       },
       "PurchaseOut": {
@@ -4500,6 +4871,165 @@
         "title": "RiskSettingsIO",
         "type": "object"
       },
+      "RulesConfig": {
+        "additionalProperties": false,
+        "description": "A strategy assembled from building blocks: when to trade (timing), how to get in (signals: conditions on the\nindex, its indicators and the day's levels, each with its own legs), how long to hold (holding) and the\ntrade-wide risk. One trade at a time; a signal is read when a candle completes (ADR 0022).",
+        "properties": {
+          "holding": {
+            "$ref": "#/components/schemas/Holding"
+          },
+          "kind": {
+            "const": "rules",
+            "default": "rules",
+            "title": "Kind",
+            "type": "string"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/RulesRisk"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/Signal"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Signals",
+            "type": "array"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/RulesTiming"
+          },
+          "underlying": {
+            "default": "NIFTY",
+            "enum": [
+              "NIFTY",
+              "BANKNIFTY",
+              "FINNIFTY",
+              "MIDCPNIFTY",
+              "SENSEX"
+            ],
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signals"
+        ],
+        "title": "RulesConfig",
+        "type": "object"
+      },
+      "RulesRisk": {
+        "additionalProperties": false,
+        "description": "Per trade (all legs of one entry, with their re-entries): stop-loss / target in \u20b9, a profit lock, and what a\nleg's stop-loss does to the other legs.",
+        "properties": {
+          "exit_all_on_leg_sl": {
+            "default": false,
+            "title": "Exit All On Leg Sl",
+            "type": "boolean"
+          },
+          "mtm_stop_loss": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mtm Stop Loss"
+          },
+          "mtm_target": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mtm Target"
+          },
+          "profit_lock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProfitLock"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sl_to_cost_on_leg_sl": {
+            "default": false,
+            "title": "Sl To Cost On Leg Sl",
+            "type": "boolean"
+          }
+        },
+        "title": "RulesRisk",
+        "type": "object"
+      },
+      "RulesTiming": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "items": {
+              "enum": [
+                "MON",
+                "TUE",
+                "WED",
+                "THU",
+                "FRI"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Days",
+            "type": "array"
+          },
+          "dte": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "maxItems": 8,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dte"
+          },
+          "last_entry": {
+            "default": "14:30",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Last Entry",
+            "type": "string"
+          },
+          "max_entries_per_day": {
+            "default": 1,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Max Entries Per Day",
+            "type": "integer"
+          },
+          "start": {
+            "default": "09:20",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "title": "RulesTiming",
+        "type": "object"
+      },
       "RunDetail": {
         "properties": {
           "events": {
@@ -4799,6 +5329,45 @@
           "ip"
         ],
         "title": "ServerIpOut",
+        "type": "object"
+      },
+      "Signal": {
+        "additionalProperties": false,
+        "description": "One way into a trade: when `when` holds, enter `legs`. Several signals let the market pick the direction,\ne.g. an upside breakout buys a call and a downside breakout buys a put. `exit_when` closes this signal's trade.",
+        "properties": {
+          "exit_when": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConditionGroup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "pattern": "^[A-Za-z0-9_-]{1,12}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "legs": {
+            "items": {
+              "$ref": "#/components/schemas/Leg"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Legs",
+            "type": "array"
+          },
+          "when": {
+            "$ref": "#/components/schemas/ConditionGroup"
+          }
+        },
+        "required": [
+          "id",
+          "legs"
+        ],
+        "title": "Signal",
         "type": "object"
       },
       "SmcBox": {
@@ -5447,6 +6016,7 @@
             "discriminator": {
               "mapping": {
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "rules": "#/components/schemas/RulesConfig",
                 "smc_scalp": "#/components/schemas/SmcScalpConfig",
                 "time_based": "#/components/schemas/TimeBasedConfig",
                 "zero_dte": "#/components/schemas/ZeroDteConfig"
@@ -5465,6 +6035,9 @@
               },
               {
                 "$ref": "#/components/schemas/SmcScalpConfig"
+              },
+              {
+                "$ref": "#/components/schemas/RulesConfig"
               }
             ],
             "title": "Config"
@@ -5535,6 +6108,7 @@
             "discriminator": {
               "mapping": {
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "rules": "#/components/schemas/RulesConfig",
                 "smc_scalp": "#/components/schemas/SmcScalpConfig",
                 "time_based": "#/components/schemas/TimeBasedConfig",
                 "zero_dte": "#/components/schemas/ZeroDteConfig"
@@ -5553,6 +6127,9 @@
               },
               {
                 "$ref": "#/components/schemas/SmcScalpConfig"
+              },
+              {
+                "$ref": "#/components/schemas/RulesConfig"
               }
             ],
             "title": "Config"
@@ -5583,7 +6160,8 @@
               "time_based",
               "range_breakout",
               "zero_dte",
-              "smc_scalp"
+              "smc_scalp",
+              "rules"
             ],
             "title": "Kind",
             "type": "string"
@@ -5639,6 +6217,7 @@
                 "discriminator": {
                   "mapping": {
                     "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                    "rules": "#/components/schemas/RulesConfig",
                     "smc_scalp": "#/components/schemas/SmcScalpConfig",
                     "time_based": "#/components/schemas/TimeBasedConfig",
                     "zero_dte": "#/components/schemas/ZeroDteConfig"
@@ -5657,6 +6236,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/SmcScalpConfig"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RulesConfig"
                   }
                 ]
               },
