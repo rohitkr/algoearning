@@ -24,3 +24,11 @@ platform and publishes them to Redis; the engine and the API only read Redis (`a
 **To verify with a live Breeze session** (not possible in tests, which use a fake SDK): the option expiry format in
 subscriptions (`06-Oct-2026`), whether a candle's `datetime` is the minute's start, and how many instruments one
 socket carries. Each is isolated in `BreezeSource` (`breeze_expiry`, `parse`).
+
+**Gap fill (2026-10-05).** The sessions of Breeze and Kite expire every day, so the feed gets no prices until someone
+logs in from Monitor, and a stream only carries prices from the moment it connects. Every few seconds the feed now looks
+at each index's bars in Redis for today; when two or more minutes between 09:15 and three minutes ago are missing, it
+fetches them from the provider's history (Breeze or Kite, whichever feeds) and merges them in (`Hub.merge_bars`: stored
+minutes win, the list stays sorted, added bars are published so open charts redraw). It retries every 10 minutes, or 30
+seconds while no session exists yet, and skips weekends. Charts, the engine's strategies and the evening archive all read
+those bars, so a late login no longer leaves a hole in the day.

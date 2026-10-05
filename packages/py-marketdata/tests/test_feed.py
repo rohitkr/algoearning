@@ -209,3 +209,67 @@ async def test_breeze_session_is_stored_encrypted_for_the_day(db: Any) -> None:
         assert await breeze_session(s, box, morning + timedelta(hours=6)) == ("tok-123", expires)
         assert (await breeze_session(s, box, expires))[0] is None  # next day: log in again
         await s.execute(text("DELETE FROM platform_secrets"))
+
+
+def minute(hm: str) -> datetime:
+    h, m = (int(x) for x in hm.split(":"))
+    return datetime(2026, 10, 1, h, m, tzinfo=IST)  # a Thursday
+
+
+def bar(hm: str, px: float = 100.0) -> Bar:
+    return Bar("NIFTY", minute(hm), px, px + 1, px - 1, px)
+
+
+async def test_merge_bars_keeps_stored_minutes_sorts_and_publishes_only_the_new(hub: Hub) -> None:
+    for hm in ("11:40", "11:41"):
+        await hub.publish_bar(bar(hm, 200))
+    pubsub = hub.r.pubsub()
+    await pubsub.subscribe("md:bar")
+    await pubsub.get_message(timeout=1)  # the subscribe confirmation
+    added = await hub.merge_bars([bar("09:15"), bar("09:16"), bar("11:40", 999)])
+    assert added == 2  # 11:40 is stored already: the live bar wins
+    stored = await hub.bars("NIFTY", minute("09:15").date())
+    assert [b.ts.strftime("%H:%M") for b in stored] == ["09:15", "09:16", "11:40", "11:41"]
+    assert stored[2].close == 200
+    got = [await pubsub.get_message(timeout=1) for _ in range(2)]
+    assert [Bar.from_json(m["data"]).ts.minute for m in got if m] == [15, 16]
+    assert await hub.merge_bars([bar("09:15")]) == 0
+    await pubsub.aclose()
+
+
+async def test_feed_fills_the_morning_it_missed(hub: Hub) -> None:
+    clock = [minute("11:45")]
+    asked: list[tuple[str, datetime, datetime]] = []
+    ready = [False]
+
+    async def fetch(code: str, start: datetime, end: datetime) -> list[Bar] | None:
+        asked.append((code, start, end))
+        if not ready[0]:
+            return None  # no session yet
+        out, t = [], start
+        while t <= end:
+            out.append(Bar(code, t, 100, 101, 99, 100))
+            t += timedelta(minutes=1)
+        return out
+
+    async def always() -> set[str]:
+        return {"NIFTY"}
+
+    feed = Feed(hub, SimulatedSource(seed=1, now=lambda: clock[0]), always, now=lambda: clock[0], fetch=fetch)
+    for hm in ("11:40", "11:41", "11:42"):  # the feed came up at 11:40
+        await hub.publish_bar(bar(hm, 200))
+    assert await feed.fill_gaps() == 0 and len(asked) == 1  # not ready: asked once
+    assert await feed.fill_gaps() == 0 and len(asked) == 1  # and not again at once
+    clock[0] = minute("11:45").replace(second=10)
+    ready[0] = True
+    assert await feed.fill_gaps() == 0 and len(asked) == 1  # still within the retry pause
+    clock[0] = minute("11:50")
+    n = await feed.fill_gaps()
+    code, start, end = asked[-1]
+    assert (code, start, end) == ("NIFTY", minute("09:15"), minute("11:47"))  # all but the last 3 minutes
+    stored = await hub.bars("NIFTY", minute("09:15").date())
+    assert n == 150 and len(stored) == 153 and stored[0].ts == minute("09:15")  # 09:15..11:47, 3 were live
+    assert [b.close for b in stored if b.ts.hour == 11 and 40 <= b.ts.minute <= 42] == [200, 200, 200]
+    assert await feed.fill_gaps() == 0  # nothing left to ask for
+    clock[0] = datetime(2026, 10, 3, 11, 0, tzinfo=IST)  # a Saturday: no session
+    assert await feed.fill_gaps() == 0

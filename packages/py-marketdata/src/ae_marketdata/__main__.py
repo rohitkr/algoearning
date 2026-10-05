@@ -15,6 +15,7 @@ import asyncio
 import os
 import signal
 import sys
+from datetime import datetime
 
 import structlog
 from ae_core.secrets import SecretBox, load_master_key
@@ -23,11 +24,13 @@ from ae_db.session import Database
 from redis.asyncio import Redis
 from sqlalchemy import select
 
+from .backfill import BreezeHistory, to_rows
 from .hub import Hub
-from .kite_feed import KiteCode, KiteSource
+from .kite_feed import KiteCode, KiteHistory, KiteSource, TokenBook
 from .service import Feed
 from .session import KITE_SESSION, breeze_session, load_session
-from .sources import BreezeSource, FeedCode, SimulatedSource, Source, choose_source
+from .sources import BreezeSource, FeedCode, SimulatedSource, Source, _breeze_sdk, choose_source
+from .types import Bar
 
 log = structlog.get_logger("ae_marketdata")
 
@@ -89,12 +92,44 @@ async def _main() -> int:
         log.error("MARKET_DATA_SOURCE must be breeze, kite, simulated or auto")
         return 2
 
+    book = TokenBook()  # Kite's instrument tokens, loaded once a day for the gap fill
+
+    async def fetch_index(code: str, start: datetime, end: datetime) -> list[Bar] | None:
+        """The index's 1-minute bars between two minutes from the provider's history (None: no session yet)."""
+        if token[0] is None or box is None:
+            return None
+        a, b = start.replace(tzinfo=None), end.replace(tzinfo=None)
+        if choice == "kite":
+            import httpx
+
+            if book.day != start.date():
+                async with httpx.AsyncClient() as c:
+                    await book.load(kite_codes, c, start.date())
+            raw = await KiteHistory(kite_key, token[0], code, book).candles({"product_type": "cash"}, a, b)
+        elif choice == "breeze":
+            fc = codes.get(code)
+            if fc is None:
+                return []
+            sdk = _breeze_sdk(key)
+            await hub.count_api_call(1)  # generate_session is a REST call
+            await asyncio.to_thread(sdk.generate_session, api_secret=secret, session_token=token[0])
+            params = {
+                "interval": "1minute",
+                "stock_code": fc.stock_code,
+                "exchange_code": fc.spot_exchange,
+                "product_type": "cash",
+            }
+            raw = await BreezeHistory(sdk, hub.count_api_call, hub.api_calls_today).candles(params, a, b)
+        else:
+            return None
+        return [Bar(code, r["ts"], r["open"], r["high"], r["low"], r["close"], r["volume"]) for r in to_rows(code, raw)]
+
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
     try:
-        await Feed(hub, source, always, before_sync=load).run(stop)
+        await Feed(hub, source, always, before_sync=load, fetch=fetch_index).run(stop)
     finally:
         await redis.aclose()
         await db.dispose()

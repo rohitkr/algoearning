@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from typing import Any
 
@@ -45,6 +45,30 @@ class Hub:
             p.expire(k, BARS_TTL_S)
             p.publish(BAR_CHANNEL, payload)
             await p.execute()
+
+    async def merge_bars(self, bars: Sequence[Bar]) -> int:
+        """Add bars the feed missed (it started late, or lost its connection): minutes already stored are kept, the
+        list stays sorted, and each added bar is published like a live one so open charts redraw. Only the feed
+        process calls this, and not while it publishes a bar. Returns how many were added."""
+        by_list: dict[str, list[Bar]] = {}
+        for b in bars:
+            by_list.setdefault(bars_key(b.key, b.ts.astimezone(IST).date()), []).append(b)
+        added = 0
+        for k, new in by_list.items():
+            have = {Bar.from_json(x).ts: x for x in await self.r.lrange(k, 0, -1)}
+            fresh = {b.ts: b for b in new if b.ts not in have}
+            if not fresh:
+                continue
+            merged = {**have, **{ts: b.to_json() for ts, b in fresh.items()}}
+            async with self.r.pipeline(transaction=True) as p:
+                p.delete(k)
+                p.rpush(k, *(merged[ts] for ts in sorted(merged)))
+                p.expire(k, BARS_TTL_S)
+                for ts in sorted(fresh):
+                    p.publish(BAR_CHANNEL, fresh[ts].to_json())
+                await p.execute()
+            added += len(fresh)
+        return added
 
     async def publish_tick(self, tick: Tick) -> None:
         payload = tick.to_json()
