@@ -1,7 +1,7 @@
 # 0025 Signal sources: reading a Telegram tips channel and trading its direction
 
-Status: Accepted, built phase by phase: A connect (done), B ingest + understand (done), C1 trade on paper, C2 approve /
-live / replay.
+Status: Accepted, built phase by phase: A connect (done), B ingest + understand (done), C live trading on tips (done; the owner chose
+live first, paper stays available), then approve mode and replay.
 
 **Context.** Users follow Telegram tips channels and want the platform to act on them without copying trades by hand.
 The first channel ("Nifty Sensex VIP setups", 500 messages studied, 7 Sep - 8 Oct 2026) posts a signal as two
@@ -61,6 +61,18 @@ catch-up + live feed, a signals page. It is ported, not rewritten.
 8. **Data and plans:** tables `signal_sources`, `signal_messages`, `signals`, `signal_overrides` (phase C2:
    `signal_approvals`) are user-owned with row-level security like every user table; entitlements
    `max_signal_sources` (limit) and `signal_trading` (flag). Nothing of one user's source is shared with another.
+
+**Built for trading (phase C).** A rules strategy's entry mode `tip` names a signal source; the engine hands each
+user's tips of the day (from `signals`) to their tip strategies as `Market.tips`. The runner takes the oldest tip of
+its source it has not seen: older than `max_tip_age_s` (default 120 s) or already closed on the channel -> skipped
+once with the reason (`tip_skipped` event); without a stop-loss yet -> it waits, the details reply follows within
+seconds. A bullish tip trades the legs marked up, a bearish one the down legs (builder shortcuts: sell the opposite
+ATM option, a credit spread, or follow the tip by buying), within the entry window and `max_per_day`, one trade at a
+time; `tip_received` is logged with the tip's age. With `on_tip_exit = close` the channel's SL hit or target 3 closes
+the trade; the strategy's own stop-loss, target, MTM limits and exit time always apply. Orders go through the same
+paper or live path and risk checks as every strategy (ADR 0014, 0015); a live tip strategy also needs the
+`signal_trading` plan flag and a connected source with a chat. Alert-only and approve modes and the replay over stored
+tips come later.
 
 **Not in scope.** Posting to Telegram, reading chats the user is not a member of, sharing a source between users,
 other messengers. Compliance points (third-party tips, auto-trading on them) are in `sebi_compliance_checklist.md`; the

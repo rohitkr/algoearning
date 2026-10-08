@@ -4917,13 +4917,30 @@
             "title": "Max Per Day",
             "type": "integer"
           },
+          "max_tip_age_s": {
+            "default": 120,
+            "maximum": 3600.0,
+            "minimum": 10.0,
+            "title": "Max Tip Age S",
+            "type": "integer"
+          },
           "mode": {
             "default": "time",
             "enum": [
               "time",
-              "conditions"
+              "conditions",
+              "tip"
             ],
             "title": "Mode",
+            "type": "string"
+          },
+          "on_tip_exit": {
+            "default": "close",
+            "enum": [
+              "close",
+              "ignore"
+            ],
+            "title": "On Tip Exit",
             "type": "string"
           },
           "signals": {
@@ -4933,6 +4950,18 @@
             "maxItems": 4,
             "title": "Signals",
             "type": "array"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
           },
           "until": {
             "anyOf": [

@@ -207,6 +207,27 @@ describe("StrategyBuilder", () => {
     });
   });
 
+  it("trades the direction of a Telegram tip by selling the opposite side", async () => {
+    render(<StrategyBuilder catalog={catalog} />);
+    fireEvent.change(screen.getByLabelText("Enter"), { target: { value: "tip" } });
+    expect(screen.getByRole("heading", { name: "Telegram tip" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Sell the opposite side (ATM)" }));
+    expect(legs()).toHaveLength(2);
+    expect(screen.getByText(/a bullish tip trades the up legs, a bearish one the down legs/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "VIP tips, sell opposite" } });
+    await flush();
+    fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+    await flush();
+    const saved = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies")!.body as {
+      config: { entry: { mode: string; max_tip_age_s: number; on_tip_exit: string }; legs: object[] };
+    };
+    expect(saved.config.entry).toMatchObject({ mode: "tip", max_tip_age_s: 120, on_tip_exit: "close" });
+    expect(saved.config.legs).toMatchObject([
+      { action: "SELL", option_type: "PE", direction: "up" },
+      { action: "SELL", option_type: "CE", direction: "down" },
+    ]);
+  });
+
   it("opens an old time-based strategy as rules", () => {
     const old = {
       kind: "time_based" as const,

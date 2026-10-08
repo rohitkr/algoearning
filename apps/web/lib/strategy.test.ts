@@ -63,6 +63,8 @@ describe("strategy text", () => {
         dte: [0, 1],
         signals: [],
         max_per_day: 1,
+        max_tip_age_s: 120,
+        on_tip_exit: "close",
       },
       holding: { mode: "next_day", exit: "09:30", days: 1 },
       legs: [leg()],

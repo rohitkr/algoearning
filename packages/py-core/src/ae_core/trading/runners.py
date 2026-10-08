@@ -24,7 +24,7 @@ from ..strategy import (
     rules_from_time_based,
 )
 from . import conditions, options, rules
-from .model import IST, Contract, Intent, Market, Position, Side
+from .model import IST, Contract, Intent, Market, Position, Side, Tip
 from .rules import Right
 
 
@@ -288,6 +288,32 @@ class RulesRunner(Runner):
                 return sig.direction
         return None
 
+    def _next_tip(self, m: Market) -> Tip | None:
+        """The oldest tip of our source not yet taken or skipped, if it can be traded now. A tip waits (up to its
+        maximum age) for its stop-loss to arrive; older ones are skipped, each once, with the reason."""
+        e = self.cfg.entry
+        seen: list[int] = self.s.setdefault("tips_seen", [])
+        for tip in m.tips:
+            if tip.source_id != str(e.source_id) or tip.id in seen:
+                continue
+            age = (m.now - tip.date).total_seconds()
+            if age > e.max_tip_age_s:
+                seen.append(tip.id)
+                self.note(
+                    "tip_skipped", tip_id=tip.id, tip=tip.tip, reason=f"{int(age)}s old (more than {e.max_tip_age_s}s)"
+                )
+                continue
+            if tip.status != "OPEN":
+                seen.append(tip.id)
+                self.note("tip_skipped", tip_id=tip.id, tip=tip.tip, reason=f"already {tip.status} on the channel")
+                continue
+            if not tip.complete:
+                return None  # its stop-loss usually follows within seconds
+            seen.append(tip.id)
+            del seen[:-200]  # keep the state small
+            return tip
+        return None
+
     def _advance_cursors(self, m: Market) -> None:
         cur = self.s.setdefault("cursor", {})
         for size in self._sizes:
@@ -328,7 +354,21 @@ class RulesRunner(Runner):
             self.s["phase"] = "done"
             return []
         direction = "always"
-        if e.mode == "conditions":
+        tip_id: int | None = None
+        if e.mode == "tip":
+            armed = self.s.get("armed")
+            if armed and now - datetime.fromisoformat(armed["at"]) <= ARM_FOR:
+                direction, tip_id = armed["dir"], armed.get("tip")
+            else:
+                tip = self._next_tip(m)
+                if tip is None:
+                    self.s.pop("armed", None)
+                    return []
+                direction, tip_id = ("up" if tip.direction == "BULLISH" else "down"), tip.id
+                self.s["armed"] = {"dir": direction, "at": now.isoformat(), "tip": tip.id}
+                self.note("tip_received", tip_id=tip.id, tip=tip.tip, direction=tip.direction,
+                          age_s=int((now - tip.date).total_seconds()))  # fmt: skip
+        elif e.mode == "conditions":
             armed = self.s.get("armed")
             if armed and now - datetime.fromisoformat(armed["at"]) <= ARM_FOR:
                 direction = armed["dir"]  # the signal fired a moment ago and the entry is still being prepared
@@ -341,6 +381,9 @@ class RulesRunner(Runner):
                 self.s["armed"] = {"dir": found, "at": now.isoformat()}
         legs = [leg for leg in self.cfg.legs if leg.direction in ("always", direction)]
         if not legs:
+            if tip_id is not None:
+                self.s.pop("armed", None)
+                self.note("tip_skipped", tip_id=tip_id, reason=f"no leg trades a {direction} tip")
             return []
         final = self._final(m)
         if isinstance(final, datetime) and final <= now:
@@ -367,8 +410,12 @@ class RulesRunner(Runner):
         self.s.pop("armed", None)
         self.s.update(phase="in", entries_day=today, entries=self._entries_today(m) + 1, final=final.isoformat(),
                       cycle_realized=self.realized, reentries={}, pending=[], sold={}, lock_floor=None,
-                      direction=direction)  # fmt: skip
-        why_in = f"{direction} signal" if e.mode == "conditions" else f"entry at {e.at}"
+                      direction=direction, tip_id=tip_id)  # fmt: skip
+        why_in = (
+            f"{direction} signal" if e.mode == "conditions"
+            else f"Telegram tip {tip_id} ({'bullish' if direction == 'up' else 'bearish'})" if e.mode == "tip"
+            else f"entry at {e.at}"
+        )  # fmt: skip
         return _buy_first([self._enter(m, c, leg.action, leg.lots, leg.id, why_in) for leg, c in contracts])
 
     # -- in a trade -------------------------------------------------------------------------------------------------
@@ -484,6 +531,14 @@ class RulesRunner(Runner):
         if self._lock_hit(pnl):
             floor = self.s["lock_floor"]
             return out + self._close(m, f"profit fell to the locked ₹{floor:g}", "profit_lock_exit", pnl=pnl)
+
+        # the channel closed the tip we traded (its SL hit, or its last target)
+        if cfg.entry.mode == "tip" and cfg.entry.on_tip_exit == "close" and self.s.get("tip_id") is not None:
+            done = next((t for t in m.tips if t.id == self.s["tip_id"] and t.source_id == str(cfg.entry.source_id)),
+                        None)  # fmt: skip
+            if done is not None and done.status in ("SL_HIT", "T3"):
+                why = "the channel's stop-loss hit" if done.status == "SL_HIT" else "the channel's target 3"
+                return out + self._close(m, f"tip closed: {why}", "tip_closed", tip_id=done.id, pnl=pnl)
 
         # exit on a condition or on the opposite signal
         ex = cfg.exit

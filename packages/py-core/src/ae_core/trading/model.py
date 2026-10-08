@@ -69,6 +69,19 @@ class Quote:
         return (self.ask - self.bid) / ((self.ask + self.bid) / 2) * 100
 
 
+@dataclass(frozen=True)
+class Tip:
+    """A Telegram tip as the signal reader assembled it (ADR 0025): only what trading needs."""
+
+    id: int  # the header message's id in its chat
+    source_id: str
+    date: datetime  # when the channel posted it
+    direction: Literal["BULLISH", "BEARISH"]
+    status: str  # OPEN | T1 | T2 | T3 | SL_HIT
+    complete: bool  # stop-loss given: tradable
+    tip: str = ""  # e.g. "BUY NIFTY 22450 CE", for the log
+
+
 @dataclass
 class Market:
     """One moment of market data for a run's underlying, built by the engine from the price feed."""
@@ -84,6 +97,7 @@ class Market:
     # earlier sessions' 1-minute bars, oldest first: only for runners that ask (Runner.prior_days > 0)
     prior_spot_bars: Sequence[BarLike] = ()
     quotes: Mapping[str, Quote] = field(default_factory=dict)  # contract key -> bid/ask/volume/OI, when known
+    tips: Sequence[Tip] = ()  # today's Telegram tips of the user's signal sources, oldest first (ADR 0025)
 
     def price(self, c: Contract | str) -> float | None:
         return self.prices.get(c if isinstance(c, str) else c.key)

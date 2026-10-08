@@ -284,3 +284,44 @@ async def test_dry_run_logs_orders_and_records_paper_trades(env: Any) -> None:
         t = (await s.execute(select(Trade).where(Trade.run_id == rid))).scalar_one()
         assert t.mode.value == "paper" and t.rules["dry_run"] is True
     assert "dry_run_order" in await events(db, rid) and kite.log == []
+
+
+async def test_a_telegram_tip_starts_a_paper_trade(env: Any) -> None:
+    """ADR 0025: the engine hands the user's tips of the day to a tip strategy; a bullish tip sells the put."""
+    import uuid as _uuid
+
+    from ae_db.models import SignalRow, SignalSource
+
+    db, hub, ids = env
+    pe = "NIFTY:2026-10-06:25000:PE"
+    async with db.system_session() as s:
+        src = SignalSource(id=_uuid.uuid4(), user_id=ids["user"], key_version=1, status="connected", chat_id=-1)
+        s.add(src)
+        await s.flush()
+        s.add(SignalRow(user_id=ids["user"], source_id=src.id, header_msg_id=7, date=at("10:00"), index="NIFTY",
+                        strike=25000, option_type="CE", action="BUY", direction="BULLISH", entry_low=150,
+                        entry_high=154, stop_loss=135, targets=[169], targets_done=[], intraday=True,
+                        status="OPEN", complete=True, message_ids=[7]))  # fmt: skip
+        cfg = {"kind": "rules", "underlying": "NIFTY",
+               "entry": {"mode": "tip", "at": "09:20", "until": "14:30", "source_id": str(src.id)},
+               "legs": [{"id": "BULL", "action": "SELL", "option_type": "PE", "direction": "up"},
+                        {"id": "BEAR", "action": "SELL", "option_type": "CE", "direction": "down"}]}  # fmt: skip
+        run = StrategyRun(user_id=ids["user"], strategy_id=ids["strategy"], mode="paper", config_snapshot=cfg,
+                          strategy_name="Tips", kind="rules")  # fmt: skip
+        s.add(run)
+        await s.flush()
+        rid = run.id
+    clock = [at("10:00")]
+    eng = Engine(db, hub, now=lambda: clock[0])
+    await hub.publish_tick(Tick("NIFTY", 25010, clock[0]))
+    await hub.publish_tick(Tick(pe, 80.0, clock[0]))
+    await hub.publish_tick(Tick(CE, 90.0, clock[0]))
+    await eng.tick()
+    clock[0] = at("10:00").replace(second=20)
+    await hub.publish_tick(Tick("NIFTY", 25010, clock[0]))
+    await hub.publish_tick(Tick(pe, 80.0, clock[0]))
+    await eng.tick()
+    async with db.system_session() as s:
+        (t,) = (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars()
+        assert (t.side.value, t.option_type, float(t.strike)) == ("SELL", "PE", 25000)
+    assert "tip_received" in await events(db, rid)

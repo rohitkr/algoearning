@@ -57,6 +57,9 @@ export function entryOf(c: RulesConfig): RulesEntry {
     dte: null,
     signals: [],
     max_per_day: 1,
+    source_id: null,
+    max_tip_age_s: 120,
+    on_tip_exit: "close",
     ...c.entry,
   };
 }
@@ -211,7 +214,18 @@ export function rulesFromTimeBased(c: TimeBasedConfig): RulesConfig {
   return {
     kind: "rules",
     underlying: c.underlying,
-    entry: { mode: "time", at: t.entry, until: null, days: t.days, dte: null, signals: [], max_per_day: 1 },
+    entry: {
+      mode: "time",
+      at: t.entry,
+      until: null,
+      days: t.days,
+      dte: null,
+      signals: [],
+      max_per_day: 1,
+      source_id: null,
+      max_tip_age_s: 120,
+      on_tip_exit: "close",
+    },
     holding: { mode: "intraday", exit: t.exit, days: 1 },
     legs: c.legs,
     risk: { ...r, combined_stop: null, lock_profit: null },
@@ -334,12 +348,19 @@ function describeRules(c: RulesConfig, inst: Instrument | undefined): string[] {
   const when = e.dte?.length ? `, only ${dteText(e.dte)}` : "";
   const until = e.until ? ` (not after ${e.until})` : "";
   const entry =
-    e.mode === "conditions"
+    e.mode === "tip"
       ? [
-          `From ${e.at}${until}, ${days(e.days)}${when}, enter on a signal (up to ${e.max_per_day} trade${e.max_per_day === 1 ? "" : "s"} a day); ${holdingText(h)}.`,
-          ...(e.signals ?? []).map((sg) => `${DIRECTION_LABEL[sg.direction]}: when ${groupText(sg)}.`),
+          `From ${e.at}${until}, ${days(e.days)}${when}, enter on a Telegram tip no older than ${e.max_tip_age_s}s (up to ${e.max_per_day} trade${e.max_per_day === 1 ? "" : "s"} a day): a bullish tip trades the up legs, a bearish one the down legs; ${holdingText(h)}.`,
+          e.on_tip_exit === "close"
+            ? "When the channel reports the tip's stop-loss hit or its target 3, exit everything."
+            : "The channel's own stop-loss and targets are ignored.",
         ]
-      : [`Enter at ${e.at}${until}, ${days(e.days)}${when}; ${holdingText(h)}.`];
+      : e.mode === "conditions"
+        ? [
+            `From ${e.at}${until}, ${days(e.days)}${when}, enter on a signal (up to ${e.max_per_day} trade${e.max_per_day === 1 ? "" : "s"} a day); ${holdingText(h)}.`,
+            ...(e.signals ?? []).map((sg) => `${DIRECTION_LABEL[sg.direction]}: when ${groupText(sg)}.`),
+          ]
+        : [`Enter at ${e.at}${until}, ${days(e.days)}${when}; ${holdingText(h)}.`];
   const lines = [...entry, ...c.legs.map((l, i) => `Leg ${i + 1}: ${describeLeg(l, c.underlying, inst)}`)];
   const ex = exitOf(c);
   if (ex.when) lines.push(`Exit everything when ${groupText(ex.when)}.`);
@@ -383,7 +404,7 @@ export function configSummary(c: StrategyConfig): string {
     const e = entryOf(c);
     const h = holdingOf(c);
     const hold = { intraday: "", next_day: "next day ", days: `+${h.days}d `, expiry: "expiry " }[h.mode];
-    const how = e.mode === "conditions" ? "signals " : "";
+    const how = e.mode === "conditions" ? "signals " : e.mode === "tip" ? "Telegram tips " : "";
     return `${c.underlying} · ${n} leg${n === 1 ? "" : "s"} · ${how}${e.at}–${hold}${h.exit}`;
   }
   if (c.kind === "time_based") {

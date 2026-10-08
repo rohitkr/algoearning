@@ -6,12 +6,13 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from ae_core.strategy import AnyConfig, check, max_order_lots, parse
+from ae_core.strategy import AnyConfig, RulesConfig, check, max_order_lots, parse
 from ae_db.enums import BrokerAccountStatus, RunStatus, StrategyStatus, TradingMode
 from ae_db.models import (
     BrokerAccount,
     BrokerSession,
     Order,
+    SignalSource,
     StrategyRun,
     Trade,
     TradeEvent,
@@ -131,6 +132,14 @@ async def deploy(
                 raise Conflict("switch on the Trading Engine for this broker account", {"reason": "engine_off"})
             if (body.confirm or "").strip() != strat.name.strip():
                 raise Conflict("type the strategy's name to confirm real orders", {"reason": "confirm"})
+    if isinstance(config, RulesConfig) and config.entry.mode == "tip":
+        if body.mode == "live":
+            require_feature(ent, "signal_trading")
+        src = (
+            await s.execute(select(SignalSource).where(SignalSource.id == config.entry.source_id))
+        ).scalar_one_or_none()
+        if src is None or src.status != "connected" or src.chat_id is None:
+            raise Conflict("connect the Telegram signal source and pick its chat first", {"reason": "no_source"})
     require_within(ent, "max_running_strategies", ent.usage["max_running_strategies"])
     lots, cap = _max_lots(config) * body.multiplier, ent.limit("max_lots_per_order")
     if cap is not None and lots > cap:

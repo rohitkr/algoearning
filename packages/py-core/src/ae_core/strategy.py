@@ -26,6 +26,7 @@ Changing the shape of a config: bump SCHEMA_VERSION and teach `migrate()` to upg
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from itertools import pairwise
@@ -228,13 +229,19 @@ class RulesEntry(_Model):
     intraday, none for positional), so a late engine start still enters, but not too late. `max_per_day`: trades
     a day (a stopped-out or exited trade may be followed by another)."""
 
-    mode: Literal["time", "conditions"] = "time"
+    mode: Literal["time", "conditions", "tip"] = "time"
     at: HHMM = "09:20"
     until: HHMM | None = None
     days: list[Weekday] = Field(default_factory=lambda: list(WEEKDAYS), min_length=1, max_length=5)
     dte: list[Annotated[int, Field(ge=0, le=30)]] | None = Field(default=None, max_length=10)
     signals: list[Signal] = Field(default_factory=list, max_length=4)
     max_per_day: int = Field(default=1, ge=1, le=10)
+    # mode tip (ADR 0025): a Telegram tip from this signal source starts a trade: a bullish tip (BUY CE / SELL PE)
+    # trades the up legs, a bearish one the down legs. Only complete tips (stop-loss given) no older than
+    # max_tip_age_s; on_tip_exit "close": the channel's SL hit or target 3 closes the trade too.
+    source_id: uuid.UUID | None = None
+    max_tip_age_s: int = Field(default=120, ge=10, le=3600)
+    on_tip_exit: Literal["close", "ignore"] = "close"
 
 
 class Holding(_Model):
@@ -664,7 +671,17 @@ def _check_group(g: ConditionGroup, loc: Loc) -> list[Issue]:
 def _check_conditions(c: RulesConfig, inst: Instrument) -> list[Issue]:
     e = c.entry
     issues: list[Issue] = []
-    if e.mode == "time":
+    if e.mode == "tip":
+        if e.source_id is None:
+            issues.append(Issue(("entry", "source_id"), "pick the Telegram signal source"))
+        if e.signals:
+            issues.append(Issue(("entry", "signals"), "conditions do not apply when entering on a Telegram tip"))
+        dirs = {leg.direction for leg in c.legs}
+        if "always" not in dirs and not {"up", "down"} & dirs:
+            issues.append(Issue(("legs",), "add the legs to trade on a tip"))
+        if c.exit.on_opposite_signal:
+            issues.append(Issue(("exit", "on_opposite_signal"), "needs entry on conditions"))
+    elif e.mode == "time":
         if e.signals:
             issues.append(Issue(("entry", "signals"), "signals only apply when entering on conditions"))
         if any(leg.direction != "always" for leg in c.legs):
@@ -688,7 +705,7 @@ def _check_conditions(c: RulesConfig, inst: Instrument) -> list[Issue]:
             issues.append(Issue(("exit", "on_opposite_signal"), "needs an up and a down signal"))
     if c.exit.when:
         issues += _check_group(c.exit.when, ("exit", "when"))
-    if c.holding.mode == "intraday" and e.mode == "conditions" and e.until is None and e.at >= c.holding.exit:
+    if c.holding.mode == "intraday" and e.mode != "time" and e.until is None and e.at >= c.holding.exit:
         issues.append(Issue(("holding", "exit"), "must be after the entry time"))
     return issues
 

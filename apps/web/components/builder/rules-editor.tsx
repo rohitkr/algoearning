@@ -21,6 +21,7 @@ import {
 import { ConditionGroupEditor, blankCondition } from "./condition-editor";
 import { Check, NumberField, SelectField, TimeField } from "./fields";
 import { LegEditor } from "./leg-editor";
+import { TipEntry } from "./tip-entry";
 
 type Errs = Record<string, string>;
 
@@ -99,6 +100,7 @@ export function RulesEditor({
   const ex = exitOf(config);
   const signals = e.signals ?? [];
   const byConditions = e.mode === "conditions";
+  const byTip = e.mode === "tip";
   const days = (e.days ?? [...WEEKDAYS]) as Weekday[];
   const setEntry = (p: Partial<typeof e>) => onChange({ ...config, entry: { ...e, ...p } });
   const setHolding = (p: Partial<typeof h>) => onChange({ ...config, holding: { ...h, ...p } });
@@ -125,23 +127,26 @@ export function RulesEditor({
             options={[
               { value: "time", label: "At a time" },
               { value: "conditions", label: "When conditions are met" },
+              { value: "tip", label: "On a Telegram tip" },
             ]}
             onChange={(mode) =>
               setEntry(
-                mode === "conditions"
-                  ? {
-                      mode,
-                      at: e.at < "09:30" ? "09:30" : e.at,
-                      signals: signals.length
-                        ? signals
-                        : [{ direction: "up", match: "all", conditions: [blankCondition()] }],
-                    }
-                  : { mode, signals: [] },
+                mode === "tip"
+                  ? { mode, signals: [] }
+                  : mode === "conditions"
+                    ? {
+                        mode,
+                        at: e.at < "09:30" ? "09:30" : e.at,
+                        signals: signals.length
+                          ? signals
+                          : [{ direction: "up", match: "all", conditions: [blankCondition()] }],
+                      }
+                    : { mode, signals: [] },
               )
             }
           />
           <TimeField
-            label={byConditions ? "Earliest entry" : "Entry time"}
+            label={byConditions || byTip ? "Earliest entry" : "Entry time"}
             value={e.at}
             {...hours}
             error={errs["entry.at"]}
@@ -242,6 +247,8 @@ export function RulesEditor({
         )}
       </Card>
 
+      {byTip && <TipEntry config={config} errs={errs} onChange={onChange} />}
+
       {byConditions && (
         <section className="flex flex-col gap-3" aria-label="Signals">
           <div className="flex items-center justify-between">
@@ -337,7 +344,7 @@ export function RulesEditor({
             errs={errs}
             warns={warns}
             canRemove={legs.length > 1}
-            directional={byConditions}
+            directional={byConditions || byTip}
             onChange={(l) => onChange({ ...config, legs: legs.map((x, j) => (j === i ? l : x)) })}
             onDuplicate={
               legs.length < max

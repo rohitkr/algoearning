@@ -3178,13 +3178,26 @@ export interface components {
              */
             max_per_day: number;
             /**
+             * Max Tip Age S
+             * @default 120
+             */
+            max_tip_age_s: number;
+            /**
              * Mode
              * @default time
              * @enum {string}
              */
-            mode: "time" | "conditions";
+            mode: "time" | "conditions" | "tip";
+            /**
+             * On Tip Exit
+             * @default close
+             * @enum {string}
+             */
+            on_tip_exit: "close" | "ignore";
             /** Signals */
             signals?: components["schemas"]["Signal"][];
+            /** Source Id */
+            source_id?: string | null;
             /** Until */
             until?: string | null;
         };

@@ -28,8 +28,8 @@ from ae_brokers.kite import ContractBook, KiteClient
 from ae_core.backtest import Candle
 from ae_core.notifications import FROM_ENGINE, compose
 from ae_core.secrets import SecretBox
-from ae_core.strategy import holds_overnight, migrate, parse
-from ae_core.trading.model import IST, Contract, Intent, Market, Position, Quote
+from ae_core.strategy import RulesConfig, holds_overnight, migrate, parse
+from ae_core.trading.model import IST, Contract, Intent, Market, Position, Quote, Tip
 from ae_core.trading.risk import RiskContext, RiskSettings, breach, check_entry
 from ae_core.trading.runners import Runner, make_runner
 from ae_db.entitlements import load_entitlements
@@ -42,6 +42,7 @@ from ae_db.models import (
     Notification,
     Order,
     PlatformSetting,
+    SignalRow,
     StrategyRun,
     Trade,
     TradeEvent,
@@ -185,6 +186,34 @@ class Engine:
             await self.hub.want(wanted)
         return len(runs)
 
+    async def _tips(self, s: Any, user_id: uuid.UUID, runners: Any, now: datetime) -> list[Tip]:
+        """Today's Telegram tips of the signal sources this user's runs trade on (ADR 0025), oldest first."""
+        sources = {
+            rn.cfg.entry.source_id
+            for rn in runners
+            if isinstance(rn.cfg, RulesConfig) and rn.cfg.entry.mode == "tip" and rn.cfg.entry.source_id
+        }
+        if not sources:
+            return []
+        since = datetime.combine(now.astimezone(IST).date(), datetime.min.time(), tzinfo=IST)
+        q = (
+            select(SignalRow)
+            .where(SignalRow.user_id == user_id, SignalRow.source_id.in_(sources), SignalRow.date >= since)
+            .order_by(SignalRow.date, SignalRow.header_msg_id)
+        )
+        return [
+            Tip(
+                r.header_msg_id,
+                str(r.source_id),
+                r.date,
+                r.direction,
+                r.status,
+                r.complete,
+                f"{r.action} {r.index} {r.strike} {r.option_type}",
+            )
+            for r in (await s.execute(q)).scalars()
+        ]
+
     async def _markets(self, codes: set[str], insts: dict[str, Inst], now: datetime) -> dict[str, Market]:
         last = await self.hub.last(codes)
         out = {}
@@ -221,6 +250,10 @@ class Engine:
                 m = markets.get(self._underlying(r))
                 if m is not None and runners[r.id].prior_days and len(m.prior_spot_bars) == 0:
                     m.prior_spot_bars = await self._prior_bars(m.underlying, now.date(), runners[r.id].prior_days)
+            tips = await self._tips(s, user_id, runners.values(), now)
+            if tips:
+                for m in markets.values():
+                    m.tips = tips
             # prices for every contract any of this user's runners holds or wants
             for r in runs:
                 m = markets.get(self._underlying(r))
