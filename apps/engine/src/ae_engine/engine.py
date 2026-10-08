@@ -210,6 +210,7 @@ class Engine:
                 r.status,
                 r.complete,
                 f"{r.action} {r.index} {r.strike} {r.option_type}",
+                r.index,
             )
             for r in (await s.execute(q)).scalars()
         ]

@@ -124,3 +124,13 @@ def test_ignoring_the_channels_exit() -> None:
     sim.step(at("10:00", 10))
     sim.tips = [tip(1, at("10:00"), status="SL_HIT")]
     assert sim.step(at("10:20")) == []  # our own stop-loss and exit time still apply
+
+
+def test_only_tips_for_the_strategys_underlying() -> None:
+    sim = Sim()  # a NIFTY strategy
+    sensex = Tip(1, str(SOURCE), at("10:00"), "BULLISH", "OPEN", True, "BUY SENSEX 82000 CE", "SENSEX")
+    nifty = Tip(2, str(SOURCE), at("10:00", 5), "BEARISH", "OPEN", True, "BUY NIFTY 25000 PE", "NIFTY")
+    sim.tips = [sensex]
+    assert sim.step(at("10:00", 10)) == [] and sim.notes() == []  # silently not ours
+    sim.tips = [sensex, nifty]
+    assert [i.leg for i in sim.step(at("10:00", 20))] == ["BEAR"]

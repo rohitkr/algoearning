@@ -80,6 +80,7 @@ class Tip:
     status: str  # OPEN | T1 | T2 | T3 | SL_HIT
     complete: bool  # stop-loss given: tradable
     tip: str = ""  # e.g. "BUY NIFTY 22450 CE", for the log
+    index: str = ""  # the tip's underlying, e.g. NIFTY: a strategy takes only tips for its own underlying
 
 
 @dataclass

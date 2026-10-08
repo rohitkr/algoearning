@@ -296,6 +296,9 @@ class RulesRunner(Runner):
         for tip in m.tips:
             if tip.source_id != str(e.source_id) or tip.id in seen:
                 continue
+            if tip.index and tip.index != self.cfg.underlying:
+                seen.append(tip.id)  # another underlying's tip (e.g. SENSEX for a NIFTY strategy): not ours
+                continue
             age = (m.now - tip.date).total_seconds()
             if age > e.max_tip_age_s:
                 seen.append(tip.id)
