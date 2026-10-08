@@ -41,6 +41,23 @@ This document outlines the mandatory technical, risk management, and structural 
 - [ ] **Prohibition of Performance Marketing**: Completely remove any features, banners, or widgets that present simulated historical backtesting percentages, guaranteed yields, or target returns aimed at attracting retail users.
   - _Status: Not done. The product page on app.algoearning.com (`apps/web/landing/index.html`) shows sample P&L figures (for example +₹4,820) in its dashboard mock-up. It has no backtest percentages or promised returns, and it carries a risk disclaimer, but the sample profits should go._
 
+## 📡 5. Third-Party Signals (Telegram tips, ADR 0025)
+
+- [ ] **Source of the Idea Is Disclosed**: The signals page and the strategy builder state plainly that signals come from a third party the platform does not vet, and that the user decides what to trade.
+  - _Status: Planned (ADR 0025). To be shown on the signals page and on every signal-driven strategy._
+- [ ] **No Advice or Recommendation by the Platform**: The platform only relays the user's own channel to the user and applies the rules the user wrote; it does not select, rate or promote channels or tips, and never shares one user's source with another.
+  - _Status: Planned (ADR 0025). Sources are per user under row-level security; there is no directory of channels._
+- [ ] **Read-Only Access to the User's Telegram**: The user's Telegram session is used only to read the one chat they picked: nothing is sent, forwarded, reacted to or marked read. Session data is encrypted, masked in every response and log, and removable with one click.
+  - _Status: Planned (ADR 0025): one wrapper with read methods only, enforced by a test._
+- [ ] **Explicit Opt-In per Mode**: Auto-trading on signals is opt-in per strategy (alert, approve or auto), paper first; live needs the `signal_trading` plan flag, a connected broker and the same pre-trade risk checks as any other order.
+  - _Status: Planned (ADR 0025, phase C)._
+- [ ] **Signal-to-Order Audit Trail**: Each signal is kept as received (raw text, time, edits), with how it was read, the legs it mapped to, the risk result, the orders, and every skipped signal with its reason.
+  - _Status: Planned (ADR 0025): raw messages are never modified; decisions are `trade_events`._
+- [ ] **Unclear Messages Never Trade**: Anything the parser is not sure of (free-text advice, ideas, format changes) is shown but never turned into an order.
+  - _Status: Planned (ADR 0025)._
+- [ ] **Questions for the Compliance Owner**: Whether acting on an unregistered third party's tips via an automated platform needs extra disclosures or limits (research analyst / investment adviser rules), whether approve-before-placing should be mandatory for live, and how long raw messages must be retained.
+  - _Status: Open, for review._
+
 ---
 
 _Reviewed against the code on 2 October 2026 (commit c2224a1). [x] = covered; the status line under each item says what exists and what is missing._
