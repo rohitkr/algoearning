@@ -112,9 +112,9 @@ where the last one stopped.
 
 ```bash
 # download: the index first, then the option contracts in reach each day
-uv run --env-file .env python -m ae_worker backfill NIFTY --from 2025-01-01 --to 2026-09-30
-uv run --env-file .env python -m ae_worker backfill NIFTY --from 2025-01-01 --dry-run      # plan + count calls only
-uv run --env-file .env python -m ae_worker backfill SENSEX --from 2025-01-01 --index-only  # index candles only
+uv run --env-file .env python -m ae_worker backfill NIFTY --from 2026-01-01 --to 2026-10-08
+uv run --env-file .env python -m ae_worker backfill NIFTY --from 2026-01-01 --dry-run      # plan + count calls only
+uv run --env-file .env python -m ae_worker backfill SENSEX --from 2026-01-01 --index-only  # index candles only
 #   more options: --reserve 500 (calls kept for the live feed), --buffer 4 (strikes beyond each day's range)
 
 # import an existing DuckDB file (from algo-trading-claude)
@@ -122,9 +122,9 @@ uv run --env-file .env --with duckdb python -m ae_worker import-history ~/git/al
 
 # look at what is stored
 uv run --env-file .env python scripts/show-history.py                          # summary per underlying
-uv run --env-file .env python scripts/show-history.py NIFTY 2025-01-02         # the index's candles that day
-uv run --env-file .env python scripts/show-history.py NIFTY 2025-01-02 --options              # contracts that day
-uv run --env-file .env python scripts/show-history.py NIFTY:2025-01-02:23600:CE 2025-01-02    # one contract
+uv run --env-file .env python scripts/show-history.py NIFTY 2026-01-02         # the index's candles that day
+uv run --env-file .env python scripts/show-history.py NIFTY 2026-01-02 --options              # contracts that day
+uv run --env-file .env python scripts/show-history.py NIFTY:2026-01-02:23600:CE 2025-01-02    # one contract
 
 # the 3 x 3 SMC backtests as a JSON report
 uv run --env-file .env python -m ae_worker smc-report NIFTY,BANKNIFTY,SENSEX --from 2025-01-01 --out smc.json
