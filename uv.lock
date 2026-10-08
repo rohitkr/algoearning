@@ -21,6 +21,7 @@ members = [
     "ae-db",
     "ae-engine",
     "ae-marketdata",
+    "ae-signals",
     "ae-telegram",
     "ae-worker",
 ]
@@ -170,6 +171,27 @@ requires-dist = [
     { name = "smartmoneyconcepts", specifier = ">=0.0.27" },
     { name = "structlog", specifier = ">=26.1" },
     { name = "websockets", specifier = ">=15" },
+]
+
+[[package]]
+name = "ae-signals"
+version = "0.1.0"
+source = { editable = "apps/signals" }
+dependencies = [
+    { name = "ae-core" },
+    { name = "ae-db" },
+    { name = "ae-telegram" },
+    { name = "redis" },
+    { name = "structlog" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ae-core", editable = "packages/py-core" },
+    { name = "ae-db", editable = "packages/py-db" },
+    { name = "ae-telegram", editable = "packages/py-telegram" },
+    { name = "redis", specifier = ">=8.1" },
+    { name = "structlog", specifier = ">=26.1" },
 ]
 
 [[package]]

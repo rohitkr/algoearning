@@ -1,0 +1,348 @@
+{
+  "source": "Nifty Sensex VIP setups (Telegram), messages as received, for parser tests (ADR 0025)",
+  "messages": [
+    {
+      "msg_id": 983,
+      "date": "2026-09-07T07:28:13+00:00",
+      "text": "🟢 BUY NIFTY 23700 CE\n💰 Entry : ₹133 - ₹137\n📊 Intraday Trade ⭐ ⭐",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 984,
+      "date": "2026-09-07T07:28:15+00:00",
+      "text": "🎯 TP 1: ₹152\n🎯 TP 2: ₹167\n🎯 TP 3: ₹187\n🛑 Stop Loss: ₹118\n📝 Rationale: Reversal\n⏳ Valid for: Intraday Only\n⚠️ Terms, Conditions, Disclaimer: Read everything here to avoid any future conflict.",
+      "reply_to": 983,
+      "has_media": false
+    },
+    {
+      "msg_id": 985,
+      "date": "2026-09-07T07:35:46+00:00",
+      "text": "₹140 🔥🔥🔥🔥🔥",
+      "reply_to": 983,
+      "has_media": false
+    },
+    {
+      "msg_id": 986,
+      "date": "2026-09-07T07:45:34+00:00",
+      "text": "trail SL near 134 and hold it for mentioned targets",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 987,
+      "date": "2026-09-07T07:54:50+00:00",
+      "text": "145 🔥🔥🔥🔥🔥",
+      "reply_to": 983,
+      "has_media": false
+    },
+    {
+      "msg_id": 988,
+      "date": "2026-09-07T07:57:34+00:00",
+      "text": "148 🔥🔥🔥🔥🔥",
+      "reply_to": 983,
+      "has_media": false
+    },
+    {
+      "msg_id": 989,
+      "date": "2026-09-07T08:16:20+00:00",
+      "text": "book small profit near 149 and trail sl near 143",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 990,
+      "date": "2026-09-07T08:17:19+00:00",
+      "text": "152 🔥🔥🔥🔥🔥",
+      "reply_to": 983,
+      "has_media": false
+    },
+    {
+      "msg_id": 991,
+      "date": "2026-09-07T08:24:48+00:00",
+      "text": "155 🔥🔥🔥🔥🔥",
+      "reply_to": 983,
+      "has_media": false
+    },
+    {
+      "msg_id": 992,
+      "date": "2026-09-07T08:25:04+00:00",
+      "text": "164 🔥🔥🔥🔥🔥",
+      "reply_to": 983,
+      "has_media": false
+    },
+    {
+      "msg_id": 993,
+      "date": "2026-09-07T08:25:37+00:00",
+      "text": "do part booking here near 164 \nand trail sl near 153",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 994,
+      "date": "2026-09-08T04:31:12+00:00",
+      "text": "Good morning traders",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 995,
+      "date": "2026-09-08T04:31:25+00:00",
+      "text": "Lets wait for some good momentum",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 996,
+      "date": "2026-09-08T04:40:45+00:00",
+      "text": "🟢 BUY NIFTY 23900 PE\n💰 Entry : ₹209 - ₹213\n📊 Intraday Trade ⭐ ⭐",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 997,
+      "date": "2026-09-08T04:40:47+00:00",
+      "text": "🎯 TP 1: ₹228\n🎯 TP 2: ₹243\n🎯 TP 3: ₹253\n🛑 Stop Loss: ₹194\n📝 Rationale: Retest\n⏳ Valid for: Intraday Only\n⚠️ Terms, Conditions, Disclaimer: Read everything here to avoid any future conflict.",
+      "reply_to": 996,
+      "has_media": false
+    },
+    {
+      "msg_id": 998,
+      "date": "2026-09-08T04:43:30+00:00",
+      "text": "🛑 STOP LOSS HIT | NIFTY 23900 PE\n💹 Live LTP: ₹194\n❌ Position closed. Capital preserved.",
+      "reply_to": 996,
+      "has_media": false
+    },
+    {
+      "msg_id": 1015,
+      "date": "2026-09-09T04:44:04+00:00",
+      "text": "🟢 BUY SENSEX 75000 CE\n💰 Entry : ₹306 - ₹310\n📊 Intraday Trade ⭐ ⭐",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 1016,
+      "date": "2026-09-09T04:44:06+00:00",
+      "text": "🎯 TP 1: ₹330\n🎯 TP 2: ₹350\n🎯 TP 3: ₹370\n🛑 Stop Loss: ₹286\n📝 Rationale: Reversal\n⏳ Valid for: Intraday Only\n⚠️ Terms, Conditions, Disclaimer: Read everything here to avoid any future conflict.",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1017,
+      "date": "2026-09-09T04:47:46+00:00",
+      "text": "₹315 🔥🔥🔥🔥🔥",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1018,
+      "date": "2026-09-09T04:48:10+00:00",
+      "text": "₹321 🔥🔥🔥🔥🔥",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1019,
+      "date": "2026-09-09T04:48:34+00:00",
+      "text": "₹326 🔥🔥🔥🔥🔥",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1020,
+      "date": "2026-09-09T04:49:44+00:00",
+      "text": "🎯 Target 1 done 🔥🔥🔥🔥🔥\n💹 Ltp ₹331\n✅ Book Some quantity here",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1021,
+      "date": "2026-09-09T04:49:46+00:00",
+      "text": "₹333 🔥🔥🔥🔥🔥",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1022,
+      "date": "2026-09-09T04:50:24+00:00",
+      "text": "₹338 🔥🔥🔥🔥🔥",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1023,
+      "date": "2026-09-09T04:51:30+00:00",
+      "text": "₹343 🔥🔥🔥🔥🔥",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1024,
+      "date": "2026-09-09T04:53:40+00:00",
+      "text": "₹348 🔥🔥🔥🔥🔥",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1025,
+      "date": "2026-09-09T04:53:58+00:00",
+      "text": "🎯 Target 2 done 🔥🔥🔥🔥🔥\n💹 Ltp ₹350\n✅ Book Major quantity here",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1026,
+      "date": "2026-09-09T04:54:00+00:00",
+      "text": "₹363 🔥🔥🔥🔥🔥",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1027,
+      "date": "2026-09-09T04:54:04+00:00",
+      "text": "🎯 Target 3 done 🔥🔥🔥🔥🔥\n💹 Ltp ₹375\n✅ Book Major quantity here",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1028,
+      "date": "2026-09-09T04:54:05+00:00",
+      "text": "",
+      "reply_to": 1015,
+      "has_media": true
+    },
+    {
+      "msg_id": 1029,
+      "date": "2026-09-09T04:54:06+00:00",
+      "text": "₹375 🔥🔥🔥🔥🔥",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1030,
+      "date": "2026-09-09T04:54:06+00:00",
+      "text": "₹381 🔥🔥🔥🔥🔥",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1031,
+      "date": "2026-09-09T04:54:14+00:00",
+      "text": "₹389 🔥🔥🔥🔥🔥",
+      "reply_to": 1015,
+      "has_media": false
+    },
+    {
+      "msg_id": 1032,
+      "date": "2026-09-10T07:41:45+00:00",
+      "text": "🟢 BUY SENSEX 74500 CE\n💰 Entry : ₹331 - ₹335\n📊 Intraday Trade ⭐ ⭐",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 1033,
+      "date": "2026-09-10T07:41:47+00:00",
+      "text": "🎯 TP 1: ₹355\n🎯 TP 2: ₹375\n🎯 TP 3: ₹395\n🛑 Stop Loss: ₹311\n📝 Rationale: Reversal\n⏳ Valid for: Intraday Only\n⚠️ Terms, Conditions, Disclaimer: Read everything here to avoid any future conflict.",
+      "reply_to": 1032,
+      "has_media": false
+    },
+    {
+      "msg_id": 1034,
+      "date": "2026-09-10T07:43:16+00:00",
+      "text": "₹341 🔥🔥🔥🔥🔥",
+      "reply_to": 1032,
+      "has_media": false
+    },
+    {
+      "msg_id": 1035,
+      "date": "2026-09-10T07:44:04+00:00",
+      "text": "₹346 🔥🔥🔥🔥🔥",
+      "reply_to": 1032,
+      "has_media": false
+    },
+    {
+      "msg_id": 1036,
+      "date": "2026-09-10T07:44:40+00:00",
+      "text": "₹353 🔥🔥🔥🔥🔥",
+      "reply_to": 1032,
+      "has_media": false
+    },
+    {
+      "msg_id": 1037,
+      "date": "2026-09-10T07:44:44+00:00",
+      "text": "🎯 Target 1 done 🔥🔥🔥🔥🔥\n💹 Ltp ₹358\n✅ Book Some quantity here",
+      "reply_to": 1032,
+      "has_media": false
+    },
+    {
+      "msg_id": 1038,
+      "date": "2026-09-10T07:44:48+00:00",
+      "text": "₹359 🔥🔥🔥🔥🔥",
+      "reply_to": 1032,
+      "has_media": false
+    },
+    {
+      "msg_id": 1039,
+      "date": "2026-09-10T07:45:10+00:00",
+      "text": "₹364 🔥🔥🔥🔥🔥",
+      "reply_to": 1032,
+      "has_media": false
+    },
+    {
+      "msg_id": 1117,
+      "date": "2026-09-17T08:06:46+00:00",
+      "text": "keep 74400 ce and 74200 pe for jodi \nstrangle buy near 215 combinedly",
+      "reply_to": null,
+      "has_media": true
+    },
+    {
+      "msg_id": 1118,
+      "date": "2026-09-17T08:07:26+00:00",
+      "text": "sl 80 points of combined premium and target 150 points on combined premium",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 1119,
+      "date": "2026-09-17T09:24:34+00:00",
+      "text": "combined premiums are now 260 and giving around 40rs gain, one can book now those who have multiple lots can book few here and wait for 3:20pm for big moves, rest can book here completely",
+      "reply_to": null,
+      "has_media": true
+    },
+    {
+      "msg_id": 1191,
+      "date": "2026-09-23T10:54:23+00:00",
+      "text": "⏰ Think the market closes at 3:30 PM? Think again! 👀\nThere’s another market that keeps moving after 3:30 PM — Commodities! 🪙📈\nJoin us to explore Gold, Silver, Crude Oil & Natural Gas and understand how you can trade Commodities with Dhan.\n📅 24 Sept | Thursday ⏰ 5:00 – 6:00 PM\n🎟️ Register now: https://luma.com/e4tj1ah7\nYour market day doesn’t have to end at 3:30. 😉",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 1206,
+      "date": "2026-09-24T09:20:36+00:00",
+      "text": "⏰ *Think the market closes at 3:30 PM? Think again! 👀*\n\nThere’s another market that keeps moving *after 3:30 PM — Commodities!* 🪙📈\n\nJoin us to explore *Gold, Silver, Crude Oil & Natural Gas* and understand how you can trade Commodities with Dhan.\n\n📅 *24 Sept | Thursday*\n⏰ *5:00 – 6:00 PM*\n\n🎟 *Register now:* https://luma.com/e4tj1ah7\n\n*Your market day doesn’t have to end at 3:30. 😉*",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 1207,
+      "date": "2026-09-24T09:21:02+00:00",
+      "text": "guys will see you at 5pm on this zoom call",
+      "reply_to": 1206,
+      "has_media": false
+    },
+    {
+      "msg_id": 1208,
+      "date": "2026-09-24T11:39:04+00:00",
+      "text": "We are live pls join now",
+      "reply_to": null,
+      "has_media": false
+    },
+    {
+      "msg_id": 1388,
+      "date": "2026-10-07T04:31:59+00:00",
+      "text": "keep tight sl in system, those who wants to trade ater policy announcement and want to avoid volatility, keep small positions or stay away",
+      "reply_to": null,
+      "has_media": false
+    }
+  ]
+}

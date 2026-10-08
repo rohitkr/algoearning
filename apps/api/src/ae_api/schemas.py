@@ -324,6 +324,56 @@ class SignalSourceOut(BaseModel):
     chat_kind: str | None
     connected_at: datetime | None
     created_at: datetime
+    reader_state: Literal["listening", "connecting", "error", "off"] = "off"
+    reader_detail: str | None = None
+    last_message_at: datetime | None = None
+
+
+SignalKind = Literal["SIGNAL", "DETAILS", "TARGET", "SL_HIT", "TICK", "MEDIA", "ADVISORY", "NOISE", "UNCLEAR"]
+
+
+class SignalOut(BaseModel):
+    """A signal as the channel gave it (the tip's own levels) and how it went."""
+
+    id: int  # the header message's id in the chat
+    date: datetime
+    index: str
+    strike: int
+    option_type: str
+    action: str
+    direction: Literal["BULLISH", "BEARISH"]
+    entry_low: float
+    entry_high: float
+    stop_loss: float | None
+    targets: list[float]
+    targets_done: list[int]
+    rationale: str | None
+    valid_for: str | None
+    intraday: bool
+    status: Literal["OPEN", "T1", "T2", "T3", "SL_HIT"]
+    last_price: float | None
+    complete: bool
+    message_ids: list[int]
+
+
+class SignalMessageOut(BaseModel):
+    """A chat message exactly as received, and how it was read."""
+
+    msg_id: int
+    date: datetime
+    edit_date: datetime | None
+    text: str
+    reply_to: int | None
+    has_media: bool
+    kind: SignalKind
+    data: dict[str, Any]
+    signal_id: int | None
+    overridden: bool
+
+
+class SignalKindIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: SignalKind
 
 
 class SignalSourceLoginIn(BaseModel):

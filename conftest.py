@@ -30,6 +30,10 @@ def pytest_configure(config: pytest.Config) -> None:
 ALEMBIC_INI = os.path.join(os.path.dirname(__file__), "packages/py-db/alembic.ini")
 TABLES = (
     "audit_log",
+    "signal_overrides",
+    "signals",
+    "signal_messages",
+    "signal_sources",
     "trade_events",
     "orders",
     "trades",

@@ -1,6 +1,7 @@
 import type { SignalSetup, SignalSource } from "@algoearning/api-types";
 import { StatusPill } from "@algoearning/ui";
 
+import { SignalFeed } from "@/components/signals/signal-feed";
 import { SignalSources } from "@/components/signals/signal-sources";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
@@ -15,7 +16,7 @@ export default async function SignalsPage() {
     apiGet<SignalSetup>("/v1/signal-sources/setup"),
   ]);
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4">
       <div>
         <h1 className="text-xl font-semibold">Signals</h1>
         <p className="text-sm text-muted">
@@ -24,7 +25,14 @@ export default async function SignalsPage() {
         </p>
       </div>
       {sources.ok && setup.ok ? (
-        <SignalSources sources={sources.data} setup={setup.data} />
+        <>
+          {sources.data
+            .filter((s) => s.chat_id !== null)
+            .map((s) => (
+              <SignalFeed key={s.id} source={s} />
+            ))}
+          <SignalSources sources={sources.data} setup={setup.data} />
+        </>
       ) : (
         <StatusPill tone="danger">
           Could not load signal sources:{" "}

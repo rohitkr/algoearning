@@ -17,6 +17,7 @@ from .client import (
     SessionInvalid,
     TelegramError,
     TelegramGateway,
+    TelegramReader,
     TelethonGateway,
 )
 
@@ -33,5 +34,6 @@ __all__ = [
     "SessionInvalid",
     "TelegramError",
     "TelegramGateway",
+    "TelegramReader",
     "TelethonGateway",
 ]

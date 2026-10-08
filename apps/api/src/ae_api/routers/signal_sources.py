@@ -12,11 +12,14 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 import structlog
 from ae_core.secrets import SecretBox, mask_phone
-from ae_db.models import SignalSource
+from ae_core.signals import Message, assemble
+from ae_db.models import SignalMessage, SignalOverride, SignalRow, SignalSource
 from ae_db.session import Database
+from ae_db.signal_store import load_messages, load_overrides, rebuild
 from ae_telegram import (
     Chat,
     CodeExpired,
@@ -29,8 +32,8 @@ from ae_telegram import (
     TelegramError,
     TelegramGateway,
 )
-from fastapi import APIRouter, Request, Response, status
-from sqlalchemy import select, update
+from fastapi import APIRouter, Query, Request, Response, status
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import audit
@@ -39,6 +42,9 @@ from ..entitlements import load_entitlements, require_within
 from ..errors import AppError, Conflict, NotFound, TooManyRequests, Unavailable
 from ..schemas import (
     ERROR_RESPONSES,
+    SignalKindIn,
+    SignalMessageOut,
+    SignalOut,
     SignalSetupOut,
     SignalSourceChatIn,
     SignalSourceCodeIn,
@@ -124,6 +130,9 @@ def _out(box: SecretBox, src: SignalSource) -> SignalSourceOut:
         chat_kind=src.chat_kind,
         connected_at=src.connected_at,
         created_at=src.created_at,
+        reader_state=src.reader_state,  # type: ignore[arg-type]
+        reader_detail=src.reader_detail,
+        last_message_at=src.last_message_at,
     )
 
 
@@ -400,3 +409,111 @@ async def delete_source(
     await s.flush()
     await audit(s, request, "signal_source.delete", user.user_id, "signal_source", source_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# -- what the chat says (phase B) ------------------------------------------------------------------------------------
+@router.get("/signal-sources/{source_id}/signals", response_model=list[SignalOut])
+async def list_signals(
+    source_id: uuid.UUID, user: CurrentUser, s: UserSession, days: Annotated[int, Query(ge=1, le=90)] = 7
+) -> list[SignalOut]:
+    """The source's signals of the last `days`, newest first."""
+    await _own(s, user.user_id, source_id)
+    since = datetime.now(UTC) - timedelta(days=days)
+    q = (
+        select(SignalRow)
+        .where(SignalRow.source_id == source_id, SignalRow.date >= since)
+        .order_by(SignalRow.date.desc(), SignalRow.header_msg_id.desc())
+    )
+    return [
+        SignalOut.model_validate(
+            {**{c.key: getattr(r, c.key) for c in SignalRow.__table__.columns}, "id": r.header_msg_id}
+        )
+        for r in (await s.execute(q)).scalars()
+    ]
+
+
+@router.get("/signal-sources/{source_id}/messages", response_model=list[SignalMessageOut])
+async def list_messages(
+    source_id: uuid.UUID,
+    user: CurrentUser,
+    s: UserSession,
+    days: Annotated[int, Query(ge=1, le=90)] = 3,
+    limit: Annotated[int, Query(ge=1, le=2000)] = 500,
+) -> list[SignalMessageOut]:
+    """The chat's messages of the last `days` as received, newest first, each with how it was read (the user's
+    corrections applied)."""
+    src = await _own(s, user.user_id, source_id)
+    since = datetime.now(UTC) - timedelta(days=days)
+    rows = list(
+        (
+            await s.execute(
+                select(SignalMessage)
+                .where(SignalMessage.source_id == source_id, SignalMessage.date >= since)
+                .order_by(SignalMessage.date, SignalMessage.msg_id)
+            )
+        ).scalars()
+    )
+    msgs = [Message(r.msg_id, r.date, r.text, r.reply_to, r.has_media) for r in rows]
+    _, reads = assemble(msgs, src.profile, await load_overrides(s, source_id))
+    read = {x.msg_id: x for x in reads}
+    out = [
+        SignalMessageOut(
+            msg_id=r.msg_id,
+            date=r.date,
+            edit_date=r.edit_date,
+            text=r.text,
+            reply_to=r.reply_to,
+            has_media=r.has_media,
+            kind=read[r.msg_id].kind,
+            data=dict(read[r.msg_id].data),
+            signal_id=read[r.msg_id].signal_id,
+            overridden=read[r.msg_id].overridden,
+        )
+        for r in rows
+    ]
+    return list(reversed(out))[:limit]
+
+
+@router.put("/signal-sources/{source_id}/messages/{msg_id}/kind", response_model=SignalMessageOut)
+async def correct_message(
+    source_id: uuid.UUID, msg_id: int, body: SignalKindIn, user: CurrentUser, s: UserSession, request: Request
+) -> SignalMessageOut:
+    """ "Correct this": read the message as `kind` from now on (kept as a case for improving the parser); the
+    source's signals are rebuilt."""
+    return await _override(s, request, user.user_id, source_id, msg_id, body.kind)
+
+
+@router.delete("/signal-sources/{source_id}/messages/{msg_id}/kind", response_model=SignalMessageOut)
+async def undo_correction(
+    source_id: uuid.UUID, msg_id: int, user: CurrentUser, s: UserSession, request: Request
+) -> SignalMessageOut:
+    return await _override(s, request, user.user_id, source_id, msg_id, None)
+
+
+async def _override(
+    s: AsyncSession, request: Request, user_id: uuid.UUID, source_id: uuid.UUID, msg_id: int, kind: str | None
+) -> SignalMessageOut:
+    src = await _own(s, user_id, source_id)
+    row = (
+        await s.execute(
+            select(SignalMessage).where(SignalMessage.source_id == source_id, SignalMessage.msg_id == msg_id)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFound("message not found")
+    await s.execute(
+        delete(SignalOverride).where(SignalOverride.source_id == source_id, SignalOverride.msg_id == msg_id)
+    )
+    if kind is not None:
+        s.add(SignalOverride(user_id=user_id, source_id=source_id, msg_id=msg_id, kind=kind))
+    await s.flush()
+    await rebuild(s, src)
+    await audit(s, request, "signal_message.correct", user_id, "signal_source", source_id, msg_id=msg_id, kind=kind)
+    since = row.date - timedelta(days=3)
+    msgs = await load_messages(s, source_id, since)
+    _, reads = assemble(msgs, src.profile, await load_overrides(s, source_id))
+    r = next(x for x in reads if x.msg_id == msg_id)
+    return SignalMessageOut(
+        msg_id=row.msg_id, date=row.date, edit_date=row.edit_date, text=row.text, reply_to=row.reply_to,
+        has_media=row.has_media, kind=r.kind, data=dict(r.data), signal_id=r.signal_id, overridden=r.overridden,
+    )  # fmt: skip

@@ -169,6 +169,7 @@ and unlike the other keys it cannot be re-created.
 ```bash
 uv run --env-file .env python -m ae_marketdata           # the market-data feed (MARKET_DATA_SOURCE=breeze|kite|simulated|auto)
 uv run --env-file .env python -m ae_engine               # the trading engine (--once: start, report ready, exit)
+uv run --env-file .env python -m ae_signals  # the Telegram signal reader (read-only; ADR 0025)
 uv run --env-file .env python -m ae_worker               # scheduled jobs (--once: every job once, then exit)
 uv run --env-file .env python -m ae_worker refresh-instruments   # one job, then exit
 ```
@@ -186,7 +187,7 @@ scripts/home-host.sh start|stop|restart [service]
 scripts/home-host.sh setup|tunnel|install|uninstall   # one-time setup
 ```
 
-Services: postgres, redis, api, web, feed, worker, engine, tunnel, awake.
+Services: postgres, redis, api, web, feed, worker, signals, engine, tunnel, awake.
 
 ## Conventions
 

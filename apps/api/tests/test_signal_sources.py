@@ -192,3 +192,61 @@ def test_plan_limit_and_isolation(ctx: tuple[TestClient, FakeGateway, str]) -> N
     assert c.get("/v1/signal-sources", headers=B).json() == []
     for method, path in (("get", "/chats"), ("post", "/disconnect"), ("delete", "")):
         assert getattr(c, method)(f"/v1/signal-sources/{src['id']}{path}", headers=B).status_code == 404
+
+
+# -- phase B: what the chat said ---------------------------------------------------------------------------------
+def store_thread(db: str, source_id: str) -> None:
+    """Messages as the reader would store them (system role), then the signals rebuilt."""
+    import asyncio
+    import uuid
+    from datetime import UTC, datetime, timedelta
+
+    from ae_core.signals import Message
+    from ae_db.models import SignalSource
+    from ae_db.session import Database
+    from ae_db.signal_store import rebuild, save_messages
+
+    t0 = datetime.now(UTC) - timedelta(hours=2)
+    msgs = [
+        Message(1, t0, "🟢 BUY NIFTY 22450 CE\n💰 Entry : ₹150 - ₹154\n📊 Intraday Trade"),
+        Message(2, t0 + timedelta(seconds=5), "🎯 TP 1: ₹169\n🎯 TP 2: ₹184\n🎯 TP 3: ₹204\n🛑 Stop Loss: ₹135", 1),
+        Message(3, t0 + timedelta(minutes=1), "₹157 🔥🔥🔥", 1),
+        Message(4, t0 + timedelta(minutes=9), "🛑 STOP LOSS HIT | NIFTY 22450 CE\n💹 Live LTP: ₹135", 1),
+        Message(5, t0 + timedelta(minutes=30), "Good afternoon traders"),
+    ]
+
+    async def go() -> None:
+        database = Database(db, pool_size=1)
+        async with database.system_session() as s:
+            src = await s.get(SignalSource, uuid.UUID(source_id))
+            assert src is not None
+            await save_messages(s, src, msgs, {})
+            await rebuild(s, src)
+        await database.dispose()
+
+    asyncio.run(go())
+
+
+def test_signals_messages_and_corrections(ctx: tuple[TestClient, FakeGateway, str]) -> None:
+    c, _, db = ctx
+    sid = connect(c)["id"]
+    store_thread(db, sid)
+    (sig,) = c.get(f"/v1/signal-sources/{sid}/signals", headers=A).json()
+    assert (sig["id"], sig["direction"], sig["status"], sig["targets"], sig["complete"]) == (
+        1, "BULLISH", "SL_HIT", [169, 184, 204], True)  # fmt: skip
+    msgs = c.get(f"/v1/signal-sources/{sid}/messages", headers=A).json()
+    assert [(x["msg_id"], x["kind"], x["signal_id"]) for x in msgs] == [
+        (5, "NOISE", None), (4, "SL_HIT", 1), (3, "TICK", 1), (2, "DETAILS", 1), (1, "SIGNAL", 1)]  # fmt: skip
+
+    # "correct this": the SL hit was something else; the signal is rebuilt without it
+    r = c.put(f"/v1/signal-sources/{sid}/messages/4/kind", json={"kind": "NOISE"}, headers=A)
+    assert r.status_code == 200 and (r.json()["kind"], r.json()["overridden"]) == ("NOISE", True)
+    assert c.get(f"/v1/signal-sources/{sid}/signals", headers=A).json()[0]["status"] == "OPEN"
+    assert c.delete(f"/v1/signal-sources/{sid}/messages/4/kind", headers=A).json()["kind"] == "SL_HIT"
+    assert c.get(f"/v1/signal-sources/{sid}/signals", headers=A).json()[0]["status"] == "SL_HIT"
+    assert c.put(f"/v1/signal-sources/{sid}/messages/99/kind", json={"kind": "NOISE"}, headers=A).status_code == 404
+    assert c.put(f"/v1/signal-sources/{sid}/messages/4/kind", json={"kind": "WHAT"}, headers=A).status_code == 422
+
+    for path in ("/signals", "/messages"):  # another user sees nothing
+        assert c.get(f"/v1/signal-sources/{sid}{path}", headers=B).status_code == 404
+    assert rows(db, "SELECT count(*) FROM signal_messages")[0][0] == 5

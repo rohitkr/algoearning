@@ -5372,6 +5372,278 @@
         "title": "Signal",
         "type": "object"
       },
+      "SignalKindIn": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "SIGNAL",
+              "DETAILS",
+              "TARGET",
+              "SL_HIT",
+              "TICK",
+              "MEDIA",
+              "ADVISORY",
+              "NOISE",
+              "UNCLEAR"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "SignalKindIn",
+        "type": "object"
+      },
+      "SignalMessageOut": {
+        "description": "A chat message exactly as received, and how it was read.",
+        "properties": {
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "date": {
+            "format": "date-time",
+            "title": "Date",
+            "type": "string"
+          },
+          "edit_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edit Date"
+          },
+          "has_media": {
+            "title": "Has Media",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "SIGNAL",
+              "DETAILS",
+              "TARGET",
+              "SL_HIT",
+              "TICK",
+              "MEDIA",
+              "ADVISORY",
+              "NOISE",
+              "UNCLEAR"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "msg_id": {
+            "title": "Msg Id",
+            "type": "integer"
+          },
+          "overridden": {
+            "title": "Overridden",
+            "type": "boolean"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "signal_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signal Id"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "msg_id",
+          "date",
+          "edit_date",
+          "text",
+          "reply_to",
+          "has_media",
+          "kind",
+          "data",
+          "signal_id",
+          "overridden"
+        ],
+        "title": "SignalMessageOut",
+        "type": "object"
+      },
+      "SignalOut": {
+        "description": "A signal as the channel gave it (the tip's own levels) and how it went.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "complete": {
+            "title": "Complete",
+            "type": "boolean"
+          },
+          "date": {
+            "format": "date-time",
+            "title": "Date",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "BULLISH",
+              "BEARISH"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "entry_high": {
+            "title": "Entry High",
+            "type": "number"
+          },
+          "entry_low": {
+            "title": "Entry Low",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "index": {
+            "title": "Index",
+            "type": "string"
+          },
+          "intraday": {
+            "title": "Intraday",
+            "type": "boolean"
+          },
+          "last_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Price"
+          },
+          "message_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Message Ids",
+            "type": "array"
+          },
+          "option_type": {
+            "title": "Option Type",
+            "type": "string"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "status": {
+            "enum": [
+              "OPEN",
+              "T1",
+              "T2",
+              "T3",
+              "SL_HIT"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stop_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Loss"
+          },
+          "strike": {
+            "title": "Strike",
+            "type": "integer"
+          },
+          "targets": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Targets",
+            "type": "array"
+          },
+          "targets_done": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Targets Done",
+            "type": "array"
+          },
+          "valid_for": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid For"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "index",
+          "strike",
+          "option_type",
+          "action",
+          "direction",
+          "entry_low",
+          "entry_high",
+          "stop_loss",
+          "targets",
+          "targets_done",
+          "rationale",
+          "valid_for",
+          "intraday",
+          "status",
+          "last_price",
+          "complete",
+          "message_ids"
+        ],
+        "title": "SignalOut",
+        "type": "object"
+      },
       "SignalSetupOut": {
         "properties": {
           "max_sources": {
@@ -5591,6 +5863,18 @@
             ],
             "title": "Label"
           },
+          "last_message_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Message At"
+          },
           "next_step": {
             "anyOf": [
               {
@@ -5622,6 +5906,28 @@
           "platform_app": {
             "title": "Platform App",
             "type": "boolean"
+          },
+          "reader_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reader Detail"
+          },
+          "reader_state": {
+            "default": "off",
+            "enum": [
+              "listening",
+              "connecting",
+              "error",
+              "off"
+            ],
+            "title": "Reader State",
+            "type": "string"
           },
           "status": {
             "enum": [
@@ -14550,6 +14856,341 @@
         ]
       }
     },
+    "/v1/signal-sources/{source_id}/messages": {
+      "get": {
+        "description": "The chat's messages of the last `days` as received, newest first, each with how it was read (the user's\ncorrections applied).",
+        "operationId": "list_messages_v1_signal_sources__source_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SignalMessageOut"
+                  },
+                  "title": "Response List Messages V1 Signal Sources  Source Id  Messages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "List Messages",
+        "tags": [
+          "signal-sources"
+        ]
+      }
+    },
+    "/v1/signal-sources/{source_id}/messages/{msg_id}/kind": {
+      "delete": {
+        "operationId": "undo_correction_v1_signal_sources__source_id__messages__msg_id__kind_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "msg_id",
+            "required": true,
+            "schema": {
+              "title": "Msg Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignalMessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Undo Correction",
+        "tags": [
+          "signal-sources"
+        ]
+      },
+      "put": {
+        "description": "\"Correct this\": read the message as `kind` from now on (kept as a case for improving the parser); the\nsource's signals are rebuilt.",
+        "operationId": "correct_message_v1_signal_sources__source_id__messages__msg_id__kind_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "msg_id",
+            "required": true,
+            "schema": {
+              "title": "Msg Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignalKindIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignalMessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Correct Message",
+        "tags": [
+          "signal-sources"
+        ]
+      }
+    },
     "/v1/signal-sources/{source_id}/password": {
       "post": {
         "operationId": "submit_password_v1_signal_sources__source_id__password_post",
@@ -14648,6 +15289,116 @@
           }
         },
         "summary": "Submit Password",
+        "tags": [
+          "signal-sources"
+        ]
+      }
+    },
+    "/v1/signal-sources/{source_id}/signals": {
+      "get": {
+        "description": "The source's signals of the last `days`, newest first.",
+        "operationId": "list_signals_v1_signal_sources__source_id__signals_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SignalOut"
+                  },
+                  "title": "Response List Signals V1 Signal Sources  Source Id  Signals Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "List Signals",
         "tags": [
           "signal-sources"
         ]

@@ -11,6 +11,7 @@ forward_messages, send_read_acknowledge, ...) raises before a request is made.""
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -257,3 +258,56 @@ class TelethonGateway:
                 await c.log_out()
 
         await self._run(api_id, api_hash, session, go)
+
+
+class TelegramReader:
+    """A long-lived, read-only connection to one chat (the signals process): `recent()` catches up, `listen()`
+    delivers every new or edited message until the connection ends. Telegram's errors arrive translated."""
+
+    def __init__(
+        self,
+        api_id: int,
+        api_hash: str,
+        session: str,
+        factory: Callable[[int, str, str], ReadOnlyClient] = _new_client,
+    ) -> None:
+        self._client = factory(api_id, api_hash, session)
+        self._entity: Any = None
+
+    async def _guard(self, coro: Awaitable[Any]) -> Any:
+        try:
+            return await coro
+        except TelegramError:
+            raise
+        except Exception as exc:
+            translated = _translate(exc)
+            if translated is None:
+                raise
+            raise translated from exc
+
+    async def start(self, chat_id: int) -> None:
+        await self._guard(self._client.connect())
+        if not await self._guard(self._client.is_user_authorized()):
+            raise SessionInvalid("the Telegram session is no longer valid: reconnect Telegram")
+        self._entity = await self._guard(self._client.get_entity(chat_id))
+
+    async def recent(self, limit: int) -> list[Message]:
+        async def go() -> list[Message]:
+            return [to_message(m) async for m in self._client.iter_messages(self._entity, limit=limit)]
+
+        result: list[Message] = await self._guard(go())
+        return result
+
+    async def listen(self, on_message: Callable[[Message], Awaitable[Any]]) -> None:
+        from telethon import events
+
+        async def handler(event: Any) -> None:
+            await on_message(to_message(event.message))
+
+        self._client.add_event_handler(handler, events.NewMessage(chats=self._entity))
+        self._client.add_event_handler(handler, events.MessageEdited(chats=self._entity))
+        await self._guard(self._client.run_until_disconnected())
+
+    async def close(self) -> None:
+        with contextlib.suppress(Exception):  # closing a broken connection: nothing to do
+            await self._client.disconnect()

@@ -26,7 +26,7 @@ for arg in "$@"; do
 done
 
 bold=$'\033[1m'; dim=$'\033[2m'; red=$'\033[31m'; green=$'\033[32m'; yellow=$'\033[33m'; blue=$'\033[34m'
-magenta=$'\033[35m'; reset=$'\033[0m'
+magenta=$'\033[35m'; cyan=$'\033[36m'; reset=$'\033[0m'
 step() { echo "${bold}${blue}==>${reset} ${bold}$*${reset}"; }
 ok() { echo "    ${green}✓${reset} $*"; }
 warn() { echo "    ${yellow}!${reset} $*"; }
@@ -168,6 +168,9 @@ pids+=($!)
 pids+=($!)
 # the worker: sends notifications, links Telegram, raises the engine-down alert, refreshes instruments daily
 ( uv run --env-file .env python -m ae_worker 2>&1 | prefix "${magenta}wrk ${reset}│ " ) &
+pids+=($!)
+# the signal reader: reads connected Telegram tips chats, read-only (ADR 0025)
+( uv run --env-file .env python -m ae_signals 2>&1 | prefix "${cyan}sig ${reset}│ " ) &
 pids+=($!)
 # the trading engine: steps every deployed strategy (paper) every second
 ( uv run --env-file .env python -m ae_engine 2>&1 | prefix "${green}eng ${reset}│ " ) &

@@ -317,7 +317,7 @@ function SourceCard({
       {source.status === "connected" && source.chat_id && (
         <p className="text-sm text-muted">
           Reading <span className="font-medium text-foreground">{source.chat_title}</span> read-only: nothing
-          is ever sent, forwarded or marked as read. Reading messages starts in the next release.
+          is ever sent, forwarded or marked as read.
         </p>
       )}
       <div className="flex flex-wrap gap-2 border-t border-border pt-3">

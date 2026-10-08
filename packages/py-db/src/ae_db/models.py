@@ -257,6 +257,81 @@ class SignalSource(UUIDPk, Timestamps, Base):
     chat_title: Mapped[str | None] = mapped_column(String(200))
     chat_kind: Mapped[str | None] = mapped_column(String(10))  # channel | group
     connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    profile: Mapped[str] = mapped_column(String(40), default="vip_setups", server_default="vip_setups")
+    # the reader (python -m ae_signals): listening | connecting | error | off, and the newest message it stored
+    reader_state: Mapped[str] = mapped_column(String(20), default="off", server_default="off")
+    reader_detail: Mapped[str | None] = mapped_column(String(300))
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SignalMessage(Base):
+    """A message of a source's chat exactly as received (never modified; an edit replaces the text and sets
+    edit_date), so history can always be re-read with a better parser."""
+
+    __tablename__ = "signal_messages"
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    user_id: Mapped[uuid.UUID] = owner()
+    source_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("signal_sources.id", ondelete="CASCADE"))
+    msg_id: Mapped[int] = mapped_column(BigInteger)
+    date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    edit_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    text: Mapped[str] = mapped_column(Text, default="")
+    reply_to: Mapped[int | None] = mapped_column(BigInteger)
+    has_media: Mapped[bool] = mapped_column(Boolean, default=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (
+        UniqueConstraint("source_id", "msg_id"),
+        Index("ix_signal_messages_source_date", "source_id", "date"),
+    )
+
+
+class SignalRow(Base):
+    """A signal assembled from a source's messages (ae_core.signals): the tip, its levels and how it went. Rebuilt
+    from signal_messages whenever they change; id = the header message's id within the source."""
+
+    __tablename__ = "signals"
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    user_id: Mapped[uuid.UUID] = owner()
+    source_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("signal_sources.id", ondelete="CASCADE"))
+    header_msg_id: Mapped[int] = mapped_column(BigInteger)
+    date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    index: Mapped[str] = mapped_column(String(20))
+    strike: Mapped[int] = mapped_column(Integer)
+    option_type: Mapped[str] = mapped_column(String(2))
+    action: Mapped[str] = mapped_column(String(4))
+    direction: Mapped[str] = mapped_column(String(8))
+    entry_low: Mapped[float] = mapped_column(Float)
+    entry_high: Mapped[float] = mapped_column(Float)
+    stop_loss: Mapped[float | None] = mapped_column(Float)
+    targets: Mapped[list[float]] = mapped_column(JSONB, default=list)
+    targets_done: Mapped[list[int]] = mapped_column(JSONB, default=list)
+    rationale: Mapped[str | None] = mapped_column(String(300))
+    valid_for: Mapped[str | None] = mapped_column(String(100))
+    intraday: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(10), default="OPEN")
+    last_price: Mapped[float | None] = mapped_column(Float)
+    complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    message_ids: Mapped[list[int]] = mapped_column(JSONB, default=list)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    __table_args__ = (
+        UniqueConstraint("source_id", "header_msg_id"),
+        Index("ix_signals_source_date", "source_id", "date"),
+    )
+
+
+class SignalOverride(Base):
+    """A user's correction of how a message was read (its kind); wins over the parser and is a test case for it."""
+
+    __tablename__ = "signal_overrides"
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    user_id: Mapped[uuid.UUID] = owner()
+    source_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("signal_sources.id", ondelete="CASCADE"))
+    msg_id: Mapped[int] = mapped_column(BigInteger)
+    kind: Mapped[str] = mapped_column(String(10))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (UniqueConstraint("source_id", "msg_id"),)
 
 
 class BrokerSession(UUIDPk, Base):

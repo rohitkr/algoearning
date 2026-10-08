@@ -1,6 +1,6 @@
 # 0025 Signal sources: reading a Telegram tips channel and trading its direction
 
-Status: Accepted, built phase by phase: A connect (done), B ingest + understand, C1 trade on paper, C2 approve /
+Status: Accepted, built phase by phase: A connect (done), B ingest + understand (done), C1 trade on paper, C2 approve /
 live / replay.
 
 **Context.** Users follow Telegram tips channels and want the platform to act on them without copying trades by hand.

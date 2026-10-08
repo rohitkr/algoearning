@@ -1,0 +1,24 @@
+[project]
+name = "ae-signals"
+version = "0.1.0"
+description = "AlgoEarning signal reader: reads users' Telegram tips chats (read-only) into signals (ADR 0025)"
+requires-python = ">=3.13"
+dependencies = [
+    "structlog>=26.1",
+    "redis>=8.1",
+    "ae-db",
+    "ae-core",
+    "ae-telegram",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ae_signals"]
+
+[tool.uv.sources]
+ae-db = { workspace = true }
+ae-core = { workspace = true }
+ae-telegram = { workspace = true }

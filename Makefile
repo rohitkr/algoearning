@@ -64,7 +64,7 @@ lint-js:
 	uv run python scripts/check-contrast.py
 
 typecheck: ## mypy (strict) + tsc
-	uv run mypy apps/api/src apps/engine/src apps/worker/src packages/py-*/src
+	uv run mypy apps/api/src apps/engine/src apps/worker/src apps/signals/src packages/py-*/src
 	pnpm typecheck
 
 format: ## Auto-format Python and JS

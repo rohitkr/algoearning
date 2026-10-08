@@ -1,7 +1,7 @@
 # Python workspace (uv). Every app/package below is its own installable project; `uv sync --all-packages`
 # installs them all (editable) into one .venv for development.
 [tool.uv.workspace]
-members = ["apps/api", "apps/engine", "apps/worker", "packages/py-core", "packages/py-brokers",
+members = ["apps/api", "apps/engine", "apps/worker", "apps/signals", "packages/py-core", "packages/py-brokers",
            "packages/py-marketdata", "packages/py-db", "packages/py-telegram"]
 
 [dependency-groups]
@@ -27,7 +27,7 @@ ignore = ["S101", "UP046", "UP047"]    # assert is fine in tests; Generic[T] kep
 "**/tests/**" = ["S", "B"]
 
 [tool.pytest.ini_options]
-testpaths = ["apps/api/tests", "apps/engine/tests", "apps/worker/tests", "packages/py-core/tests",
+testpaths = ["apps/api/tests", "apps/engine/tests", "apps/worker/tests", "apps/signals/tests", "packages/py-core/tests",
              "packages/py-brokers/tests", "packages/py-marketdata/tests", "packages/py-db/tests",
              "packages/py-telegram/tests"]
 asyncio_mode = "auto"

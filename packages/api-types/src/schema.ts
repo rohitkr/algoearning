@@ -1196,6 +1196,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/signal-sources/{source_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Messages
+         * @description The chat's messages of the last `days` as received, newest first, each with how it was read (the user's
+         *     corrections applied).
+         */
+        get: operations["list_messages_v1_signal_sources__source_id__messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/signal-sources/{source_id}/messages/{msg_id}/kind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Correct Message
+         * @description "Correct this": read the message as `kind` from now on (kept as a case for improving the parser); the
+         *     source's signals are rebuilt.
+         */
+        put: operations["correct_message_v1_signal_sources__source_id__messages__msg_id__kind_put"];
+        post?: never;
+        /** Undo Correction */
+        delete: operations["undo_correction_v1_signal_sources__source_id__messages__msg_id__kind_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/signal-sources/{source_id}/password": {
         parameters: {
             query?: never;
@@ -1207,6 +1250,26 @@ export interface paths {
         put?: never;
         /** Submit Password */
         post: operations["submit_password_v1_signal_sources__source_id__password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/signal-sources/{source_id}/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Signals
+         * @description The source's signals of the last `days`, newest first.
+         */
+        get: operations["list_signals_v1_signal_sources__source_id__signals_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3283,6 +3346,101 @@ export interface components {
              */
             match: "all" | "any";
         };
+        /** SignalKindIn */
+        SignalKindIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "SIGNAL" | "DETAILS" | "TARGET" | "SL_HIT" | "TICK" | "MEDIA" | "ADVISORY" | "NOISE" | "UNCLEAR";
+        };
+        /**
+         * SignalMessageOut
+         * @description A chat message exactly as received, and how it was read.
+         */
+        SignalMessageOut: {
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Date
+             * Format: date-time
+             */
+            date: string;
+            /** Edit Date */
+            edit_date: string | null;
+            /** Has Media */
+            has_media: boolean;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "SIGNAL" | "DETAILS" | "TARGET" | "SL_HIT" | "TICK" | "MEDIA" | "ADVISORY" | "NOISE" | "UNCLEAR";
+            /** Msg Id */
+            msg_id: number;
+            /** Overridden */
+            overridden: boolean;
+            /** Reply To */
+            reply_to: number | null;
+            /** Signal Id */
+            signal_id: number | null;
+            /** Text */
+            text: string;
+        };
+        /**
+         * SignalOut
+         * @description A signal as the channel gave it (the tip's own levels) and how it went.
+         */
+        SignalOut: {
+            /** Action */
+            action: string;
+            /** Complete */
+            complete: boolean;
+            /**
+             * Date
+             * Format: date-time
+             */
+            date: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "BULLISH" | "BEARISH";
+            /** Entry High */
+            entry_high: number;
+            /** Entry Low */
+            entry_low: number;
+            /** Id */
+            id: number;
+            /** Index */
+            index: string;
+            /** Intraday */
+            intraday: boolean;
+            /** Last Price */
+            last_price: number | null;
+            /** Message Ids */
+            message_ids: number[];
+            /** Option Type */
+            option_type: string;
+            /** Rationale */
+            rationale: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "OPEN" | "T1" | "T2" | "T3" | "SL_HIT";
+            /** Stop Loss */
+            stop_loss: number | null;
+            /** Strike */
+            strike: number;
+            /** Targets */
+            targets: number[];
+            /** Targets Done */
+            targets_done: number[];
+            /** Valid For */
+            valid_for: string | null;
+        };
         /** SignalSetupOut */
         SignalSetupOut: {
             /** Max Sources */
@@ -3348,12 +3506,22 @@ export interface components {
             id: string;
             /** Label */
             label: string | null;
+            /** Last Message At */
+            last_message_at?: string | null;
             /** Next Step */
             next_step: ("code" | "password" | "chat" | "login") | null;
             /** Phone Masked */
             phone_masked: string | null;
             /** Platform App */
             platform_app: boolean;
+            /** Reader Detail */
+            reader_detail?: string | null;
+            /**
+             * Reader State
+             * @default off
+             * @enum {string}
+             */
+            reader_state: "listening" | "connecting" | "error" | "off";
             /**
              * Status
              * @enum {string}
@@ -9771,6 +9939,243 @@ export interface operations {
             };
         };
     };
+    list_messages_v1_signal_sources__source_id__messages_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalMessageOut"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    correct_message_v1_signal_sources__source_id__messages__msg_id__kind_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+                msg_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignalKindIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalMessageOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    undo_correction_v1_signal_sources__source_id__messages__msg_id__kind_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+                msg_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalMessageOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     submit_password_v1_signal_sources__source_id__password_post: {
         parameters: {
             query?: never;
@@ -9793,6 +10198,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SignalSourceOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_signals_v1_signal_sources__source_id__signals_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalOut"][];
                 };
             };
             /** @description Bad request */

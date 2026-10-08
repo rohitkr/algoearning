@@ -26,8 +26,8 @@ LOGS="$ROOT/.data/logs"
 PREFIX=com.algoearning
 DOMAIN_ID="gui/$(id -u)"
 # start order; stop runs it backwards so the database goes last
-SERVICES=(postgres redis api web feed worker engine tunnel awake)
-APP_SERVICES=(api web feed worker) # what `deploy` restarts (the engine only on request: it steps live strategies)
+SERVICES=(postgres redis api web feed worker signals engine tunnel awake)
+APP_SERVICES=(api web feed worker signals) # what `deploy` restarts (the engine only on request: it steps live strategies)
 
 bold=$'\033[1m'; red=$'\033[31m'; green=$'\033[32m'; yellow=$'\033[33m'; blue=$'\033[34m'; reset=$'\033[0m'
 step() { echo "${bold}${blue}==>${reset} ${bold}$*${reset}"; }

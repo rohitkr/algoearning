@@ -26,6 +26,9 @@ const base: SignalSource = {
   chat_kind: null,
   connected_at: null,
   created_at: "2026-10-08T10:00:00Z",
+  reader_state: "off",
+  reader_detail: null,
+  last_message_at: null,
 };
 
 type Call = { method: string; path: string; body: unknown };

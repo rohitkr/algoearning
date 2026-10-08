@@ -2,7 +2,7 @@
 # One production service, run by launchd (installed by scripts/home-host.sh; ADR 0019). launchd restarts it when it
 # exits, so every branch ends in `exec` and never daemonizes. For development use `make dev` instead.
 #
-#   scripts/home-service.sh postgres|redis|api|web|feed|worker|engine|tunnel|awake
+#   scripts/home-service.sh postgres|redis|api|web|feed|worker|signals|engine|tunnel|awake
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export LC_ALL="${LC_ALL:-en_US.UTF-8}" LANG="${LANG:-en_US.UTF-8}" # postgres refuses to start without a locale
@@ -42,6 +42,10 @@ case "${1:-}" in
   worker)
     wait_for_db
     exec uv run "${ENV_FILES[@]}" python -m ae_worker ;;
+  signals)
+    # the Telegram signal reader (ADR 0025): reads users' tips chats, read-only
+    wait_for_db
+    exec uv run "${ENV_FILES[@]}" python -m ae_signals ;;
   engine)
     wait_for_db
     exec uv run "${ENV_FILES[@]}" python -m ae_engine ;;
@@ -50,6 +54,6 @@ case "${1:-}" in
   awake)
     exec caffeinate -i -s ;; # no idle or system sleep while this runs (the lid may still be closed on power)
   *)
-    echo "usage: $0 postgres|redis|api|web|feed|worker|engine|tunnel|awake" >&2
+    echo "usage: $0 postgres|redis|api|web|feed|worker|signals|engine|tunnel|awake" >&2
     exit 2 ;;
 esac
