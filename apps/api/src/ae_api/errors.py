@@ -71,6 +71,12 @@ class Conflict(AppError):
     status, code = 409, "conflict"
 
 
+class TooManyRequests(AppError):
+    """An upstream service (e.g. Telegram's flood wait) asks to wait; details carry retry_after seconds."""
+
+    status, code = 429, "rate_limited"
+
+
 class Unavailable(AppError):
     status, code = 503, "unavailable"
 

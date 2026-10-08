@@ -84,3 +84,13 @@ class SecretBox:
 def mask(value: str, visible: int = 4) -> str:
     """For display: '••••' + last few characters (nothing at all for short values)."""
     return "••••" + value[-visible:] if len(value) > visible * 2 else "••••"
+
+
+def mask_phone(phone: str) -> str:
+    """For display: '+91 98•••••210' (country code, the first two and last three digits)."""
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if len(digits) < 8:
+        return "••••"
+    cc_len = len(digits) - 10 if len(digits) > 10 else 0
+    cc, rest = digits[:cc_len], digits[cc_len:]
+    return f"{'+' + cc + ' ' if cc else ''}{rest[:2]}{'•' * (len(rest) - 5)}{rest[-3:]}"

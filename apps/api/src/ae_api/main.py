@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from ae_brokers.registry import default_adapters
 from ae_core.secrets import SecretBox, load_master_key
 from ae_db.session import Database
+from ae_telegram import TelethonGateway
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
@@ -36,6 +37,7 @@ from .routers import (
     plans,
     reports,
     runs,
+    signal_sources,
     strategies,
     webhooks,
 )
@@ -91,6 +93,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         SecretBox({1: load_master_key(settings.app_encryption_key)}, 1) if settings.app_encryption_key else None
     )
     app.state.brokers = default_adapters()
+    app.state.telegram = TelethonGateway()
     app.state.payments = (
         RazorpayClient(settings.razorpay_key_id, settings.razorpay_key_secret)
         if settings.razorpay_key_id and settings.razorpay_key_secret
@@ -120,6 +123,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         reports.router,
         billing.router,
         brokers.router,
+        signal_sources.router,
         webhooks.router,
         admin.router,
     ):

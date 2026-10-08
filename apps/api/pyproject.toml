@@ -15,6 +15,7 @@ dependencies = [
     "ae-core",
     "ae-brokers",
     "ae-marketdata",
+    "ae-telegram",
 ]
 
 [build-system]
@@ -29,3 +30,4 @@ ae-db = { workspace = true }
 ae-core = { workspace = true }
 ae-brokers = { workspace = true }
 ae-marketdata = { workspace = true }
+ae-telegram = { workspace = true }

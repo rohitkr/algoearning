@@ -300,6 +300,71 @@ class BrokerAccountOut(BaseModel):
     created_at: datetime
 
 
+# -- signal sources (ADR 0025) ----------------------------------------------------------------------------------
+SignalSourceStatus = Literal[
+    "code_sent", "password_needed", "connected", "flood_wait", "needs_reconnect", "disconnected"
+]
+
+
+class SignalSourceOut(BaseModel):
+    """Never contains a secret: the phone masked, the API hash and the Telegram session not at all."""
+
+    id: uuid.UUID
+    label: str | None
+    status: SignalSourceStatus
+    status_detail: str | None
+    next_step: Literal["code", "password", "chat", "login"] | None  # what the user does next, if anything
+    flood_until: datetime | None
+    phone_masked: str | None
+    api_id: int | None
+    platform_app: bool  # the platform's Telegram app, not the user's own
+    account_name: str | None
+    chat_id: int | None
+    chat_title: str | None
+    chat_kind: str | None
+    connected_at: datetime | None
+    created_at: datetime
+
+
+class SignalSourceLoginIn(BaseModel):
+    """Start (or restart) the Telegram login. Without api_id / api_hash the platform's app is used; on an existing
+    source an empty phone means the one stored."""
+
+    model_config = ConfigDict(extra="forbid")
+    label: str | None = Field(default=None, max_length=80)
+    phone: str | None = Field(default=None, pattern=r"^\+?[0-9 ()-]{7,20}$")
+    api_id: int | None = Field(default=None, gt=0, lt=2**31)
+    api_hash: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{32}$")
+
+
+class SignalSourceCodeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: str = Field(pattern=r"^[0-9 -]{3,12}$")
+
+
+class SignalSourcePasswordIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    password: str = Field(min_length=1, max_length=256)
+
+
+class SignalSourceChatIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    chat_id: int
+
+
+class TelegramChatOut(BaseModel):
+    id: int
+    title: str
+    kind: Literal["channel", "group"]
+    username: str | None
+
+
+class SignalSetupOut(BaseModel):
+    platform_app: bool  # the platform offers its own Telegram app (no my.telegram.org step for the user)
+    max_sources: int | None
+    used: int
+
+
 class BrokerLoginOut(BaseModel):
     login_url: str
 

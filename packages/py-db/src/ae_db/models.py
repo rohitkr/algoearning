@@ -234,6 +234,31 @@ class BrokerAccount(UUIDPk, Timestamps, Base):
     __table_args__ = (UniqueConstraint("user_id", "broker", "client_id"),)
 
 
+class SignalSource(UUIDPk, Timestamps, Base):
+    """A user's Telegram login and the one chat it reads tips from (ADR 0025). The session, API hash and phone are
+    ciphertext (SecretBox, authenticated data `signal_source:<id>:<field>`) and never leave the server; `login_state`
+    holds the code request's hash between the login steps. api_hash_enc is empty when the platform's own Telegram
+    app is used. status: code_sent | password_needed | connected | flood_wait | needs_reconnect | disconnected."""
+
+    __tablename__ = "signal_sources"
+    user_id: Mapped[uuid.UUID] = owner()
+    label: Mapped[str | None] = mapped_column(String(80))
+    api_id: Mapped[int | None] = mapped_column(Integer)  # None: the platform's app
+    api_hash_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
+    phone_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
+    session_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
+    login_state_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
+    key_version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(20), default="code_sent")
+    status_detail: Mapped[str | None] = mapped_column(String(300))
+    flood_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    account_name: Mapped[str | None] = mapped_column(String(120))  # the Telegram account that logged in
+    chat_id: Mapped[int | None] = mapped_column(BigInteger)
+    chat_title: Mapped[str | None] = mapped_column(String(200))
+    chat_kind: Mapped[str | None] = mapped_column(String(10))  # channel | group
+    connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class BrokerSession(UUIDPk, Base):
     """The broker's daily access token for one account (ciphertext), replaced on every login."""
 

@@ -1,7 +1,7 @@
 # 0025 Signal sources: reading a Telegram tips channel and trading its direction
 
-Status: Proposed (plan approved phase by phase: A connect, B ingest + understand, C1 trade on paper, C2 approve /
-live / replay).
+Status: Accepted, built phase by phase: A connect (done), B ingest + understand, C1 trade on paper, C2 approve /
+live / replay.
 
 **Context.** Users follow Telegram tips channels and want the platform to act on them without copying trades by hand.
 The first channel ("Nifty Sensex VIP setups", 500 messages studied, 7 Sep - 8 Oct 2026) posts a signal as two
@@ -54,7 +54,10 @@ catch-up + live feed, a signals page. It is ported, not rewritten.
    other strategy. Every step is a `trade_event`: signal received, mapped legs, risk result, orders, and every skip
    with its reason. Advisories never trade on their own.
 7. **Replay:** a backtest of a signal strategy runs over the source's stored signals with historical prices (ADR
-   0017), so a user sees how "sell the opposite side" would have done before going live.
+   0017), so a user sees how "sell the opposite side" would have done before going live. The replay never fills at the
+   tip's entry range (the price had often moved by the time the message was posted): it enters our own legs at the
+   market price of the minute after the message, with the usual slippage and charges; the tip's entry, SL and
+   targets are shown beside it, and "follow the tip" reports how far the fill was from the tip's entry.
 8. **Data and plans:** tables `signal_sources`, `signal_messages`, `signals`, `signal_overrides` (phase C2:
    `signal_approvals`) are user-owned with row-level security like every user table; entitlements
    `max_signal_sources` (limit) and `signal_trading` (flag). Nothing of one user's source is shared with another.

@@ -41,6 +41,8 @@ FEATURES: dict[str, Feature] = {
         Feature("max_running_strategies", "limit", "Strategies running at once", 1),
         Feature("max_broker_accounts", "limit", "Broker accounts", 1),
         Feature("max_lots_per_order", "limit", "Lots per order", 1),
+        Feature("max_signal_sources", "limit", "Telegram signal sources", 1),
+        Feature("signal_trading", "flag", "Live trading on Telegram signals", False),
     )
 }
 

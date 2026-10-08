@@ -16,7 +16,18 @@ from sqlalchemy import ColumnElement, Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .enums import RunStatus, UserStatus
-from .models import AuditLog, BrokerAccount, Instrument, Plan, Strategy, StrategyRun, Subscription, User, UserOverride
+from .models import (
+    AuditLog,
+    BrokerAccount,
+    Instrument,
+    Plan,
+    SignalSource,
+    Strategy,
+    StrategyRun,
+    Subscription,
+    User,
+    UserOverride,
+)
 from .pagination import Page, clamp_limit, decode_cursor, encode_cursor
 
 M = TypeVar("M", Strategy, BrokerAccount)
@@ -211,6 +222,9 @@ class UsageRepo:
 
     async def broker_accounts(self) -> int:
         return await self._count(select(BrokerAccount.id).where(BrokerAccount.user_id == self.user_id))
+
+    async def signal_sources(self) -> int:
+        return await self._count(select(SignalSource.id).where(SignalSource.user_id == self.user_id))
 
     async def subscriptions(self) -> list[Subscription]:
         q = select(Subscription).where(Subscription.user_id == self.user_id)

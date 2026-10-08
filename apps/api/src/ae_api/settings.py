@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     kite_feed_api_key: str | None = None  # the platform Kite app (not a user's): Monitor's login link
     kite_feed_api_secret: str | None = Field(default=None, repr=False)  # turns its login into the day's session
     kite_feed_client_id: str | None = None  # optional: the Zerodha account the platform feed must log in with
+    # the platform's own Telegram app (my.telegram.org), offered to users who do not bring one (ADR 0025)
+    telegram_api_id: int | None = None
+    telegram_api_hash: str | None = Field(default=None, repr=False)
     registration_open: bool = True
 
     @property

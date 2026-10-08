@@ -43,6 +43,7 @@ async def load_entitlements(
         "max_strategies": await usage.strategies(),
         "max_running_strategies": await usage.running_strategies(),
         "max_broker_accounts": await usage.broker_accounts(),
+        "max_signal_sources": await usage.signal_sources(),
     }
     overrides = await usage.overrides()
     features = effective_features(plan.features, overrides)
