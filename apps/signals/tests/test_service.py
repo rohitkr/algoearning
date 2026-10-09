@@ -46,7 +46,7 @@ class FakeReader:
         if FakeReader.fail:
             raise FakeReader.fail
 
-    async def recent(self, limit: int) -> list[Message]:
+    async def recent(self, limit: int, since: datetime | None = None) -> list[Message]:
         return list(reversed(FakeReader.history))  # Telegram gives newest first
 
     async def listen(self, on_message: Callable[[Message], Awaitable[None]]) -> None:

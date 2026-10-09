@@ -356,6 +356,53 @@ class SignalOut(BaseModel):
     message_ids: list[int]
 
 
+class TipFillOut(BaseModel):
+    time: datetime
+    price: float
+    qty: int
+    reason: str  # TARGET 1..3 / STOP LOSS / END OF DAY
+
+
+class TipTradeOut(BaseModel):
+    """One tip replayed exactly as given (ADR 0025): what the tip said, what the price did, what the follower got."""
+
+    signal_id: int
+    date: datetime
+    tip: str  # "BUY NIFTY 22450 CE"
+    direction: Literal["BULLISH", "BEARISH"]
+    entry_low: float
+    entry_high: float
+    stop_loss: float | None
+    targets: list[float]
+    channel_status: Literal["OPEN", "T1", "T2", "T3", "SL_HIT"]  # what the channel itself reported
+    entry: Literal["IN_ZONE", "CHASED", "NOT_PLACED", "NO_DATA"]
+    note: str
+    expiry: date | None  # inferred: the tip never names one
+    price_at_signal: float | None
+    above_zone: float | None  # premium points over the top of the range
+    buffer: float | None
+    entry_time: datetime | None
+    entry_price: float | None
+    qty: int
+    exits: list[TipFillOut]
+    gross: float
+    charges: float
+    net: float
+
+
+class TipReplayOut(BaseModel):
+    start: date
+    end: date
+    lots: int
+    lot_sizes: dict[str, int]
+    buffers: dict[str, float]
+    slippage_pct: float
+    summary: dict[str, Any]
+    daily: list[dict[str, Any]]
+    trades: list[TipTradeOut]  # newest first
+    warnings: list[str]
+
+
 class SignalMessageOut(BaseModel):
     """A chat message exactly as received, and how it was read."""
 

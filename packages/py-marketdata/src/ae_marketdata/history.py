@@ -84,6 +84,39 @@ async def load_history(db: Database, underlying: str, start: date, end: date) ->
     return h
 
 
+async def load_tip_prices(db: Database, tips: Iterable[tuple[str, date, Iterable[tuple[int, str]]]]) -> MemoryHistory:
+    """Just the option bars a tip replay needs (ADR 0025): for each (underlying, day, strikes with CE/PE) the contracts
+    of the next few expiries on that day, plus every expiry in the data (the tip never names one)."""
+    h = MemoryHistory()
+    hc = HistoryCandle
+    async with db.system_session() as s:
+        seen: set[str] = set()
+        for underlying, day, contracts in tips:
+            if underlying not in seen:
+                seen.add(underlying)
+                rows = await s.execute(
+                    text("SELECT DISTINCT split_part(key, ':', 2) FROM history_candles WHERE key LIKE :p"),
+                    {"p": f"{underlying}:%"},
+                )
+                h._exp[underlying] = {date.fromisoformat(e) for (e,) in rows}
+            expiries = sorted(e for e in h._exp[underlying] if e >= day)[:3]
+            keys = [f"{underlying}:{e.isoformat()}:{strike}:{typ}" for e in expiries for strike, typ in contracts]
+            if not keys:
+                continue
+            lo = datetime.combine(day, time(0), tzinfo=IST)
+            q = (
+                select(hc.key, hc.ts, hc.open, hc.high, hc.low, hc.close, hc.volume)
+                .where(hc.key.in_(keys), hc.ts >= lo, hc.ts < lo + timedelta(days=1))
+                .order_by(hc.key, hc.ts)
+            )
+            by_key: dict[str, list[Candle]] = {}
+            for key, ts, o, hi_, lo_, c, v in (await s.execute(q)).all():
+                by_key.setdefault(key, []).append(Candle(_ist(ts), o, hi_, lo_, c, v or 0))
+            for key, candles in by_key.items():
+                h.add_option(key, candles)
+    return h
+
+
 async def coverage(db: Database) -> list[Coverage]:
     async with db.system_session() as s:
         idx = {

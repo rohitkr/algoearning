@@ -7275,6 +7275,306 @@
         "title": "Timing",
         "type": "object"
       },
+      "TipFillOut": {
+        "properties": {
+          "price": {
+            "title": "Price",
+            "type": "number"
+          },
+          "qty": {
+            "title": "Qty",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "time": {
+            "format": "date-time",
+            "title": "Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time",
+          "price",
+          "qty",
+          "reason"
+        ],
+        "title": "TipFillOut",
+        "type": "object"
+      },
+      "TipReplayOut": {
+        "properties": {
+          "buffers": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Buffers",
+            "type": "object"
+          },
+          "daily": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Daily",
+            "type": "array"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "lot_sizes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Lot Sizes",
+            "type": "object"
+          },
+          "lots": {
+            "title": "Lots",
+            "type": "integer"
+          },
+          "slippage_pct": {
+            "title": "Slippage Pct",
+            "type": "number"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "title": "Summary",
+            "type": "object"
+          },
+          "trades": {
+            "items": {
+              "$ref": "#/components/schemas/TipTradeOut"
+            },
+            "title": "Trades",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "lots",
+          "lot_sizes",
+          "buffers",
+          "slippage_pct",
+          "summary",
+          "daily",
+          "trades",
+          "warnings"
+        ],
+        "title": "TipReplayOut",
+        "type": "object"
+      },
+      "TipTradeOut": {
+        "description": "One tip replayed exactly as given (ADR 0025): what the tip said, what the price did, what the follower got.",
+        "properties": {
+          "above_zone": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Above Zone"
+          },
+          "buffer": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buffer"
+          },
+          "channel_status": {
+            "enum": [
+              "OPEN",
+              "T1",
+              "T2",
+              "T3",
+              "SL_HIT"
+            ],
+            "title": "Channel Status",
+            "type": "string"
+          },
+          "charges": {
+            "title": "Charges",
+            "type": "number"
+          },
+          "date": {
+            "format": "date-time",
+            "title": "Date",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "BULLISH",
+              "BEARISH"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "entry": {
+            "enum": [
+              "IN_ZONE",
+              "CHASED",
+              "NOT_PLACED",
+              "NO_DATA"
+            ],
+            "title": "Entry",
+            "type": "string"
+          },
+          "entry_high": {
+            "title": "Entry High",
+            "type": "number"
+          },
+          "entry_low": {
+            "title": "Entry Low",
+            "type": "number"
+          },
+          "entry_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Price"
+          },
+          "entry_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Time"
+          },
+          "exits": {
+            "items": {
+              "$ref": "#/components/schemas/TipFillOut"
+            },
+            "title": "Exits",
+            "type": "array"
+          },
+          "expiry": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry"
+          },
+          "gross": {
+            "title": "Gross",
+            "type": "number"
+          },
+          "net": {
+            "title": "Net",
+            "type": "number"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "price_at_signal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price At Signal"
+          },
+          "qty": {
+            "title": "Qty",
+            "type": "integer"
+          },
+          "signal_id": {
+            "title": "Signal Id",
+            "type": "integer"
+          },
+          "stop_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Loss"
+          },
+          "targets": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Targets",
+            "type": "array"
+          },
+          "tip": {
+            "title": "Tip",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal_id",
+          "date",
+          "tip",
+          "direction",
+          "entry_low",
+          "entry_high",
+          "stop_loss",
+          "targets",
+          "channel_status",
+          "entry",
+          "note",
+          "expiry",
+          "price_at_signal",
+          "above_zone",
+          "buffer",
+          "entry_time",
+          "entry_price",
+          "qty",
+          "exits",
+          "gross",
+          "charges",
+          "net"
+        ],
+        "title": "TipTradeOut",
+        "type": "object"
+      },
       "TradeRow": {
         "properties": {
           "entry_price": {
@@ -15318,6 +15618,176 @@
           }
         },
         "summary": "Submit Password",
+        "tags": [
+          "signal-sources"
+        ]
+      }
+    },
+    "/v1/signal-sources/{source_id}/replay": {
+      "get": {
+        "description": "Every stored tip of the source between `start` and `end`, bought exactly as the tip says over stored history\n(ae_core.tip_replay): entry marked in the range / chased within the buffer / not placed, stop-loss and targets\nby minute, the rest out at 15:15. Computed on request; nothing is stored.",
+        "operationId": "replay_tips_v1_signal_sources__source_id__replay_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "default": "2026-07-09",
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lots",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Lots",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "slippage_pct",
+            "required": false,
+            "schema": {
+              "default": 0.05,
+              "maximum": 5,
+              "minimum": 0,
+              "title": "Slippage Pct",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "nifty_buffer",
+            "required": false,
+            "schema": {
+              "default": 5.0,
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Nifty Buffer",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sensex_buffer",
+            "required": false,
+            "schema": {
+              "default": 10.0,
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Sensex Buffer",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipReplayOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Replay Tips",
         "tags": [
           "signal-sources"
         ]

@@ -15,7 +15,7 @@ import json
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Protocol
 
 import structlog
@@ -31,6 +31,9 @@ from sqlalchemy import select, update
 log = structlog.get_logger("ae_signals")
 
 CATCH_UP = 200  # messages re-read when a reader starts, to fill anything missed while it was down
+# Every start also re-reads the chat from here (saving what is already stored changes nothing): the first tip of the
+# channel studied for the replay (ADR 0025) came on 9 July 2026, so history back to then is always complete.
+BACKFILL_FROM = datetime(2026, 7, 9, tzinfo=timezone(timedelta(hours=5, minutes=30)))
 LIVE_WINDOW = timedelta(days=3)  # signals rebuilt on each new message (tips are intraday)
 SYNC_S = 5
 RETRY_S = (5, 15, 30, 60, 120, 300)
@@ -39,7 +42,7 @@ CHANNEL = "signals"
 
 class Reader(Protocol):
     async def start(self, chat_id: int) -> None: ...
-    async def recent(self, limit: int) -> list[TgMessage]: ...
+    async def recent(self, limit: int, since: datetime | None = None) -> list[TgMessage]: ...
     async def listen(self, on_message: Callable[[TgMessage], Awaitable[Any]]) -> None: ...
     async def close(self) -> None: ...
 
@@ -139,7 +142,7 @@ class SignalsService:
             try:
                 await self._set(plan.source_id, reader_state="connecting", reader_detail=None)
                 await reader.start(plan.chat_id)
-                await self.store(plan, await reader.recent(CATCH_UP), since=None)
+                await self.store(plan, await reader.recent(CATCH_UP, since=BACKFILL_FROM), since=None)
                 await self._set(plan.source_id, reader_state="listening", reader_detail=None)
                 attempt = 0
                 await reader.listen(lambda m: self.store(plan, [m], since=datetime.now(UTC) - LIVE_WINDOW))

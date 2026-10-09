@@ -82,3 +82,15 @@ signals page and the strategy builder show "signals come from a third party; you
 masking and an easy disconnect are the mitigation, and the risk is stated where the user connects. Telethon becomes a
 dependency of the API (login) and the new `ae_signals` process. A channel changing its format degrades to UNCLEAR
 (nothing trades) until its profile is updated; raw history lets it be re-read.
+
+**Replay as given (built).** `GET /v1/signal-sources/{id}/replay` (plan flag `backtesting`; computed on request, nothing
+stored; shown in the Signals tab under the chat) replays every stored tip since the channel's first one (9 July 2026)
+over `history_candles` with `ae_core.tip_replay`: the tip's own option is bought, with the tip's own stop-loss and
+targets, one third of the lots per target, the rest out at 15:15. This is the "follow the tip as given" replay; the
+rules-engine replay of point 7 (our own legs) is separate and still to come. Entry: the first price a follower could
+get is the open of the minute after the message. In or below the entry range -> bought, marked in range; above it by
+no more than the buffer (5 premium points NIFTY, 10 SENSEX, adjustable) -> bought and marked chased; above that, or at
+or under the stop-loss -> no order, with the reason; no prices / no stop-loss -> no data. The tip names no expiry, so
+the expiry priced closest to the tip's entry range (of the next three) is used and shown as inferred. A minute that
+reached both stop and target counts as the stop; gaps fill at the open; stop-loss and the end-of-day exit take
+slippage, targets are limit fills. The reader backfills the chat from 9 July on every start so the history is complete.

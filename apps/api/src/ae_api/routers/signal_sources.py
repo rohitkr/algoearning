@@ -9,17 +9,21 @@ until it is deleted."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 import structlog
 from ae_core.secrets import SecretBox, mask_phone
 from ae_core.signals import Message, assemble
-from ae_db.models import SignalMessage, SignalOverride, SignalRow, SignalSource
+from ae_core.tip_replay import BUFFER, ReplayParams, Tip, replay
+from ae_core.trading.model import IST
+from ae_db.models import Instrument, SignalMessage, SignalOverride, SignalRow, SignalSource
 from ae_db.session import Database
 from ae_db.signal_store import load_messages, load_overrides, rebuild
+from ae_marketdata.history import load_tip_prices
 from ae_telegram import (
     Chat,
     CodeExpired,
@@ -37,8 +41,8 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import audit
-from ..deps import CurrentUser, UserSession, get_db
-from ..entitlements import load_entitlements, require_within
+from ..deps import CurrentUser, DbDep, UserSession, get_db
+from ..entitlements import load_entitlements, require_feature, require_within
 from ..errors import AppError, Conflict, NotFound, TooManyRequests, Unavailable
 from ..schemas import (
     ERROR_RESPONSES,
@@ -52,6 +56,9 @@ from ..schemas import (
     SignalSourceOut,
     SignalSourcePasswordIn,
     TelegramChatOut,
+    TipFillOut,
+    TipReplayOut,
+    TipTradeOut,
 )
 from ..settings import Settings, SettingsDep
 
@@ -430,6 +437,91 @@ async def list_signals(
         )
         for r in (await s.execute(q)).scalars()
     ]
+
+
+FIRST_TIP = date(2026, 7, 9)  # the channel's first trade message
+
+
+@router.get("/signal-sources/{source_id}/replay", response_model=TipReplayOut)
+async def replay_tips(
+    source_id: uuid.UUID,
+    user: CurrentUser,
+    s: UserSession,
+    db: DbDep,
+    settings: SettingsDep,
+    start: date = FIRST_TIP,
+    end: date | None = None,
+    lots: Annotated[int, Query(ge=1, le=100)] = 3,
+    slippage_pct: Annotated[float, Query(ge=0, le=5)] = 0.05,
+    nifty_buffer: Annotated[float, Query(ge=0, le=100)] = BUFFER["NIFTY"],
+    sensex_buffer: Annotated[float, Query(ge=0, le=100)] = BUFFER["SENSEX"],
+) -> TipReplayOut:
+    """Every stored tip of the source between `start` and `end`, bought exactly as the tip says over stored history
+    (ae_core.tip_replay): entry marked in the range / chased within the buffer / not placed, stop-loss and targets
+    by minute, the rest out at 15:15. Computed on request; nothing is stored."""
+    await _own(s, user.user_id, source_id)
+    ent = await load_entitlements(s, user.user_id, timedelta(days=settings.subscription_grace_days))
+    require_feature(ent, "backtesting")
+    end = end or datetime.now(IST).date()
+    if start > end:
+        raise AppError("the start date must not be after the end date")
+    lo = datetime.combine(start, datetime.min.time(), tzinfo=IST)
+    hi = datetime.combine(end + timedelta(days=1), datetime.min.time(), tzinfo=IST)
+    rows = (
+        await s.execute(
+            select(SignalRow)
+            .where(SignalRow.source_id == source_id, SignalRow.date >= lo, SignalRow.date < hi)
+            .order_by(SignalRow.date, SignalRow.header_msg_id)
+        )
+    ).scalars().all()  # fmt: skip
+    tips = [
+        Tip(r.header_msg_id, r.date, r.index, r.strike, r.option_type, r.action, r.entry_low, r.entry_high,
+            r.stop_loss, list(r.targets), r.status)
+        for r in rows
+    ]  # fmt: skip
+    insts = {
+        i.code: i.lot_size
+        for i in (await s.execute(select(Instrument).where(Instrument.code.in_(("NIFTY", "SENSEX"))))).scalars()
+    }
+    wanted: dict[tuple[str, date], set[tuple[int, str]]] = {}
+    for t in tips:
+        wanted.setdefault((t.index, t.date.astimezone(IST).date()), set()).add((t.strike, t.option_type))
+    prices = await load_tip_prices(db, ((u, d, c) for (u, d), c in wanted.items()))
+    params = ReplayParams(
+        lots=lots,
+        lot_sizes=insts,
+        slippage_pct=slippage_pct,
+        buffer={"NIFTY": nifty_buffer, "SENSEX": sensex_buffer},
+    )
+    result = await asyncio.to_thread(replay, tips, prices, params)
+    by_id = {r.header_msg_id: r for r in rows}
+    trades = [
+        TipTradeOut(
+            signal_id=r.tip.id, date=r.tip.date, tip=f"{r.tip.action} {r.tip.index} {r.tip.strike} {r.tip.option_type}",
+            direction=by_id[r.tip.id].direction, entry_low=r.tip.entry_low, entry_high=r.tip.entry_high,
+            stop_loss=r.tip.stop_loss, targets=list(r.tip.targets), channel_status=by_id[r.tip.id].status,
+            entry=r.entry, note=r.note, expiry=r.expiry, price_at_signal=r.price_at_signal,
+            above_zone=r.above_zone, buffer=r.buffer, entry_time=r.entry_time, entry_price=r.entry_price,
+            qty=r.qty, exits=[TipFillOut(time=f.time, price=f.price, qty=f.qty, reason=f.reason) for f in r.exits],
+            gross=r.gross, charges=r.charges, net=r.net,
+        )
+        for r in reversed(result.results)
+    ]  # fmt: skip
+    warnings = [
+        f"Quantities use today's lot sizes ({', '.join(f'{k} {v}' for k, v in sorted(insts.items()))}); older "
+        "periods traded other sizes.",
+        "Expiries are inferred (a tip never names one): the expiry priced closest to the tip's entry range.",
+        "History holds trades, not quotes: fills at a bar's open have no bid/ask spread.",
+    ]
+    no_data = sum(1 for r in result.results if r.entry == "NO_DATA")
+    if no_data:
+        warnings.insert(0, f"{no_data} tip(s) could not be replayed: no stored prices or no stop-loss/targets.")
+    if not tips:
+        warnings.insert(0, "No tips are stored for this period yet: the reader loads the chat from 9 July on start.")
+    return TipReplayOut(
+        start=start, end=end, lots=lots, lot_sizes=insts, buffers=params.buffer, slippage_pct=slippage_pct,
+        summary=result.summary(), daily=result.daily(), trades=trades, warnings=warnings,
+    )  # fmt: skip
 
 
 @router.get("/signal-sources/{source_id}/messages", response_model=list[SignalMessageOut])

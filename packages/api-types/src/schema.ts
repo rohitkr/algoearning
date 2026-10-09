@@ -1256,6 +1256,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/signal-sources/{source_id}/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Replay Tips
+         * @description Every stored tip of the source between `start` and `end`, bought exactly as the tip says over stored history
+         *     (ae_core.tip_replay): entry marked in the range / chased within the buffer / not placed, stop-loss and targets
+         *     by minute, the rest out at 15:15. Computed on request; nothing is stored.
+         */
+        get: operations["replay_tips_v1_signal_sources__source_id__replay_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/signal-sources/{source_id}/signals": {
         parameters: {
             query?: never;
@@ -4119,6 +4141,119 @@ export interface components {
              * @default 15:15
              */
             exit: string;
+        };
+        /** TipFillOut */
+        TipFillOut: {
+            /** Price */
+            price: number;
+            /** Qty */
+            qty: number;
+            /** Reason */
+            reason: string;
+            /**
+             * Time
+             * Format: date-time
+             */
+            time: string;
+        };
+        /** TipReplayOut */
+        TipReplayOut: {
+            /** Buffers */
+            buffers: {
+                [key: string]: number;
+            };
+            /** Daily */
+            daily: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Lot Sizes */
+            lot_sizes: {
+                [key: string]: number;
+            };
+            /** Lots */
+            lots: number;
+            /** Slippage Pct */
+            slippage_pct: number;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            };
+            /** Trades */
+            trades: components["schemas"]["TipTradeOut"][];
+            /** Warnings */
+            warnings: string[];
+        };
+        /**
+         * TipTradeOut
+         * @description One tip replayed exactly as given (ADR 0025): what the tip said, what the price did, what the follower got.
+         */
+        TipTradeOut: {
+            /** Above Zone */
+            above_zone: number | null;
+            /** Buffer */
+            buffer: number | null;
+            /**
+             * Channel Status
+             * @enum {string}
+             */
+            channel_status: "OPEN" | "T1" | "T2" | "T3" | "SL_HIT";
+            /** Charges */
+            charges: number;
+            /**
+             * Date
+             * Format: date-time
+             */
+            date: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "BULLISH" | "BEARISH";
+            /**
+             * Entry
+             * @enum {string}
+             */
+            entry: "IN_ZONE" | "CHASED" | "NOT_PLACED" | "NO_DATA";
+            /** Entry High */
+            entry_high: number;
+            /** Entry Low */
+            entry_low: number;
+            /** Entry Price */
+            entry_price: number | null;
+            /** Entry Time */
+            entry_time: string | null;
+            /** Exits */
+            exits: components["schemas"]["TipFillOut"][];
+            /** Expiry */
+            expiry: string | null;
+            /** Gross */
+            gross: number;
+            /** Net */
+            net: number;
+            /** Note */
+            note: string;
+            /** Price At Signal */
+            price_at_signal: number | null;
+            /** Qty */
+            qty: number;
+            /** Signal Id */
+            signal_id: number;
+            /** Stop Loss */
+            stop_loss: number | null;
+            /** Targets */
+            targets: number[];
+            /** Tip */
+            tip: string;
         };
         /** TradeRow */
         TradeRow: {
@@ -10211,6 +10346,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SignalSourceOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    replay_tips_v1_signal_sources__source_id__replay_get: {
+        parameters: {
+            query?: {
+                start?: string;
+                end?: string | null;
+                lots?: number;
+                slippage_pct?: number;
+                nifty_buffer?: number;
+                sensex_buffer?: number;
+            };
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipReplayOut"];
                 };
             };
             /** @description Bad request */

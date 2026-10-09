@@ -291,9 +291,15 @@ class TelegramReader:
             raise SessionInvalid("the Telegram session is no longer valid: reconnect Telegram")
         self._entity = await self._guard(self._client.get_entity(chat_id))
 
-    async def recent(self, limit: int) -> list[Message]:
+    async def recent(self, limit: int, since: datetime | None = None) -> list[Message]:
+        """The newest `limit` messages; with `since`, every message from that moment on instead (oldest first)."""
+
         async def go() -> list[Message]:
-            return [to_message(m) async for m in self._client.iter_messages(self._entity, limit=limit)]
+            if since is not None:
+                it = self._client.iter_messages(self._entity, limit=None, offset_date=since, reverse=True)
+            else:
+                it = self._client.iter_messages(self._entity, limit=limit)
+            return [to_message(m) async for m in it]
 
         result: list[Message] = await self._guard(go())
         return result

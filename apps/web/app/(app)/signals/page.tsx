@@ -2,6 +2,7 @@ import type { SignalSetup, SignalSource } from "@algoearning/api-types";
 import { StatusPill } from "@algoearning/ui";
 
 import { SignalFeed } from "@/components/signals/signal-feed";
+import { TipReplayView } from "@/components/signals/tip-replay";
 import { SignalSources } from "@/components/signals/signal-sources";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
@@ -29,7 +30,10 @@ export default async function SignalsPage() {
           {sources.data
             .filter((s) => s.chat_id !== null)
             .map((s) => (
-              <SignalFeed key={s.id} source={s} />
+              <div key={s.id} className="flex flex-col gap-4">
+                <SignalFeed source={s} />
+                <TipReplayView source={s} />
+              </div>
             ))}
           <SignalSources sources={sources.data} setup={setup.data} />
         </>
