@@ -142,7 +142,7 @@ class SignalsService:
             try:
                 await self._set(plan.source_id, reader_state="connecting", reader_detail=None)
                 await reader.start(plan.chat_id)
-                await self.store(plan, await reader.recent(CATCH_UP, since=BACKFILL_FROM), since=None)
+                await self.store(plan, await reader.recent(CATCH_UP, since=BACKFILL_FROM), since=None, force=True)
                 await self._set(plan.source_id, reader_state="listening", reader_detail=None)
                 attempt = 0
                 await reader.listen(lambda m: self.store(plan, [m], since=datetime.now(UTC) - LIVE_WINDOW))
@@ -171,9 +171,10 @@ class SignalsService:
             finally:
                 await reader.close()
 
-    async def store(self, plan: Plan, messages: list[TgMessage], since: datetime | None) -> int:
-        """Store messages (new or edited) and, if anything changed, rebuild the source's signals."""
-        if not messages:
+    async def store(self, plan: Plan, messages: list[TgMessage], since: datetime | None, force: bool = False) -> int:
+        """Store messages (new or edited) and, if anything changed, rebuild the source's signals. `force` rebuilds
+        even when nothing changed: at reader start, so a better parser re-reads messages stored earlier."""
+        if not messages and not force:
             return 0
         msgs = [Message(m.id, m.date, m.text, m.reply_to, m.has_media) for m in messages]
         async with self.db.system_session() as s:
@@ -181,10 +182,10 @@ class SignalsService:
             if src is None:
                 return 0
             changed = await save_messages(s, src, msgs, {m.id: m.edit_date for m in messages})
-            if changed:
+            if changed or force:
                 signals = await rebuild(s, src, since)
-                newest = max(m.date for m in msgs)
-                if src.last_message_at is None or newest > src.last_message_at:
+                newest = max((m.date for m in msgs), default=None)
+                if newest and (src.last_message_at is None or newest > src.last_message_at):
                     src.last_message_at = newest
             else:
                 signals = []

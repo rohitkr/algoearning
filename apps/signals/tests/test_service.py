@@ -129,6 +129,23 @@ async def test_catch_up_then_live_messages(db: Database, setup: Any) -> None:
     assert (await source(db, sid)).last_message_at == T0 + timedelta(seconds=300)
 
 
+async def test_a_restart_rebuilds_signals_from_the_stored_messages(db: Database, setup: Any) -> None:
+    """A better parser must re-read messages stored earlier: nothing changed on Telegram, signals still come back."""
+    from sqlalchemy import delete
+
+    service, sid, _ = setup
+    await service.sync()
+    await eventually(lambda: _state(db, sid, "listening"))
+    await service.stop()
+    async with db.system_session() as s:  # signals as an older parser left them: none
+        await s.execute(delete(SignalRow).where(SignalRow.source_id == sid))
+    assert await rows(db, SignalRow, sid) == []
+    await service.sync()
+    await eventually(lambda: _state(db, sid, "listening"))
+    (sig,) = await rows(db, SignalRow, sid)
+    assert (sig.header_msg_id, sig.complete) == (1, True)
+
+
 async def test_a_revoked_session_asks_to_reconnect(db: Database, setup: Any) -> None:
     service, sid, _ = setup
     FakeReader.fail = SessionInvalid("the Telegram session is no longer valid: reconnect Telegram")

@@ -516,6 +516,10 @@ async def replay_tips(
     no_data = sum(1 for r in result.results if r.entry == "NO_DATA")
     if no_data:
         warnings.insert(0, f"{no_data} tip(s) could not be replayed: no stored prices or no stop-loss/targets.")
+    if tips:
+        first = min(t.date for t in tips).astimezone(IST)
+        warnings.insert(0, f"{len(tips)} tips found, the first on {first:%d %b %Y %H:%M} IST and the last on "
+                           f"{max(t.date for t in tips).astimezone(IST):%d %b %Y %H:%M} IST.")  # fmt: skip
     if not tips:
         warnings.insert(0, "No tips are stored for this period yet: the reader loads the chat from 9 July on start.")
     return TipReplayOut(

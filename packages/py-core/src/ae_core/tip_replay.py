@@ -185,7 +185,12 @@ def replay_tip(tip: Tip, prices: TipPrices, params: ReplayParams) -> TipResult:
     first = _signal_minute(tip)
     picked = _pick_expiry(prices, tip, day, first)
     if picked is None:
-        return TipResult(tip, "NO_DATA", "no stored prices for this contract on that day")
+        tried = candidate_expiries(prices, tip.index, day)
+        why = (f"tried expiries {', '.join(map(str, tried))}" if tried
+               else f"no {tip.index} expiry on or after that day in the stored history")  # fmt: skip
+        return TipResult(
+            tip, "NO_DATA", f"no stored prices for {tip.index} {tip.strike} {tip.option_type} that day ({why})"
+        )
     exp, bars, _ = picked
     key = contract_key(tip.index, exp, tip.strike, tip.option_type)
     times = sorted(t for t in bars if t >= first)
