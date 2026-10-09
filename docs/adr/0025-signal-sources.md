@@ -94,3 +94,8 @@ or under the stop-loss -> no order, with the reason; no prices / no stop-loss ->
 the expiry priced closest to the tip's entry range (of the next three) is used and shown as inferred. A minute that
 reached both stop and target counts as the stop; gaps fill at the open; stop-loss and the end-of-day exit take
 slippage, targets are limit fills. The reader backfills the chat from 9 July on every start so the history is complete.
+
+**Two message formats.** The channel's first weeks (from 9 July 2026) used `BUY SENSEX 76900 CE @ 240`, a reply
+`SL - 180 / Tgt - 330, 420, 520 ++++` and updates like `240 - 250 🚀🚀`; the `Entry : ₹x - ₹y` / `TP 1:` format came
+later. `VipSetups` reads both (an `@ price` counts as the entry, `Tgt` lists as targets, a rocket range as a price tick).
+

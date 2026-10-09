@@ -45,6 +45,24 @@ def test_details_and_updates() -> None:
     assert P.parse("", has_media=True).kind == "MEDIA" and P.parse("   ").kind == "NOISE"
 
 
+def test_the_channels_first_weeks_format() -> None:
+    """9 July 2026: "BUY SENSEX 76900 CE @ 240", then "SL - 180 / Tgt - 330, 420, 520 ++++", then "240 - 250 🚀🚀"."""
+    h = P.parse("BUY SENSEX 76900 CE @ 240")
+    want = {"action": "BUY", "index": "SENSEX", "strike": 76900, "option_type": "CE", "entry_low": 240.0,
+            "entry_high": 240.0, "direction": "BULLISH", "intraday": False}  # fmt: skip
+    assert (h.kind, dict(h.data)) == ("SIGNAL", want)
+    d = P.parse("SL - 180\nTgt - 330, 420, 520 ++++")
+    assert d.kind == "DETAILS" and d.data["targets"] == [330, 420, 520] and d.data["stop_loss"] == 180
+    t = P.parse("240 - 250 🚀🚀🚀🚀")
+    assert (t.kind, dict(t.data)) == ("TICK", {"price": 250.0})
+    (a, b), _ = assemble([msg(1, 0, "BUY SENSEX 76900 CE @ 240"), msg(2, 60, "SL - 180\nTgt - 330, 420, 520 ++++", 1),
+                          msg(3, 900, "240 - 250 🚀🚀", 1), msg(4, 4000, "BUY SENSEX 77000 PE @ 215"),
+                          msg(5, 4060, "SL - 150\nTgt - 290, 380, 470 ++++", 4)])  # fmt: skip
+    assert (a.complete, a.targets, a.last_price) == (True, [330, 420, 520], 250)
+    assert (b.direction, b.stop_loss, b.entry_low) == ("BEARISH", 150, 215)
+    assert P.parse("trail sl near 143").kind == "ADVISORY"  # "sl <number>" needs the number right after it
+
+
 def test_advice_noise_and_unclear_are_never_signals() -> None:
     assert dict(P.parse("EXIT COMPLETELY \nBOOK ALL PROFITS").data) == {"exit": True}
     a = P.parse("book small profit near 149 and trail sl near 143")

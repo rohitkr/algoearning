@@ -58,13 +58,16 @@ class VipSetups:
     SYMBOL = re.compile(rf"\b({_IDX})\s+(\d{{4,6}})\s*(CE|PE)\b", re.I)
     ENTRY = re.compile(rf"Entry\s*:?\s*₹?\s*{_NUM}(?:\s*(?:-|\u2013|to)\s*₹?\s*{_NUM})?", re.I)
     TP = re.compile(rf"\bTP\s*(\d)\s*:?\s*₹?\s*{_NUM}", re.I)
-    SL = re.compile(rf"Stop\s*Loss\s*:?\s*₹?\s*{_NUM}", re.I)
+    SL = re.compile(rf"(?:Stop\s*Loss|\bSL)\s*[:\-\u2013]?\s*₹?\s*{_NUM}", re.I)
+    # the first weeks (from 9 July 2026): "BUY SENSEX 76900 CE @ 240", "SL - 180 / Tgt - 330, 420, 520 ++++"
+    AT = re.compile(rf"@\s*₹?\s*{_NUM}(?:\s*(?:-|\u2013|to)\s*₹?\s*{_NUM})?", re.I)
+    TGT = re.compile(r"\b(?:Tgts?|Targets?)\s*[:\-\u2013]\s*([^\n]+)", re.I)
     RATIONALE = re.compile(r"Rationale\s*:\s*([^\n|]+)", re.I)
     VALID = re.compile(r"Valid\s*for\s*:\s*([^\n|]+)", re.I)
     TARGET_DONE = re.compile(r"Target\s*(\d)\s*(?:done|hit|achieved)", re.I)
     SL_HIT = re.compile(r"STOP\s*LOSS\s*HIT|\bSL\s*HIT\b", re.I)
     LTP = re.compile(rf"\bLtp\s*:?\s*₹?\s*{_NUM}", re.I)
-    TICK = re.compile(rf"^\s*₹?\s*{_NUM}\s*(?:🔥\s*)+$")
+    TICK = re.compile(rf"^\s*₹?\s*{_NUM}(?:\s*(?:-|\u2013)\s*₹?\s*{_NUM})?\s*(?:[🔥🚀]\s*)+$")
     EXIT = re.compile(r"\bexit\b|\bbook\s+all\b|\bsquare\s*off\b", re.I)
     TRAIL = re.compile(rf"\btrail\w*\s+sl\b(?:\s+(?:near|at|to))?\s*{_NUM}?", re.I)
     BOOK = re.compile(rf"\b(?:book|booking)\b.*?(?:near|at)\s*{_NUM}", re.I)
@@ -74,7 +77,7 @@ class VipSetups:
         t = (text or "").strip()
         if not t:
             return Parsed("MEDIA" if has_media else "NOISE")
-        m, e = self.SIGNAL.search(t), self.ENTRY.search(t)
+        m, e = self.SIGNAL.search(t), self.ENTRY.search(t) or self.AT.search(t)
         if m and e:
             lo, hi = _f(e.group(1)), _f(e.group(2)) or _f(e.group(1))
             assert lo is not None and hi is not None
@@ -91,7 +94,7 @@ class VipSetups:
                 **self._details(t),  # some posts put TP / SL in the header too
             }
             return Parsed("SIGNAL", data)
-        if self.SL.search(t) and self.TP.search(t):
+        if self.SL.search(t) and (self.TP.search(t) or self.TGT.search(t)):
             return Parsed("DETAILS", self._details(t))
         if mt := self.TARGET_DONE.search(t):
             ltp = self.LTP.search(t)
@@ -101,7 +104,7 @@ class VipSetups:
             sym = f"{s.group(1).upper()} {s.group(2)} {s.group(3).upper()}" if s else None
             return Parsed("SL_HIT", {"ltp": _f(ltp.group(1)) if ltp else None, "symbol": sym})
         if mk := self.TICK.match(t):
-            return Parsed("TICK", {"price": _f(mk.group(1))})
+            return Parsed("TICK", {"price": _f(mk.group(2) or mk.group(1))})  # "240 - 250 🚀": it reached the top
         if self.EXIT.search(t) or self.TRAIL.search(t) or self.BOOK.search(t):
             adv: dict[str, Any] = {"exit": bool(self.EXIT.search(t))}
             tr, bk = self.TRAIL.search(t), self.BOOK.search(t)
@@ -119,6 +122,8 @@ class VipSetups:
         tps = {int(n): _f(v) for n, v in self.TP.findall(t)}
         if tps:
             d["targets"] = [tps[k] for k in sorted(tps)]
+        elif tg := self.TGT.search(t):
+            d["targets"] = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", tg.group(1).replace(",", " "))]
         if sl := self.SL.search(t):
             d["stop_loss"] = _f(sl.group(1))
         if r := self.RATIONALE.search(t):
