@@ -136,7 +136,74 @@ export function SignalFeed({ source }: { source: SignalSource }) {
         </p>
       )}
 
-      <div className="overflow-x-auto">
+      <ul className="flex flex-col gap-2 md:hidden" aria-label="Signals">
+        {signals === null && <li className="py-2 text-sm text-muted">Loading…</li>}
+        {signals?.length === 0 && <li className="py-2 text-sm text-muted">No signals in the last 7 days.</li>}
+        {signals?.map((s) => {
+          const st = STATUS[s.status];
+          return (
+            <li key={s.id}>
+              <button
+                type="button"
+                onClick={() => setSelected(selected === s.id ? null : s.id)}
+                aria-pressed={selected === s.id}
+                className={cn(
+                  "flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border px-3 py-2 text-left text-sm",
+                  selected === s.id && "border-primary/40 bg-primary/10",
+                )}
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className="font-medium">
+                    {s.action} {s.index} {s.strike} {s.option_type}
+                    {!s.complete && <span className="ml-1 text-xs text-warning">(no SL yet)</span>}
+                  </span>
+                  <StatusPill tone={st.tone}>{st.text}</StatusPill>
+                </span>
+                <span className="flex items-center justify-between gap-2 text-xs text-muted">
+                  <span
+                    className={cn("font-semibold", s.direction === "BULLISH" ? "text-profit" : "text-loss")}
+                  >
+                    {s.direction === "BULLISH" ? "▲ Bullish" : "▼ Bearish"}
+                  </span>
+                  <span>{ist(s.date, true)}</span>
+                </span>
+                <span className="grid grid-cols-3 gap-2 text-xs tabular-nums">
+                  <span>
+                    <span className="block text-muted">Entry</span>
+                    {num(s.entry_low)}–{num(s.entry_high)}
+                  </span>
+                  <span>
+                    <span className="block text-muted">SL</span>
+                    {num(s.stop_loss)}
+                  </span>
+                  <span>
+                    <span className="block text-muted">Last</span>
+                    {num(s.last_price)}
+                  </span>
+                </span>
+                <span className="flex flex-wrap gap-1 text-xs tabular-nums">
+                  <span className="text-muted">Targets</span>
+                  {s.targets.map((t, i) => (
+                    <span
+                      key={i}
+                      className={cn(
+                        "rounded px-1",
+                        s.targets_done.includes(i + 1)
+                          ? "bg-profit/15 font-semibold text-profit"
+                          : "text-muted",
+                      )}
+                    >
+                      {num(t)}
+                    </span>
+                  ))}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="text-left text-xs text-muted">
             <tr className="border-b border-border">
@@ -232,21 +299,21 @@ export function SignalFeed({ source }: { source: SignalSource }) {
             <li
               key={m.msg_id}
               className={cn(
-                "flex flex-wrap items-start gap-2 rounded-lg border border-transparent px-2 py-1.5 text-sm",
+                "grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-1 rounded-lg border border-transparent px-2 py-1.5 text-sm sm:grid-cols-[3rem_5rem_1fr_auto]",
                 linked.has(m.msg_id) && "border-primary/40 bg-primary/10",
               )}
             >
-              <span className="w-12 shrink-0 pt-0.5 text-xs text-muted tabular-nums">{ist(m.date)}</span>
-              <span className="w-20 shrink-0">
+              <span className="pt-0.5 text-xs text-muted tabular-nums">{ist(m.date, true)}</span>
+              <span className="justify-self-start sm:col-start-2">
                 <StatusPill tone={KIND_TONE[m.kind]}>{KIND_LABEL[m.kind]}</StatusPill>
               </span>
-              <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+              <span className="col-span-2 min-w-0 whitespace-pre-wrap break-words sm:col-span-1 sm:col-start-3 sm:row-start-1">
                 {m.text || (m.has_media ? "[image]" : "")}
                 {m.edit_date && <span className="ml-1 text-xs text-muted">(edited)</span>}
               </span>
               <select
                 aria-label={`Correct how message ${m.msg_id} was read`}
-                className="h-7 rounded border border-border bg-surface px-1 text-xs text-muted"
+                className="col-span-2 h-7 w-full max-w-48 rounded border border-border bg-surface px-1 text-xs text-muted sm:col-span-1 sm:col-start-4 sm:row-start-1 sm:w-auto"
                 value={m.overridden ? m.kind : ""}
                 onChange={(e) => void correct(m, e.target.value as SignalKind | "")}
               >

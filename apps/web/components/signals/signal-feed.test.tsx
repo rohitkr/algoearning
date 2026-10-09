@@ -57,14 +57,14 @@ afterEach(() => {
 describe("SignalFeed", () => {
   it("shows signals and the chat as read; ticks hidden unless their signal is picked", async () => {
     render(<SignalFeed source={SOURCE} />);
-    expect(await screen.findByText("▲ Bullish")).toBeTruthy();
-    expect(screen.getByText("BUY NIFTY 22450 CE")).toBeTruthy();
+    expect((await screen.findAllByText("▲ Bullish")).length).toBe(2); // phone card + desktop row
+    expect(screen.getAllByText("BUY NIFTY 22450 CE").length).toBe(2);
     expect(screen.getByText("● Live")).toBeTruthy();
-    expect(screen.getByText("169").className).toContain("text-profit"); // target 1 hit
+    expect(screen.getAllByText("169")[0]?.className).toContain("text-profit"); // target 1 hit
     expect(screen.queryByText("₹157 🔥🔥🔥")).toBeNull(); // a price tick, hidden
     expect(screen.getByText("Good afternoon traders")).toBeTruthy();
 
-    await act(async () => fireEvent.click(screen.getByText("BUY NIFTY 22450 CE")));
+    await act(async () => fireEvent.click(screen.getAllByText("BUY NIFTY 22450 CE")[1]!));
     expect(screen.getByText("₹157 🔥🔥🔥")).toBeTruthy(); // the picked signal's ticks show
     expect(screen.getByText("🟢 BUY NIFTY 22450 CE").closest("li")?.className).toContain("bg-primary/10");
   });

@@ -193,6 +193,18 @@ class Read:
     overridden: bool = False
 
 
+def _latest_for(signals: Mapping[int, Signal], latest: int, symbol: str | None) -> int | None:
+    """The signal a message that is not a reply belongs to: the latest one, unless the message names another contract
+    ("STOP LOSS HIT | NIFTY 22450 CE"), then the latest signal on that contract, and none when there is none (an update
+    for a contract we never saw must not close a different tip)."""
+    if symbol is None:
+        return latest
+    for sig in sorted(signals.values(), key=lambda x: (x.date, x.id), reverse=True):
+        if f"{sig.index} {sig.strike} {sig.option_type}" == symbol:
+            return sig.id
+    return None
+
+
 def assemble(
     messages: Iterable[Message],
     profile: str = DEFAULT_PROFILE,
@@ -207,6 +219,7 @@ def assemble(
     p = PROFILES[profile]
     overrides = overrides or {}
     signals: dict[int, Signal] = {}
+    owner: dict[int, int] = {}  # any message of a signal (header, details, an update) -> its signal
     reads: list[Read] = []
     latest: int | None = None
     for m in sorted(messages, key=lambda x: (x.date, x.msg_id)):
@@ -225,13 +238,14 @@ def assemble(
             sig.apply(d)
             signals[m.msg_id] = sig
             latest = sid = m.msg_id
-        elif m.reply_to in signals:
-            sid = m.reply_to
+        elif m.reply_to in owner:  # a reply to the header or to any message already attached (details, an update)
+            sid = owner[m.reply_to]
         elif kind in ("ADVISORY", "SL_HIT", "TARGET") and latest is not None:
-            sid = latest
+            sid = _latest_for(signals, latest, parsed.data.get("symbol"))
         s = signals.get(sid) if sid is not None else None
         if s is not None:
             s.message_ids.append(m.msg_id)
+            owner[m.msg_id] = s.id
             if kind == "DETAILS":
                 s.apply(parsed.data)
             elif kind == "TARGET" and parsed.data.get("target"):

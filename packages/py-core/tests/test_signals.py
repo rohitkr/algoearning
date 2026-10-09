@@ -81,6 +81,18 @@ def test_assembly_links_updates_and_tracks_status() -> None:
     assert [r.kind for r in reads] == ["SIGNAL", "DETAILS", "TICK", "TARGET", "ADVISORY", "SL_HIT"]
 
 
+def test_updates_replying_to_the_details_attach_and_an_sl_hit_names_its_contract() -> None:
+    other = "🟢 BUY NIFTY 22550 PE\n💰 Entry : ₹158 - ₹162"
+    sigs, reads = assemble([*THREAD[:2], msg(10, 30, "₹163 🔥🔥🔥", 2),  # replies to the details, not the header
+                            msg(11, 600, other),
+                            msg(12, 900, "🛑 STOP LOSS HIT | NIFTY 22450 CE\n💹 Live LTP: ₹140"),
+                            msg(13, 950, "🛑 STOP LOSS HIT | SENSEX 72900 PE")])  # fmt: skip
+    first, second = sigs
+    assert first.last_price == 140 and first.status == "SL_HIT"  # found by contract, not "the latest"
+    assert second.status == "OPEN" and second.message_ids == [11]
+    assert [r.signal_id for r in reads] == [1, 1, 1, 11, 1, None]  # a contract we never saw closes nothing
+
+
 def test_a_header_without_details_is_not_tradable_and_a_later_signal_takes_advice() -> None:
     sigs, reads = assemble([msg(1, 0, HEADER), msg(7, 60, "🟢 BUY SENSEX 75000 CE\n💰 Entry : ₹300 - ₹305"),
                             msg(8, 90, "EXIT COMPLETELY")])  # fmt: skip
