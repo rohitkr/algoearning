@@ -385,6 +385,13 @@ class TipTradeOut(BaseModel):
     entry_price: float | None
     qty: int
     exits: list[TipFillOut]
+    peak_price: float | None  # highest price in the minutes before the exit minute
+    peak_points: float | None  # ... over our entry: did the market move our way first?
+    peak_time: datetime | None
+    stopped: bool  # closed by a stop (the tip's, at cost, or trailing)
+    breakeven_time: datetime | None  # when the stop moved to cost; None = the price never got that far
+    final_stop: float | None
+    trail_moves: int
     gross: float
     charges: float
     net: float
@@ -396,6 +403,8 @@ class TipReplayOut(BaseModel):
     lots: int
     lot_sizes: dict[str, int]
     buffers: dict[str, float]
+    breakevens: dict[str, float]
+    trails: dict[str, float]
     slippage_pct: float
     summary: dict[str, Any]
     daily: list[dict[str, Any]]

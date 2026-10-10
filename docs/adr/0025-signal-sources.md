@@ -99,3 +99,10 @@ slippage, targets are limit fills. The reader backfills the chat from 9 July on 
 `SL - 180 / Tgt - 330, 420, 520 ++++` and updates like `240 - 250 🚀🚀`; the `Entry : ₹x - ₹y` / `TP 1:` format came
 later. `VipSetups` reads both (an `@ price` counts as the entry, `Tgt` lists as targets, a rocket range as a price tick).
 
+**Replay exits (revised).** The first version held the tip's stop to the end. The owner's rule: one third of the lots
+at target 1, one third at target 2, everything left at target 3; once the option is 10 points (NIFTY) / 20 points
+(SENSEX) above our entry the stop moves to cost, and from then on it trails the highest price by the same number of
+points (adjustable; 0 = stay at cost), only ever moving up. A stop change applies from the next minute (the order
+inside a minute is unknown). Every tip also reports whether the market moved our way before it was stopped (highest
+price in the minutes before the exit, in points), when the stop reached cost and how often it trailed up.
+

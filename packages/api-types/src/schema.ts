@@ -4158,6 +4158,10 @@ export interface components {
         };
         /** TipReplayOut */
         TipReplayOut: {
+            /** Breakevens */
+            breakevens: {
+                [key: string]: number;
+            };
             /** Buffers */
             buffers: {
                 [key: string]: number;
@@ -4190,6 +4194,10 @@ export interface components {
             };
             /** Trades */
             trades: components["schemas"]["TipTradeOut"][];
+            /** Trails */
+            trails: {
+                [key: string]: number;
+            };
             /** Warnings */
             warnings: string[];
         };
@@ -4200,6 +4208,8 @@ export interface components {
         TipTradeOut: {
             /** Above Zone */
             above_zone: number | null;
+            /** Breakeven Time */
+            breakeven_time: string | null;
             /** Buffer */
             buffer: number | null;
             /**
@@ -4236,12 +4246,20 @@ export interface components {
             exits: components["schemas"]["TipFillOut"][];
             /** Expiry */
             expiry: string | null;
+            /** Final Stop */
+            final_stop: number | null;
             /** Gross */
             gross: number;
             /** Net */
             net: number;
             /** Note */
             note: string;
+            /** Peak Points */
+            peak_points: number | null;
+            /** Peak Price */
+            peak_price: number | null;
+            /** Peak Time */
+            peak_time: string | null;
             /** Price At Signal */
             price_at_signal: number | null;
             /** Qty */
@@ -4250,10 +4268,14 @@ export interface components {
             signal_id: number;
             /** Stop Loss */
             stop_loss: number | null;
+            /** Stopped */
+            stopped: boolean;
             /** Targets */
             targets: number[];
             /** Tip */
             tip: string;
+            /** Trail Moves */
+            trail_moves: number;
         };
         /** TradeRow */
         TradeRow: {
@@ -10413,6 +10435,10 @@ export interface operations {
                 slippage_pct?: number;
                 nifty_buffer?: number;
                 sensex_buffer?: number;
+                nifty_breakeven?: number;
+                sensex_breakeven?: number;
+                nifty_trail?: number | null;
+                sensex_trail?: number | null;
             };
             header?: never;
             path: {

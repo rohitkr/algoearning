@@ -94,6 +94,15 @@ function Trade({ t }: { t: TipTrade }) {
               {x.reason}: sold {x.qty} @ {pts(x.price)} at {clock.format(new Date(x.time))}
             </li>
           ))}
+          <li className={cn(t.stopped && !(t.peak_points && t.peak_points > 0) && "text-loss")}>
+            {t.stopped ? "Before the stop: " : "Highest price: "}
+            {t.peak_points != null && t.peak_points > 0
+              ? `market moved our way, up to ${pts(t.peak_price)} (+${pts(t.peak_points)})${t.peak_time ? ` at ${clock.format(new Date(t.peak_time))}` : ""}`
+              : "market never moved our way, it went straight down"}
+            {t.breakeven_time
+              ? `; stop moved to cost at ${clock.format(new Date(t.breakeven_time))}${t.trail_moves ? `, then trailed ${t.trail_moves}×` : ""}, ended at ${pts(t.final_stop)}`
+              : "; the move never reached the stop-to-cost trigger"}
+          </li>
           <li className="text-muted">
             Gross {inr(t.gross)} − charges {inr(t.charges)} · the channel called it:{" "}
             {CHANNEL[t.channel_status]}
@@ -111,6 +120,10 @@ export function TipReplayView({ source }: { source: SignalSource }) {
   const [lots, setLots] = useState(3);
   const [niftyBuffer, setNiftyBuffer] = useState(5);
   const [sensexBuffer, setSensexBuffer] = useState(10);
+  const [niftyCost, setNiftyCost] = useState(10);
+  const [sensexCost, setSensexCost] = useState(20);
+  const [niftyTrail, setNiftyTrail] = useState(10);
+  const [sensexTrail, setSensexTrail] = useState(20);
   const [data, setData] = useState<TipReplay | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +135,8 @@ export function TipReplayView({ source }: { source: SignalSource }) {
     try {
       const q = new URLSearchParams({
         start, lots: String(lots), nifty_buffer: String(niftyBuffer), sensex_buffer: String(sensexBuffer),
+        nifty_breakeven: String(niftyCost), sensex_breakeven: String(sensexCost),
+        nifty_trail: String(niftyTrail), sensex_trail: String(sensexTrail),
       }); // prettier-ignore
       setData(
         await apiRequest<TipReplay>(
@@ -153,9 +168,10 @@ export function TipReplayView({ source }: { source: SignalSource }) {
         </h2>
         <p className="text-sm text-muted">
           Buys each tip&apos;s option at the first price after the message, with the tip&apos;s own stop-loss
-          and targets (a third of the lots at each target), the rest out at 15:15. If the option already moved
-          above the entry range it is bought only within the buffer and marked <em>chased</em>; beyond it, no
-          order.
+          and targets (a third of the lots at the first two, everything left at the last). Once the option is
+          the set number of points above your entry the stop moves to cost, then trails the highest price;
+          whatever is left leaves at 15:15. If the option already moved above the entry range it is bought
+          only within the buffer and marked <em>chased</em>; beyond it, no order.
         </p>
       </div>
       <form
@@ -205,6 +221,46 @@ export function TipReplayView({ source }: { source: SignalSource }) {
             onChange={(e) => setSensexBuffer(Number(e.target.value))}
           />
         </label>
+        <label className="flex flex-col gap-1">
+          Nifty SL to cost after (pts)
+          <input
+            type="number"
+            min={1}
+            className={field}
+            value={niftyCost}
+            onChange={(e) => setNiftyCost(Number(e.target.value))}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          Sensex SL to cost after (pts)
+          <input
+            type="number"
+            min={1}
+            className={field}
+            value={sensexCost}
+            onChange={(e) => setSensexCost(Number(e.target.value))}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          Nifty trail (pts, 0 = off)
+          <input
+            type="number"
+            min={0}
+            className={field}
+            value={niftyTrail}
+            onChange={(e) => setNiftyTrail(Number(e.target.value))}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          Sensex trail (pts, 0 = off)
+          <input
+            type="number"
+            min={0}
+            className={field}
+            value={sensexTrail}
+            onChange={(e) => setSensexTrail(Number(e.target.value))}
+          />
+        </label>
         <Button type="submit" disabled={busy}>
           {busy ? "Replaying…" : data ? "Replay again" : "Run replay"}
         </Button>
@@ -238,6 +294,11 @@ export function TipReplayView({ source }: { source: SignalSource }) {
             <Stat label="Avg win / loss">
               {inr(s.avg_win as number | null)} / {inr(s.avg_loss as number | null)}
             </Stat>
+            <Stat label="Stopped out">{String(s.stopped_out)}</Stat>
+            <Stat label="…after moving our way">{String(s.stopped_after_moving_up)}</Stat>
+            <Stat label="…never moved our way">{String(s.stopped_never_moved_up)}</Stat>
+            <Stat label="Stop moved to cost">{String(s.stop_moved_to_cost)}</Stat>
+            <Stat label="Avg peak (pts)">{pts(s.avg_peak_points as number | null)}</Stat>
             <Stat label="Profit factor">
               {s.profit_factor == null ? "–" : Number(s.profit_factor).toFixed(2)}
             </Stat>

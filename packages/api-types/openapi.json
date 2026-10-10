@@ -7306,6 +7306,13 @@
       },
       "TipReplayOut": {
         "properties": {
+          "breakevens": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Breakevens",
+            "type": "object"
+          },
           "buffers": {
             "additionalProperties": {
               "type": "number"
@@ -7358,6 +7365,13 @@
             "title": "Trades",
             "type": "array"
           },
+          "trails": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Trails",
+            "type": "object"
+          },
           "warnings": {
             "items": {
               "type": "string"
@@ -7372,6 +7386,8 @@
           "lots",
           "lot_sizes",
           "buffers",
+          "breakevens",
+          "trails",
           "slippage_pct",
           "summary",
           "daily",
@@ -7394,6 +7410,18 @@
               }
             ],
             "title": "Above Zone"
+          },
+          "breakeven_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breakeven Time"
           },
           "buffer": {
             "anyOf": [
@@ -7494,6 +7522,17 @@
             ],
             "title": "Expiry"
           },
+          "final_stop": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Stop"
+          },
           "gross": {
             "title": "Gross",
             "type": "number"
@@ -7505,6 +7544,40 @@
           "note": {
             "title": "Note",
             "type": "string"
+          },
+          "peak_points": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak Points"
+          },
+          "peak_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak Price"
+          },
+          "peak_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak Time"
           },
           "price_at_signal": {
             "anyOf": [
@@ -7536,6 +7609,10 @@
             ],
             "title": "Stop Loss"
           },
+          "stopped": {
+            "title": "Stopped",
+            "type": "boolean"
+          },
           "targets": {
             "items": {
               "type": "number"
@@ -7546,6 +7623,10 @@
           "tip": {
             "title": "Tip",
             "type": "string"
+          },
+          "trail_moves": {
+            "title": "Trail Moves",
+            "type": "integer"
           }
         },
         "required": [
@@ -7568,6 +7649,13 @@
           "entry_price",
           "qty",
           "exits",
+          "peak_price",
+          "peak_points",
+          "peak_time",
+          "stopped",
+          "breakeven_time",
+          "final_stop",
+          "trail_moves",
           "gross",
           "charges",
           "net"
@@ -15712,6 +15800,66 @@
               "minimum": 0,
               "title": "Sensex Buffer",
               "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "nifty_breakeven",
+            "required": false,
+            "schema": {
+              "default": 10.0,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Nifty Breakeven",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sensex_breakeven",
+            "required": false,
+            "schema": {
+              "default": 20.0,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Sensex Breakeven",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "nifty_trail",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Nifty Trail"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sensex_trail",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sensex Trail"
             }
           }
         ],

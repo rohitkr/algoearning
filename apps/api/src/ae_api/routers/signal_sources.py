@@ -18,7 +18,7 @@ from typing import Annotated
 import structlog
 from ae_core.secrets import SecretBox, mask_phone
 from ae_core.signals import Message, assemble
-from ae_core.tip_replay import BUFFER, ReplayParams, Tip, replay
+from ae_core.tip_replay import BREAKEVEN, BUFFER, ReplayParams, Tip, replay
 from ae_core.trading.model import IST
 from ae_db.models import Instrument, SignalMessage, SignalOverride, SignalRow, SignalSource
 from ae_db.session import Database
@@ -455,6 +455,10 @@ async def replay_tips(
     slippage_pct: Annotated[float, Query(ge=0, le=5)] = 0.05,
     nifty_buffer: Annotated[float, Query(ge=0, le=100)] = BUFFER["NIFTY"],
     sensex_buffer: Annotated[float, Query(ge=0, le=100)] = BUFFER["SENSEX"],
+    nifty_breakeven: Annotated[float, Query(ge=1, le=500)] = BREAKEVEN["NIFTY"],
+    sensex_breakeven: Annotated[float, Query(ge=1, le=500)] = BREAKEVEN["SENSEX"],
+    nifty_trail: Annotated[float | None, Query(ge=0, le=500)] = None,
+    sensex_trail: Annotated[float | None, Query(ge=0, le=500)] = None,
 ) -> TipReplayOut:
     """Every stored tip of the source between `start` and `end`, bought exactly as the tip says over stored history
     (ae_core.tip_replay): entry marked in the range / chased within the buffer / not placed, stop-loss and targets
@@ -492,6 +496,11 @@ async def replay_tips(
         lot_sizes=insts,
         slippage_pct=slippage_pct,
         buffer={"NIFTY": nifty_buffer, "SENSEX": sensex_buffer},
+        breakeven={"NIFTY": nifty_breakeven, "SENSEX": sensex_breakeven},
+        trail={  # the trail distance defaults to the break-even trigger; 0 turns trailing off
+            "NIFTY": nifty_breakeven if nifty_trail is None else nifty_trail,
+            "SENSEX": sensex_breakeven if sensex_trail is None else sensex_trail,
+        },
     )
     result = await asyncio.to_thread(replay, tips, prices, params)
     by_id = {r.header_msg_id: r for r in rows}
@@ -503,6 +512,8 @@ async def replay_tips(
             entry=r.entry, note=r.note, expiry=r.expiry, price_at_signal=r.price_at_signal,
             above_zone=r.above_zone, buffer=r.buffer, entry_time=r.entry_time, entry_price=r.entry_price,
             qty=r.qty, exits=[TipFillOut(time=f.time, price=f.price, qty=f.qty, reason=f.reason) for f in r.exits],
+            peak_price=r.peak_price, peak_points=r.peak_points, peak_time=r.peak_time, stopped=r.stopped,
+            breakeven_time=r.breakeven_time, final_stop=r.final_stop, trail_moves=r.trail_moves,
             gross=r.gross, charges=r.charges, net=r.net,
         )
         for r in reversed(result.results)
@@ -524,6 +535,7 @@ async def replay_tips(
         warnings.insert(0, "No tips are stored for this period yet: the reader loads the chat from 9 July on start.")
     return TipReplayOut(
         start=start, end=end, lots=lots, lot_sizes=insts, buffers=params.buffer, slippage_pct=slippage_pct,
+        breakevens=dict(params.breakeven), trails=dict(params.trail),
         summary=result.summary(), daily=result.daily(), trades=trades, warnings=warnings,
     )  # fmt: skip
 

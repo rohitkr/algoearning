@@ -15,9 +15,13 @@ const trade = (id: number, entry: "IN_ZONE" | "CHASED" | "NOT_PLACED", net: numb
   qty: entry === "NOT_PLACED" ? 0 : 225,
   exits: entry === "NOT_PLACED" ? [] : [{ time: "2026-10-08T05:00:00Z", price: 169, qty: 75, reason: "TARGET 1" }],
   gross: net, charges: 0, net,
+  peak_price: entry === "NOT_PLACED" ? null : 171, peak_points: entry === "NOT_PLACED" ? null : 13,
+  peak_time: entry === "NOT_PLACED" ? null : "2026-10-08T04:55:00Z", stopped: false,
+  breakeven_time: entry === "NOT_PLACED" ? null : "2026-10-08T04:55:00Z", final_stop: 161, trail_moves: 1,
 }); // prettier-ignore
 const REPLAY: TipReplay = {
-  start: "2026-07-09", end: "2026-10-09", lots: 3, lot_sizes: { NIFTY: 75 }, buffers: { NIFTY: 5, SENSEX: 10 },
+  start: "2026-07-09", end: "2026-10-09", lots: 3, lot_sizes: { NIFTY: 75 }, buffers: { NIFTY: 5, SENSEX: 10 }, breakevens: { NIFTY: 10, SENSEX: 20 },
+  trails: { NIFTY: 10, SENSEX: 20 },
   slippage_pct: 0.05,
   summary: { tips: 2, traded: 1, entries: { CHASED: 1, NOT_PLACED: 1 }, net_pnl: 825, gross_pnl: 825, charges: 0, win_rate: 1,
     avg_win: 825, avg_loss: null, profit_factor: null, max_drawdown: 0 },
@@ -53,5 +57,8 @@ describe("TipReplayView", () => {
     expect(screen.getByText("price 170 was already above the range")).toBeTruthy();
     expect(screen.getByText("TARGET 1: sold 75 @ 169 at 10:30")).toBeTruthy();
     expect(screen.getByText("Expiries are inferred.")).toBeTruthy();
+    expect(url).toContain("nifty_breakeven=10&sensex_breakeven=20&nifty_trail=10&sensex_trail=20");
+    expect(screen.getByText(/market moved our way, up to 171 \(\+13\)/)).toBeTruthy();
+    expect(screen.getByText(/stop moved to cost at 10:25, then trailed 1×, ended at 161/)).toBeTruthy();
   });
 });

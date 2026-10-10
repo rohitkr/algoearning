@@ -76,7 +76,9 @@ def test_the_stop_wins_a_minute_that_reached_both_and_gaps_fill_at_the_open() ->
 
 
 def test_stop_after_a_target_only_closes_the_rest_and_the_day_ends_at_1515() -> None:
-    r = run(bars((152, 170, 151, 168), (168, 169, 134, 136)))
+    r = run(
+        bars((152, 170, 151, 168), (168, 169, 134, 136)), params=ReplayParams(slippage_pct=0, breakeven={"NIFTY": 999})
+    )
     assert [(e.reason, e.price, e.qty) for e in r.exits] == [("TARGET 1", 169, 75), ("STOP LOSS", 135, 150)]
     quiet = {T0 + timedelta(minutes=i): Candle(T0 + timedelta(minutes=i), 152, 153, 151, 152) for i in range(1, 330)}
     r = run(quiet)
@@ -103,3 +105,45 @@ def test_lots_split_charges_and_summary() -> None:
     s = res.summary()
     assert s["traded"] == 1 and s["entries"] == {"IN_ZONE": 1} and s["net_pnl"] == r.net
     assert res.daily()[0]["day"] == "2026-10-08"
+
+
+def test_stop_moves_to_cost_after_10_points_then_trails_the_highest_price() -> None:
+    # entry 152; minute 1 reaches 163 (+11): from minute 2 the stop is at cost (peak 163 - trail 10 = 153 > 152)
+    r = run(bars((152, 163, 151, 160), (160, 161, 150, 152)))
+    assert [(e.reason, e.price, e.qty) for e in r.exits] == [("TRAILING STOP", 153, 225)]
+    assert (r.peak_price, r.peak_points, r.breakeven_time is not None, r.final_stop) == (163, 11, True, 153)
+    # a pullback to exactly cost right after arming (trail wider than the trigger): the stop sits at cost
+    wide = ReplayParams(slippage_pct=0, trail={"NIFTY": 30})
+    r = run(bars((152, 163, 151, 160), (160, 161, 150, 152)), params=wide)
+    assert [(e.reason, e.price) for e in r.exits] == [("STOP AT COST", 152)] and r.gross == 0
+    # the trail only ever moves up: 152 -> 153 (cost, peak 163) -> 158 (peak 168 - 10)
+    r = run(bars((152, 163, 151, 160), (160, 168, 158, 166), (166, 167, 157, 158)))
+    assert [(e.reason, e.price) for e in r.exits] == [("TRAILING STOP", 158)] and r.trail_moves == 1
+
+
+def test_target_3_books_everything_left_and_targets_split_a_third_each() -> None:
+    r = run(bars((152, 170, 151, 168), (168, 186, 167, 185), (185, 205, 184, 204)), params=NOFEE)
+    assert [(e.reason, e.qty) for e in r.exits] == [("TARGET 1", 75), ("TARGET 2", 75), ("TARGET 3", 75)]
+    # T1 and T2 skipped by a gap straight to T3: the last target still books the whole position
+    r = run(bars((152, 205, 151, 204)))
+    assert [(e.reason, e.price, e.qty) for e in r.exits] == [
+        ("TARGET 1", 169, 75),
+        ("TARGET 2", 184, 75),
+        ("TARGET 3", 204, 75),
+    ]
+
+
+def test_did_the_market_move_our_way_before_the_stop() -> None:
+    straight_down = run(bars((152, 153, 140, 141), (141, 142, 130, 131)))
+    assert straight_down.stopped and (straight_down.peak_points, straight_down.breakeven_time) == (1, None)
+    went_up_first = run(bars((152, 156, 151, 155), (155, 156, 134, 136)))
+    assert went_up_first.stopped and went_up_first.peak_points == 4  # up 4 (under the 10-point trigger), then the SL
+    s = replay(
+        [tip(), tip(id=2, date=POSTED + timedelta(hours=1))],
+        Prices({KEY: bars((152, 153, 140, 141), (141, 142, 130, 131))}, [date(2026, 10, 13)]),
+    ).summary()
+    assert (
+        s["stopped_out"] >= 1
+        and s["stop_moved_to_cost"] == 0
+        and s["stopped_never_moved_up"] == s["stopped_out"] - s["stopped_after_moving_up"]
+    )

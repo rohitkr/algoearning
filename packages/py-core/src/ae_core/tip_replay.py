@@ -33,8 +33,11 @@ from .trading.model import IST
 Entry = Literal["IN_ZONE", "CHASED", "NOT_PLACED", "NO_DATA"]
 BUFFER = {"NIFTY": 5.0, "SENSEX": 10.0}  # premium points accepted above the top of the entry range
 DEFAULT_BUFFER = 5.0
+BREAKEVEN = {"NIFTY": 10.0, "SENSEX": 20.0}  # premium points in our favour before the stop moves to cost
+DEFAULT_BREAKEVEN = 10.0
 EXIT_AT = time(15, 15)
 EXPIRIES_TRIED = 3
+STOPS = ("STOP LOSS", "STOP AT COST", "TRAILING STOP")
 
 
 class TipPrices(Protocol):
@@ -66,6 +69,10 @@ class ReplayParams:
     lot_sizes: Mapping[str, int] = field(default_factory=lambda: {"NIFTY": 75, "SENSEX": 20})
     slippage_pct: float = 0.05  # on market orders: the stop-loss and the end-of-day exit
     buffer: Mapping[str, float] = field(default_factory=lambda: dict(BUFFER))
+    # once the option is this many premium points above our entry, the stop moves to cost; after that it trails the
+    # highest price by `trail` points (0 = no trailing, the stop stays at cost)
+    breakeven: Mapping[str, float] = field(default_factory=lambda: dict(BREAKEVEN))
+    trail: Mapping[str, float] = field(default_factory=lambda: dict(BREAKEVEN))
     costs: Costs = field(default_factory=Costs)
 
 
@@ -74,7 +81,7 @@ class Fill:
     time: datetime
     price: float
     qty: int
-    reason: str  # TARGET 1..3, STOP LOSS, END OF DAY, NO EXIT DATA
+    reason: str  # TARGET 1..3, STOP LOSS, STOP AT COST, TRAILING STOP, END OF DAY
 
 
 @dataclass
@@ -93,6 +100,25 @@ class TipResult:
     exits: list[Fill] = field(default_factory=list)
     gross: float = 0.0
     charges: float = 0.0
+    # did the market move our way before we were out? (highest price in the minutes before the exit minute)
+    peak_price: float | None = None
+    peak_time: datetime | None = None
+    breakeven_at: float | None = None  # the move, in points, that moved the stop to cost
+    breakeven_time: datetime | None = None  # when the stop moved to cost (None: the price never got there)
+    final_stop: float | None = None  # where the stop stood when the position was closed
+    trail_moves: int = 0  # how many times the trailing stop was raised after cost
+
+    @property
+    def peak_points(self) -> float | None:
+        return (
+            None
+            if self.peak_price is None or self.entry_price is None
+            else round(self.peak_price - self.entry_price, 2)
+        )
+
+    @property
+    def stopped(self) -> bool:
+        return any(f.reason in STOPS for f in self.exits)
 
     @property
     def net(self) -> float:
@@ -113,7 +139,15 @@ class ReplayResult:
         counts: dict[str, int] = defaultdict(int)
         for r in self.results:
             counts[r.entry] += 1
+        stopped = [r for r in done if r.stopped]
+        moved = [r for r in stopped if (r.peak_points or 0) > 0]
+        armed = [r for r in done if r.breakeven_time is not None]
         return {
+            "stopped_out": len(stopped),  # closed by a stop (original, at cost or trailing)
+            "stopped_after_moving_up": len(moved),  # ... of which the price had gone above our entry first
+            "stopped_never_moved_up": len(stopped) - len(moved),
+            "stop_moved_to_cost": len(armed),  # reached the break-even trigger
+            "avg_peak_points": round(sum(r.peak_points or 0 for r in done) / len(done), 2) if done else None,
             "tips": len(self.results),
             "traded": len(done),
             "entries": dict(counts),
@@ -220,31 +254,53 @@ def replay_tip(tip: Tip, prices: TipPrices, params: ReplayParams) -> TipResult:
     res.charges += params.costs.charges("BUY", res.qty, res.entry_price)
 
     remaining = [n * lot for n in tranches]  # units still open per target
+    entry_px = res.entry_price
     stop = tip.stop_loss
+    trigger = params.breakeven.get(tip.index, DEFAULT_BREAKEVEN)
+    trail = params.trail.get(tip.index, trigger)
+    res.breakeven_at = trigger
     cutoff = datetime.combine(day, EXIT_AT, tzinfo=IST)
 
     def sell(ts: datetime, px: float, qty: int, reason: str, market: bool) -> None:
         price = slip(px, "SELL", params.slippage_pct) if market else to_tick(px)
         res.exits.append(Fill(ts, price, qty, reason))
-        res.gross += (price - res.entry_price) * qty  # type: ignore[operator]
+        res.gross += (price - entry_px) * qty
         res.charges += params.costs.charges("SELL", qty, price)
 
     last_bar = bars[times[0]]
+    last = len(tip.targets) - 1
     for ts in times:
         bar = last_bar = bars[ts]
         if ts >= cutoff:
             break
-        if bar.low <= stop:  # stop first when a target was also reachable in the same minute
-            px = min(bar.open, stop)
-            sell(ts, px, sum(remaining), "STOP LOSS", market=True)
+        if bar.low <= stop:  # the stop as it stood when the minute began; first when a target was also reachable
+            why = "STOP LOSS" if stop < entry_px else "STOP AT COST" if stop == entry_px else "TRAILING STOP"
+            sell(ts, min(bar.open, stop), sum(remaining), why, market=True)
             remaining = [0] * len(remaining)
             break
         for i, tp in enumerate(tip.targets):
             if remaining[i] and bar.high >= tp:
-                sell(ts, max(bar.open, tp), remaining[i], f"TARGET {i + 1}", market=False)
-                remaining[i] = 0
+                # the last target books everything that is left, the earlier ones their share (a third of the lots)
+                sell(
+                    ts,
+                    max(bar.open, tp),
+                    sum(remaining) if i == last else remaining[i],
+                    f"TARGET {i + 1}",
+                    market=False,
+                )
+                remaining = [0] * len(remaining) if i == last else [0 if k == i else q for k, q in enumerate(remaining)]
         if not any(remaining):
             break
+        if res.peak_price is None or bar.high > res.peak_price:
+            res.peak_price, res.peak_time = bar.high, ts
+        if bar.high - entry_px >= trigger:  # from the next minute on: cost first, then trailing the highest price
+            raised = to_tick(max(entry_px, res.peak_price - trail)) if trail > 0 else entry_px
+            if res.breakeven_time is None:
+                res.breakeven_time = ts
+            elif raised > stop:
+                res.trail_moves += 1
+            stop = max(stop, raised)
+    res.final_stop = stop
     if any(remaining):
         # the day's last known price: the 15:15 minute's open, else the last bar there is
         at = next((bars[t] for t in times if t >= cutoff), None)
