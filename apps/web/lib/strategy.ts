@@ -362,6 +362,10 @@ function describeRules(c: RulesConfig, inst: Instrument | undefined): string[] {
           ]
         : [`Enter at ${e.at}${until}, ${days(e.days)}${when}; ${holdingText(h)}.`];
   const lines = [...entry, ...c.legs.map((l, i) => `Leg ${i + 1}: ${describeLeg(l, c.underlying, inst)}`)];
+  for (const d of WEEKDAYS) {
+    const own = c.day_legs?.[d];
+    if (own) lines.push(`${d}: ${own.map((l) => describeLeg(l, c.underlying, inst)).join("; ")}.`);
+  }
   const ex = exitOf(c);
   if (ex.when) lines.push(`Exit everything when ${groupText(ex.when)}.`);
   if (ex.on_opposite_signal) lines.push("Exit everything on a signal in the other direction.");

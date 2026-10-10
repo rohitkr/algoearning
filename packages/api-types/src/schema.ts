@@ -3232,8 +3232,17 @@ export interface components {
             /** Max Trades Per Day */
             max_trades_per_day?: number | null;
         };
-        /** RulesConfig */
+        /**
+         * RulesConfig
+         * @description `legs` trade on every entry day, unless `day_legs` names legs for that weekday: then those replace `legs` on
+         *     that day (a strangle on Monday, an iron condor on Tuesday, an iron fly on Wednesday, each with its own strikes).
+         *     Leg ids are unique across all of them, so a position held overnight finds its leg.
+         */
         RulesConfig: {
+            /** Day Legs */
+            day_legs?: {
+                [key: string]: components["schemas"]["Leg"][];
+            } | null;
             entry?: components["schemas"]["RulesEntry"];
             exit?: components["schemas"]["RulesExit"];
             holding?: components["schemas"]["Holding"];

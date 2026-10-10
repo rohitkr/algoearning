@@ -29,6 +29,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import date
 from itertools import pairwise
 from typing import Annotated, Any, Literal
 
@@ -69,6 +70,12 @@ DEFAULT_INSTRUMENTS: dict[str, Instrument] = {
 
 Underlying = Literal["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"]
 Weekday = Literal["MON", "TUE", "WED", "THU", "FRI"]
+
+
+def weekday_of(d: date) -> Weekday:
+    return d.strftime("%a").upper()[:3]  # type: ignore[return-value]
+
+
 WEEKDAYS: tuple[Weekday, ...] = ("MON", "TUE", "WED", "THU", "FRI")
 PREMIUM_MODES = frozenset({"premium", "premium_gte", "premium_lte"})
 HHMM = Annotated[str, StringConstraints(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]  # "09:20"; compares as text
@@ -289,13 +296,31 @@ class RulesExit(_Model):
 
 
 class RulesConfig(_Model):
+    """`legs` trade on every entry day, unless `day_legs` names legs for that weekday: then those replace `legs` on
+    that day (a strangle on Monday, an iron condor on Tuesday, an iron fly on Wednesday, each with its own strikes).
+    Leg ids are unique across all of them, so a position held overnight finds its leg."""
+
     kind: Literal["rules"] = "rules"
     underlying: Underlying = "NIFTY"
     entry: RulesEntry = Field(default_factory=RulesEntry)
     holding: Holding = Field(default_factory=Holding)
     legs: list[Leg] = Field(min_length=1, max_length=MAX_LEGS)
+    day_legs: dict[Weekday, Annotated[list[Leg], Field(min_length=1, max_length=MAX_LEGS)]] | None = None
     risk: RulesRisk = Field(default_factory=RulesRisk)
     exit: RulesExit = Field(default_factory=RulesExit)
+
+    def legs_for(self, day: date) -> list[Leg]:
+        """The legs that trade on this date."""
+        return (self.day_legs or {}).get(weekday_of(day), self.legs)
+
+    def leg_sets(self) -> list[tuple[Loc, list[Leg]]]:
+        """Every set of legs with its place in the config: the default legs, then each weekday's."""
+        out: list[tuple[Loc, list[Leg]]] = [(("legs",), self.legs)]
+        out += [(("day_legs", d), v) for d, v in (self.day_legs or {}).items()]
+        return out
+
+    def every_leg(self) -> list[Leg]:
+        return [leg for _, legs in self.leg_sets() for leg in legs]
 
 
 def rules_conditions(c: RulesConfig) -> list[Condition]:
@@ -572,11 +597,14 @@ def check(c: AnyConfig, instruments: Instruments) -> list[Issue]:
     return issues
 
 
-def _check_legs(legs: list[Leg], underlying: str, inst: Instrument, exit_all_on_leg_sl: bool) -> list[Issue]:
+def _check_legs(
+    legs: list[Leg], underlying: str, inst: Instrument, exit_all_on_leg_sl: bool, prefix: Loc = ("legs",),
+    seen: set[str] | None = None,
+) -> list[Issue]:  # fmt: skip
     issues: list[Issue] = []
-    seen: set[str] = set()
+    seen = set() if seen is None else seen  # shared between the sets of one config: ids are unique across them
     for i, leg in enumerate(legs):
-        loc: Loc = ("legs", i)
+        loc: Loc = (*prefix, i)
         if leg.id in seen:
             issues.append(Issue((*loc, "id"), f"leg id {leg.id} is used twice"))
         seen.add(leg.id)
@@ -619,9 +647,15 @@ def _check_rules(c: RulesConfig, inst: Instrument) -> list[Issue]:
             issues.append(Issue(("holding", "exit"), "must be after the entry time"))
         elif e.until is not None and e.until >= h.exit:
             issues.append(Issue(("entry", "until"), f"must be before the exit time ({h.exit})"))
-    issues += _check_legs(c.legs, c.underlying, inst, r.exit_all_on_leg_sl)
+    seen: set[str] = set()
+    for prefix, legs in c.leg_sets():
+        issues += _check_legs(legs, c.underlying, inst, r.exit_all_on_leg_sl, prefix, seen)
+    if c.day_legs:
+        idle = [d for d in c.day_legs if d not in e.days]
+        if idle:
+            issues.append(Issue(("entry", "days"), f"no trade on {', '.join(idle)}, which have their own legs"))
     issues += _check_conditions(c, inst)
-    if r.combined_stop and not any(leg.action == "SELL" for leg in c.legs):
+    if r.combined_stop and not any(leg.action == "SELL" for leg in c.every_leg()):
         issues.append(Issue(("risk", "combined_stop"), "needs at least one sold leg"))
     lp = r.lock_profit
     if lp:
@@ -676,7 +710,7 @@ def _check_conditions(c: RulesConfig, inst: Instrument) -> list[Issue]:
             issues.append(Issue(("entry", "source_id"), "pick the Telegram signal source"))
         if e.signals:
             issues.append(Issue(("entry", "signals"), "conditions do not apply when entering on a Telegram tip"))
-        dirs = {leg.direction for leg in c.legs}
+        dirs = {leg.direction for leg in c.every_leg()}
         if "always" not in dirs and not {"up", "down"} & dirs:
             issues.append(Issue(("legs",), "add the legs to trade on a tip"))
         if c.exit.on_opposite_signal:
@@ -684,7 +718,7 @@ def _check_conditions(c: RulesConfig, inst: Instrument) -> list[Issue]:
     elif e.mode == "time":
         if e.signals:
             issues.append(Issue(("entry", "signals"), "signals only apply when entering on conditions"))
-        if any(leg.direction != "always" for leg in c.legs):
+        if any(leg.direction != "always" for leg in c.every_leg()):
             issues.append(Issue(("legs",), "up/down legs need entry on conditions"))
         if c.exit.on_opposite_signal:
             issues.append(Issue(("exit", "on_opposite_signal"), "needs entry on conditions"))
@@ -693,14 +727,17 @@ def _check_conditions(c: RulesConfig, inst: Instrument) -> list[Issue]:
             issues.append(Issue(("entry", "signals"), "add a signal: the conditions that start a trade"))
         for i, sig in enumerate(e.signals):
             issues += _check_group(sig, ("entry", "signals", i))
-            if sig.direction != "always" and not any(leg.direction in ("always", sig.direction) for leg in c.legs):
+            if sig.direction != "always" and not any(
+                leg.direction in ("always", sig.direction) for leg in c.every_leg()
+            ):
                 issues.append(
                     Issue(("entry", "signals", i, "direction"), f"no leg trades on an {sig.direction} signal")
                 )
         dirs = {sig.direction for sig in e.signals}
-        for i, leg in enumerate(c.legs):
-            if leg.direction != "always" and leg.direction not in dirs:
-                issues.append(Issue(("legs", i, "direction"), f"no signal says {leg.direction}"))
+        for prefix, legs in c.leg_sets():
+            for i, leg in enumerate(legs):
+                if leg.direction != "always" and leg.direction not in dirs:
+                    issues.append(Issue((*prefix, i, "direction"), f"no signal says {leg.direction}"))
         if c.exit.on_opposite_signal and not {"up", "down"} <= dirs:
             issues.append(Issue(("exit", "on_opposite_signal"), "needs an up and a down signal"))
     if c.exit.when:
@@ -741,7 +778,14 @@ def plan_warnings(c: AnyConfig, max_lots_per_order: int | None) -> list[Issue]:
     if max_lots_per_order is None:
         return []
     msg = f"your plan allows {max_lots_per_order} lot(s) per order"
-    if isinstance(c, RulesConfig | TimeBasedConfig):
+    if isinstance(c, RulesConfig):
+        return [
+            Issue((*prefix, i, "lots"), msg, "plan_limit")
+            for prefix, legs in c.leg_sets()
+            for i, leg in enumerate(legs)
+            if leg.lots > max_lots_per_order
+        ]
+    if isinstance(c, TimeBasedConfig):
         return [
             Issue(("legs", i, "lots"), msg, "plan_limit")
             for i, leg in enumerate(c.legs)
@@ -764,7 +808,9 @@ def holds_overnight(c: AnyConfig) -> bool:
 
 def max_order_lots(c: AnyConfig) -> int:
     """The most lots this config puts in one order."""
-    if isinstance(c, RulesConfig | TimeBasedConfig):
+    if isinstance(c, RulesConfig):
+        return max(leg.lots for leg in c.every_leg())
+    if isinstance(c, TimeBasedConfig):
         return max(leg.lots for leg in c.legs)
     if isinstance(c, SmcScalpConfig):
         return max(smc_tranches(c.risk.lots, c.risk.tranches))

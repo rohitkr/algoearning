@@ -4928,7 +4928,36 @@
       },
       "RulesConfig": {
         "additionalProperties": false,
+        "description": "`legs` trade on every entry day, unless `day_legs` names legs for that weekday: then those replace `legs` on\nthat day (a strangle on Monday, an iron condor on Tuesday, an iron fly on Wednesday, each with its own strikes).\nLeg ids are unique across all of them, so a position held overnight finds its leg.",
         "properties": {
+          "day_legs": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "$ref": "#/components/schemas/Leg"
+                  },
+                  "maxItems": 6,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "propertyNames": {
+                  "enum": [
+                    "MON",
+                    "TUE",
+                    "WED",
+                    "THU",
+                    "FRI"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Legs"
+          },
           "entry": {
             "$ref": "#/components/schemas/RulesEntry"
           },

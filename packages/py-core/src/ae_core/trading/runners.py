@@ -163,7 +163,7 @@ class RulesRunner(Runner):
         self._sizes = sorted({c.candle for c in rules_conditions(self.cfg)})
 
     def _leg(self, leg_id: str) -> Leg | None:
-        return next((leg for leg in self.cfg.legs if leg.id == leg_id), None)
+        return next((leg for leg in self.cfg.every_leg() if leg.id == leg_id), None)
 
     def _new_day(self, m: Market) -> None:
         today = m.now.date()
@@ -187,7 +187,7 @@ class RulesRunner(Runner):
         keys = super().wanted(m)
         keys |= {p["contract"] for p in self.s.get("pending", [])}
         if self.s.get("phase", "waiting") == "waiting":
-            for leg in self.cfg.legs:
+            for leg in self.cfg.legs_for(m.now.date()):
                 expiry = rules.pick_expiry(m.expiries, m.now.date(), leg.expiry)
                 if expiry is None or m.spot is None:
                     continue
@@ -267,7 +267,7 @@ class RulesRunner(Runner):
         elif h.mode == "days":
             day = rules.add_weekdays(today, h.days)
         else:
-            leg = self.cfg.legs[0]
+            leg = self.cfg.legs_for(today)[0]
             found = rules.pick_expiry(m.expiries, today, leg.expiry)
             if found is None:
                 return f"no {leg.expiry.replace('_', ' ')} expiry listed"
@@ -336,7 +336,7 @@ class RulesRunner(Runner):
         if today.strftime("%a").upper()[:3] not in e.days:
             return "not_a_trading_day_for_this_strategy"
         if e.dte is not None:
-            expiry = rules.pick_expiry(m.expiries, today, self.cfg.legs[0].expiry)
+            expiry = rules.pick_expiry(m.expiries, today, self.cfg.legs_for(today)[0].expiry)
             if expiry is None or rules.weekdays_between(today, expiry) not in e.dte:
                 return "not_a_chosen_day_before_expiry"
         return None
@@ -382,7 +382,7 @@ class RulesRunner(Runner):
                     return []
                 direction = found
                 self.s["armed"] = {"dir": found, "at": now.isoformat()}
-        legs = [leg for leg in self.cfg.legs if leg.direction in ("always", direction)]
+        legs = [leg for leg in self.cfg.legs_for(now.date()) if leg.direction in ("always", direction)]
         if not legs:
             if tip_id is not None:
                 self.s.pop("armed", None)

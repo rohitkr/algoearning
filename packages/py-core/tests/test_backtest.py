@@ -216,3 +216,38 @@ def test_an_exit_with_no_trade_at_that_time_uses_the_last_known_price_instead_of
     (t,) = r.trades
     assert (t.exit_time, t.exit_price, t.reason) == (ts("09:30"), 100, "exit time 09:30")
     assert any("last known price" in w for w in r.warnings)
+
+
+def test_each_weekday_can_trade_its_own_legs() -> None:
+    mon = DAY - timedelta(days=1)
+    put = f"NIFTY:{DAY:%Y-%m-%d}:25000:PE"
+    put_up = f"NIFTY:{DAY:%Y-%m-%d}:25100:PE"
+    h = MemoryHistory()
+    _days(h, mon, DAY)
+    for d in (mon, DAY):
+        for key in (KEY, put, put_up):
+            h.add_option(key, [Candle(ts("09:20", d), *flat(100)), Candle(ts("15:15", d), *flat(90))])
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "09:20"},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [{"id": "D", "action": "SELL", "option_type": "CE"}],  # every day without its own legs
+        "day_legs": {"MON": [  # an iron-fly-like set: sell the put, buy a put above it
+            {"id": "M1", "action": "SELL", "option_type": "PE"},
+            {"id": "M2", "action": "BUY", "option_type": "PE", "strike": {"mode": "points", "points": -100}},
+        ]},
+    })  # fmt: skip
+    r = simulate(config, h, mon, DAY, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
+    by_day: dict[date, list[str]] = {}
+    for t in r.trades:
+        by_day.setdefault(t.entry_time.date(), []).append(t.leg)
+    by_day = {d: sorted(v) for d, v in by_day.items()}
+    assert by_day == {mon: ["M1", "M2"], DAY: ["D"]}
+    from ae_core.strategy import Instrument, check
+
+    inst = {"NIFTY": Instrument("NIFTY", "Nifty 50", "NSE", 65, 50, True, "09:15", "15:30")}
+    assert check(config, inst) == []
+    clash = parse(
+        {**config.model_dump(mode="json"), "day_legs": {"MON": [{"id": "D", "action": "SELL", "option_type": "PE"}]}}
+    )
+    assert [i.msg for i in check(clash, inst)] == ["leg id D is used twice"]

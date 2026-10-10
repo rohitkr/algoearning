@@ -20,6 +20,7 @@ import {
 
 import { ConditionGroupEditor, blankCondition } from "./condition-editor";
 import { Check, NumberField, SelectField, TimeField } from "./fields";
+import { DayLegs } from "./day-legs";
 import { LegEditor } from "./leg-editor";
 import { TipEntry } from "./tip-entry";
 
@@ -358,6 +359,8 @@ export function RulesEditor({
           />
         ))}
       </section>
+
+      <DayLegs config={config} catalog={catalog} inst={inst} errs={errs} warns={warns} onChange={onChange} />
 
       {byConditions && (
         <Card className="flex flex-col gap-4">

@@ -127,6 +127,7 @@ export function LegEditor({
   warns,
   canRemove,
   directional = false,
+  path,
   onChange,
   onDuplicate,
   onRemove,
@@ -139,11 +140,12 @@ export function LegEditor({
   warns: Errs;
   canRemove: boolean;
   directional?: boolean; // entering on signals: each leg may trade only on an up or a down signal
+  path?: string; // where this leg sits in the config, for its errors (default legs.<index>; a weekday's: day_legs.MON.<index>)
   onChange: (l: StrategyLeg) => void;
   onDuplicate?: () => void;
   onRemove: () => void;
 }) {
-  const p = `legs.${index}`;
+  const p = path ?? `legs.${index}`;
   const set = <K extends keyof StrategyLeg>(k: K, v: StrategyLeg[K]) => onChange({ ...leg, [k]: v });
   const strike: LegStrike = leg.strike ?? { mode: "atm", offset: 0, premium: null, points: null };
   const qty = legQuantity(leg, instrument);
