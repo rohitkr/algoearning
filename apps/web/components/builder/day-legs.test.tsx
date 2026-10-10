@@ -70,6 +70,22 @@ describe("DayLegs", () => {
     ]);
   });
 
+  it("offers every strike rule the leg editor has: premium at least, OTM strikes, points", () => {
+    const onChange = setup();
+    fireEvent.click(screen.getByLabelText(/Trade different legs on different weekdays/));
+    fireEvent.change(screen.getByLabelText("Sell strike"), { target: { value: "premium_gte" } });
+    fireEvent.click(screen.getByText("Add MON legs"));
+    expect(legsOf(last(onChange), "MON").map((l) => [l.strike?.mode, l.strike?.premium])).toEqual([
+      ["premium_gte", 60], ["premium_gte", 60],
+    ]); // prettier-ignore
+    fireEvent.click(screen.getByRole("tab", { name: "TUE" }));
+    fireEvent.change(screen.getByLabelText("Sell strike"), { target: { value: "3" } });
+    fireEvent.click(screen.getByText("Add TUE legs"));
+    expect(legsOf(last(onChange), "TUE").map((l) => [l.strike?.mode, l.strike?.offset])).toEqual([
+      ["atm", 3], ["atm", 3],
+    ]); // prettier-ignore
+  });
+
   it("builds an iron condor and an iron fly with their wings", () => {
     const onChange = setup();
     fireEvent.click(screen.getByLabelText(/Trade different legs on different weekdays/));
@@ -82,7 +98,7 @@ describe("DayLegs", () => {
     ]); // prettier-ignore
     fireEvent.click(screen.getByRole("tab", { name: "WED" }));
     fireEvent.change(screen.getByLabelText("Trade"), { target: { value: "fly" } });
-    fireEvent.change(screen.getByLabelText("Pick strikes by"), { target: { value: "points" } });
+    fireEvent.change(screen.getByLabelText("Buy wing strike"), { target: { value: "points" } });
     fireEvent.click(screen.getByText("Add WED legs"));
     const fly = legsOf(last(onChange), "WED");
     expect(fly.map((l) => [l.action, l.option_type, l.strike?.mode])).toEqual([

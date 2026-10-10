@@ -29,6 +29,66 @@ const STRIKE_CHOICES = (max: number) => [
 ];
 const BY_PRICE = new Set(["premium", "premium_gte", "premium_lte"]);
 
+/** The strike rule of a leg: ATM / ITM n / OTM n, a premium (near, at least, at most) or points from the index, and its
+ * number. Renders two grid cells (the choice and its value) so it sits in a row of fields. */
+export function StrikePicker({
+  strike,
+  maxOffset,
+  errs = {},
+  path = "strike",
+  label = "Strike",
+  onChange,
+}: {
+  strike: LegStrike;
+  maxOffset: number;
+  errs?: Errs;
+  path?: string;
+  label?: string;
+  onChange: (s: LegStrike) => void;
+}) {
+  return (
+    <>
+      <SelectField
+        label={label}
+        value={strike.mode === "atm" ? String(strike.offset ?? 0) : strike.mode}
+        options={STRIKE_CHOICES(maxOffset)}
+        error={errs[`${path}.offset`] ?? errs[`${path}.mode`]}
+        onChange={(v) =>
+          onChange(
+            BY_PRICE.has(v)
+              ? { mode: v as LegStrike["mode"], offset: 0, premium: strike.premium ?? 100, points: null }
+              : v === "points"
+                ? { mode: "points", offset: 0, premium: null, points: strike.points ?? 200 }
+                : { mode: "atm", offset: Number(v), premium: null, points: null },
+          )
+        }
+      />
+      {BY_PRICE.has(strike.mode) ? (
+        <NumberField
+          label="Premium"
+          value={strike.premium}
+          min={0}
+          suffix="₹"
+          error={errs[`${path}.premium`]}
+          onChange={(v) => onChange({ ...strike, premium: v })}
+        />
+      ) : strike.mode === "points" ? (
+        <NumberField
+          label="Points"
+          value={strike.points}
+          step={50}
+          suffix="pts"
+          hint="+ out of the money, − in the money"
+          error={errs[`${path}.points`]}
+          onChange={(v) => onChange({ ...strike, points: v })}
+        />
+      ) : (
+        <div className="hidden sm:block" />
+      )}
+    </>
+  );
+}
+
 /** A toggleable block of options (stop-loss, target, ...): off = null in the config. */
 function Optional({
   label,
@@ -230,44 +290,13 @@ export function LegEditor({
           }))}
           onChange={(v) => set("expiry", v)}
         />
-        <SelectField
-          label="Strike"
-          value={strike.mode === "atm" ? String(strike.offset ?? 0) : strike.mode}
-          options={STRIKE_CHOICES(maxOffset)}
-          error={errs[`${p}.strike.offset`] ?? errs[`${p}.strike.mode`]}
-          onChange={(v) =>
-            set(
-              "strike",
-              BY_PRICE.has(v)
-                ? { mode: v as LegStrike["mode"], offset: 0, premium: strike.premium ?? 100, points: null }
-                : v === "points"
-                  ? { mode: "points", offset: 0, premium: null, points: strike.points ?? 200 }
-                  : { mode: "atm", offset: Number(v), premium: null, points: null },
-            )
-          }
+        <StrikePicker
+          strike={strike}
+          maxOffset={maxOffset}
+          errs={errs}
+          path={`${p}.strike`}
+          onChange={(st) => set("strike", st)}
         />
-        {BY_PRICE.has(strike.mode) ? (
-          <NumberField
-            label="Premium"
-            value={strike.premium}
-            min={0}
-            suffix="₹"
-            error={errs[`${p}.strike.premium`]}
-            onChange={(v) => set("strike", { ...strike, premium: v })}
-          />
-        ) : strike.mode === "points" ? (
-          <NumberField
-            label="Points"
-            value={strike.points}
-            step={50}
-            suffix="pts"
-            hint="+ out of the money, − in the money"
-            error={errs[`${p}.strike.points`]}
-            onChange={(v) => set("strike", { ...strike, points: v })}
-          />
-        ) : (
-          <div className="hidden sm:block" />
-        )}
       </div>
       {warns[`${p}.lots`] && <p className="mt-2 text-xs text-warning">{warns[`${p}.lots`]}</p>}
 
