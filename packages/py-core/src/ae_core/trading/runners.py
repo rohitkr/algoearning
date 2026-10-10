@@ -410,8 +410,14 @@ class RulesRunner(Runner):
             leg, c = expiring
             self.note("leg_expires_before_the_exit", leg=leg.id, expiry=c.expiry.isoformat(), exit=final.isoformat())
             return []
-        if any(m.price(c) is None for _, c in contracts):
-            return []  # the prices were just requested: enter once they stream
+        missing = [c.label for _, c in contracts if m.price(c) is None]
+        if missing:
+            # the prices were just requested: enter once they stream (a backtest says so when the data never has them)
+            why = "no price yet for " + ", ".join(missing)
+            if self.s.get("waiting_reason") != why:
+                self.s["waiting_reason"] = why
+                self.note("waiting_to_enter", reason=why)
+            return []
         self.s.pop("entered", None)
         self.s.pop("armed", None)
         self.s.update(phase="in", entries_day=today, entries=self._entries_today(m) + 1, final=final.isoformat(),

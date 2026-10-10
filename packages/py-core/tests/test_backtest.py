@@ -326,3 +326,47 @@ def test_a_weekday_can_be_an_iron_condor_built_leg_by_leg() -> None:
     assert set(got) == {"T1", "T2", "T3", "T4"}
     assert got["T1"] == ("SELL", f"NIFTY {DAY:%d %b} 25100 CE")  # premium 60 is 100 points out
     assert got["T3"] == ("BUY", f"NIFTY {DAY:%d %b} 25000 CE") and got["T4"] == ("BUY", f"NIFTY {DAY:%d %b} 25000 PE")
+
+
+def test_a_position_left_open_after_its_trade_ended_is_closed_and_reported() -> None:
+    """If an exit is lost after the trade was closed (nothing retries it), the leg used to stay open for good and
+    block every later entry; now it is closed at the last price, and the day and the result say so."""
+    from unittest.mock import patch
+
+    from ae_core.trading.runners import RulesRunner
+
+    h = history({"09:20": flat(100), "12:00": flat(90)})
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "09:20"},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [{"id": "L1", "action": "BUY", "option_type": "CE"}],
+    })  # fmt: skip
+
+    def lost_exits(self: RulesRunner, m: Any, reason: str, event: str | None = None, **detail: Any) -> list[Any]:
+        self._end_cycle(m)  # the trade is over, but no exit order comes out of it
+        return []
+
+    with patch.object(RulesRunner, "_close", lost_exits):
+        r = run(config, h)
+    (t,) = r.trades
+    assert (t.exit_price, t.reason) == (90, "closing a leftover position")
+    assert any("still open after their trade had ended" in w for w in r.warnings)
+    assert not any("still open at the end" in w for w in r.warnings)
+
+
+def test_a_day_that_waits_for_a_price_that_is_never_stored_says_which_contract() -> None:
+    mon = DAY - timedelta(days=1)
+    h = MemoryHistory()
+    _days(h, mon)
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "09:20"},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [{"id": "L1", "action": "BUY", "option_type": "CE"}],
+    })  # fmt: skip
+    h.add_option(KEY, [Candle(ts("09:20", DAY), *flat(100))])  # the contract exists, but not on Monday
+    h.add_option(f"NIFTY:{DAY:%Y-%m-%d}:25500:CE", [Candle(ts("09:20", mon), *flat(5))])  # Monday has other prices
+    r = simulate(config, h, mon, mon, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
+    (row,) = r.day_log
+    assert row["trades"] == 0 and any("no price yet for NIFTY 06 Oct 25000 CE" in w for w in row["why"])
