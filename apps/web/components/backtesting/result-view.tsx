@@ -56,7 +56,10 @@ function Tile({ label, children, sub }: { label: string; children: React.ReactNo
   );
 }
 
+export type DayRow = { day: string; weekday: string; options: boolean; trades: number; why: string[] };
+
 export type BacktestResultData = {
+  day_log?: DayRow[];
   summary: Summary;
   daily: Day[];
   trades: Trade[];
@@ -64,6 +67,52 @@ export type BacktestResultData = {
   warnings: string[];
   signals?: Signals | null;
 };
+
+/** Every replayed day: did it have option prices, did it trade, and if not, why. Answers "why so few trades?". */
+function DayTable({ rows }: { rows: DayRow[] }) {
+  const traded = rows.filter((r) => r.trades > 0).length;
+  const noPrices = rows.filter((r) => !r.options).length;
+  return (
+    <Card className="p-0">
+      <div className="px-5 pt-4 pb-2">
+        <CardTitle>Day by day</CardTitle>
+        <p className="mt-1 text-sm text-muted">
+          {rows.length} days replayed: traded on {traded}, no option prices stored on {noPrices}, other days
+          did not trade for the reason shown.
+        </p>
+      </div>
+      <div className="max-h-96 overflow-auto">
+        <table className="w-full min-w-[40rem] text-left text-sm tabular-nums">
+          <thead>
+            <tr className="border-b border-border text-xs text-muted">
+              {["Day", "Option prices", "Trades", "Why no trade"].map((h) => (
+                <th key={h} className="px-3 py-2 font-medium whitespace-nowrap">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map((r) => (
+              <tr key={r.day}>
+                <td className="px-3 py-1.5 whitespace-nowrap">
+                  {r.weekday}, {r.day}
+                </td>
+                <td className={r.options ? "px-3 py-1.5 text-profit" : "px-3 py-1.5 text-loss"}>
+                  {r.options ? "yes" : "none"}
+                </td>
+                <td className="px-3 py-1.5">{r.trades || "–"}</td>
+                <td className="px-3 py-1.5 text-xs text-muted">
+                  {r.trades > 0 ? "" : r.why.join("; ") || "–"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
 
 /** A backtest's result (ADR 0017): used by a saved backtest's page and by the builder's test before saving. */
 export function BacktestResultView({ res }: { res: BacktestResultData }) {
@@ -177,6 +226,7 @@ export function BacktestResultView({ res }: { res: BacktestResultData }) {
           </Card>
         </div>
       )}
+      {res.day_log && res.day_log.length > 0 && <DayTable rows={res.day_log} />}
       <Card className="p-0">
         <div className="px-5 pt-4 pb-2">
           <CardTitle>

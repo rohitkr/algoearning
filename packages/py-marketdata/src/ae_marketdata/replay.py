@@ -55,6 +55,7 @@ def months(start: date, end: date) -> list[tuple[date, date]]:
 def merge(total: BacktestResult, part: BacktestResult) -> None:
     total.trades += part.trades
     total.signals += part.signals
+    total.day_log += part.day_log
     total.days_replayed += part.days_replayed
     total.days_without_data += part.days_without_data
     total.days_without_options += part.days_without_options

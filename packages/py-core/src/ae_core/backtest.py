@@ -119,6 +119,7 @@ class BacktestResult:
     charges: float = 0.0
     signals: list[dict[str, Any]] = field(default_factory=list)  # runners' signal notes (event "*_signal")
     funnel: dict[str, int] = field(default_factory=dict)  # why setups did or did not become trades, counted
+    day_log: list[dict[str, Any]] = field(default_factory=list)  # per replayed day: option prices?, trades, why not
 
     def closed(self) -> list[ClosedTrade]:
         return [ClosedTrade(t.exit_time.date(), t.net) for t in sorted(self.trades, key=lambda t: t.exit_time)]
@@ -128,6 +129,42 @@ class BacktestResult:
 
     def summary(self) -> Summary:
         return summarize(self.closed())
+
+
+_WHY = {
+    "not_a_trading_day_for_this_strategy": "this weekday is not ticked under Trade on",
+    "not_a_chosen_day_before_expiry": "not one of the chosen days before expiry",
+    "no_legs_for_this_day": "no legs set for this weekday",
+    "no_expiry": "no listed expiry on or after this day in the data",
+    "leg_expires_before_the_exit": "the contract expires before the exit day: not entered",
+    "no_trade_day": "too few index bars in the range window",
+}
+
+
+def _why(note: dict[str, Any]) -> str | None:
+    """A runner note as a short reason a day did not trade (or None for notes that are not reasons)."""
+    ev = str(note["event"])
+    if ev in _WHY:
+        return _WHY[ev]
+    if ev == "waiting_to_enter":
+        return f"waiting to enter: {note.get('reason', '')}"
+    if ev == "order_not_placed":
+        return f"order not placed: {note.get('reason', '')}"
+    return None
+
+
+def _ranges(days: list[date]) -> str:
+    """Days as ranges of consecutive ones in the list: '1 Jul - 2 Jul, 5 Aug - 9 Oct'."""
+    out: list[str] = []
+    i = 0
+    while i < len(days):
+        j = i
+        while j + 1 < len(days) and (days[j + 1] - days[j]).days <= 3:  # a weekend between is not a gap
+            j += 1
+        a, b = days[i], days[j]
+        out.append(f"{a:%d %b}" if a == b else f"{a:%d %b} - {b:%d %b}")
+        i = j + 1
+    return ", ".join(out)
 
 
 def to_tick(px: float) -> float:
@@ -256,14 +293,18 @@ def simulate(
     carried: dict[str, float] = {}  # each contract's last known price from earlier days: only for getting out
     stale_exits = 0
 
+    no_options: list[date] = []
     for day in days:
         spot = history.spot(u, day)
         if not spot:
             result.days_without_data += 1
             continue
         result.days_replayed += 1
-        if not history.has_options(u, day):
+        has_options = history.has_options(u, day)
+        if not has_options:
             result.days_without_options += 1
+            no_options.append(day)
+        why: dict[str, None] = {}  # this day's reasons, in order, once each
         prices = _Prices(history, day)
         live_expiries = [e for e in expiries if e >= day]
         before = [c for d in prior for c in d]
@@ -296,12 +337,18 @@ def simulate(
             for k in keys | {p.contract.key for p in runner.positions if p.exit_time == now}:
                 prices.close(k, now)
             for note in runner.notes:
+                if (reason := _why(note)) is not None and len(why) < 4:
+                    why[reason] = None
                 if note["event"] in _NOTED:
                     noted[note["event"]] = noted.get(note["event"], 0) + 1
                 if note["event"].endswith("_signal"):
                     result.signals.append({"time": now.isoformat(), **note})
             runner.notes.clear()
         carried.update(prices.last)
+        result.day_log.append({
+            "day": day.isoformat(), "weekday": f"{day:%a}", "options": has_options,
+            "why": list(why) if has_options else ["no option prices stored for this day"],
+        })  # fmt: skip
         if runner.prior_days:
             prior = [*prior, list(spot)][-runner.prior_days :]
     if stale_exits:
@@ -314,8 +361,14 @@ def simulate(
         result.warnings.insert(
             0,
             f"{result.days_without_options} of {result.days_replayed} days have no option prices in the stored "
-            "history, so nothing could trade on them. Option history covers only part of the range.",
+            f"history, so nothing could trade on them: {_ranges(no_options)}. Load option history for those days "
+            "(import-history) and run again.",
         )
+    entered: dict[str, int] = {}
+    for t in result.trades:
+        entered[t.entry_time.date().isoformat()] = entered.get(t.entry_time.date().isoformat(), 0) + 1
+    for row in result.day_log:
+        row["trades"] = entered.get(row["day"], 0)
     # positions still open when the range ends are closed at their last known price
     last_day = days[-1]
     for pos in runner.open_positions():
@@ -455,6 +508,7 @@ def summarize_result(r: BacktestResult) -> dict[str, Any]:
             for t in r.trades[:5000]
         ],
         "trades_total": len(r.trades),
+        "day_log": r.day_log,
         "warnings": r.warnings,
     }
 

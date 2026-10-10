@@ -275,3 +275,24 @@ def test_no_default_legs_needed_when_weekdays_have_their_own() -> None:
     r = simulate(config, h, mon, DAY, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
     assert [(t.entry_time.date(), t.leg) for t in r.trades] == [(mon, "M1")]  # Monday only, no error on Tuesday
     assert [i.msg for i in check(parse({**raw, "day_legs": None}), inst)] == ["add at least one leg"]
+
+
+def test_every_replayed_day_says_whether_it_had_option_prices_and_why_it_did_not_trade() -> None:
+    mon = DAY - timedelta(days=1)  # Monday: no option prices at all; Tuesday: prices, but the weekday is not ticked
+    h = MemoryHistory()
+    _days(h, mon, DAY)
+    h.add_option(KEY, [Candle(ts("09:20", DAY), *flat(100))])
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "09:20", "days": ["MON"]},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [{"id": "L1", "action": "SELL", "option_type": "CE"}],
+    })  # fmt: skip
+    r = simulate(config, h, mon, DAY, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
+    by_day = {row["day"]: row for row in r.day_log}
+    assert by_day[mon.isoformat()]["options"] is False and by_day[mon.isoformat()]["trades"] == 0
+    assert by_day[mon.isoformat()]["why"] == ["no option prices stored for this day"]
+    assert by_day[DAY.isoformat()]["options"] is True
+    assert by_day[DAY.isoformat()]["why"] == ["this weekday is not ticked under Trade on"]
+    assert any("05 Oct" in w and "no option prices" in w for w in r.warnings)
+    assert summarize_result(r)["day_log"] == r.day_log
