@@ -81,8 +81,7 @@ export function DayLegs({
   onChange: (c: RulesConfig) => void;
 }) {
   const dayLegs = (config.day_legs ?? {}) as Partial<Record<Weekday, StrategyLeg[]>>;
-  const on = Object.keys(dayLegs).length > 0;
-  const [open, setOpen] = useState(on);
+  const open = config.day_legs != null; // the switch: an empty set is "on, no weekday set up yet"
   const [day, setDay] = useState<Weekday>("MON");
   const [build, setBuild] = useState<Build>({
     shape: "strangle",
@@ -94,7 +93,7 @@ export function DayLegs({
   const expiry: StrategyLeg["expiry"] = inst?.weekly_expiry === false ? "current_month" : "current_week";
   const taken = new Set([...config.legs, ...Object.values(dayLegs).flat()].map((l) => l!.id));
   const set = (next: Partial<Record<Weekday, StrategyLeg[]>>) =>
-    onChange({ ...config, day_legs: Object.keys(next).length ? (next as RulesConfig["day_legs"]) : null });
+    onChange({ ...config, day_legs: next as RulesConfig["day_legs"] });
   const mine = dayLegs[day];
   const max = catalog.limits.max_legs;
   const wings = build.shape === "condor" || build.shape === "fly";
@@ -119,10 +118,7 @@ export function DayLegs({
       <Check
         label="Trade different legs on different weekdays"
         checked={open}
-        onChange={(v) => {
-          setOpen(v);
-          if (!v) set({});
-        }}
+        onChange={(v) => onChange({ ...config, day_legs: v ? {} : null })}
       />
       {!open ? (
         <p className="text-sm text-muted">
@@ -152,8 +148,10 @@ export function DayLegs({
             ))}
           </div>
           <p className="text-xs text-muted">
-            ● = has its own legs. Other days trade the default legs above ({config.legs.length} leg
-            {config.legs.length === 1 ? "" : "s"}).
+            ● = has its own legs.{" "}
+            {config.legs.length
+              ? `Other days trade the default legs above (${config.legs.length}).`
+              : "A day without legs does not trade."}
           </p>
 
           <div className="flex flex-col gap-3 rounded-xl border border-border p-3">

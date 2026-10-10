@@ -251,3 +251,27 @@ def test_each_weekday_can_trade_its_own_legs() -> None:
         {**config.model_dump(mode="json"), "day_legs": {"MON": [{"id": "D", "action": "SELL", "option_type": "PE"}]}}
     )
     assert [i.msg for i in check(clash, inst)] == ["leg id D is used twice"]
+
+
+def test_no_default_legs_needed_when_weekdays_have_their_own() -> None:
+    from ae_core.strategy import Instrument, check
+
+    mon = DAY - timedelta(days=1)
+    put = f"NIFTY:{DAY:%Y-%m-%d}:25000:PE"
+    h = MemoryHistory()
+    _days(h, mon, DAY)
+    for d in (mon, DAY):
+        h.add_option(put, [Candle(ts("09:20", d), *flat(100)), Candle(ts("15:15", d), *flat(90))])
+    raw: dict[str, Any] = {
+        "kind": "rules",
+        "entry": {"at": "09:20"},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [],
+        "day_legs": {"MON": [{"id": "M1", "action": "SELL", "option_type": "PE"}]},  # Tuesday: nothing to trade
+    }
+    config = parse(raw)
+    inst = {"NIFTY": Instrument("NIFTY", "Nifty 50", "NSE", 65, 50, True, "09:15", "15:30")}
+    assert check(config, inst) == []
+    r = simulate(config, h, mon, DAY, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
+    assert [(t.entry_time.date(), t.leg) for t in r.trades] == [(mon, "M1")]  # Monday only, no error on Tuesday
+    assert [i.msg for i in check(parse({**raw, "day_legs": None}), inst)] == ["add at least one leg"]

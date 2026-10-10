@@ -335,8 +335,11 @@ class RulesRunner(Runner):
         e, today = self.cfg.entry, m.now.date()
         if today.strftime("%a").upper()[:3] not in e.days:
             return "not_a_trading_day_for_this_strategy"
+        legs = self.cfg.legs_for(today)
+        if not legs:
+            return "no_legs_for_this_day"
         if e.dte is not None:
-            expiry = rules.pick_expiry(m.expiries, today, self.cfg.legs_for(today)[0].expiry)
+            expiry = rules.pick_expiry(m.expiries, today, legs[0].expiry)
             if expiry is None or rules.weekdays_between(today, expiry) not in e.dte:
                 return "not_a_chosen_day_before_expiry"
         return None

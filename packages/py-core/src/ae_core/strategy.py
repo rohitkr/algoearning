@@ -298,13 +298,14 @@ class RulesExit(_Model):
 class RulesConfig(_Model):
     """`legs` trade on every entry day, unless `day_legs` names legs for that weekday: then those replace `legs` on
     that day (a strangle on Monday, an iron condor on Tuesday, an iron fly on Wednesday, each with its own strikes).
-    Leg ids are unique across all of them, so a position held overnight finds its leg."""
+    `legs` may be empty: a weekday with neither its own legs nor default legs does not trade. Leg ids are unique
+    across all of them, so a position held overnight finds its leg."""
 
     kind: Literal["rules"] = "rules"
     underlying: Underlying = "NIFTY"
     entry: RulesEntry = Field(default_factory=RulesEntry)
     holding: Holding = Field(default_factory=Holding)
-    legs: list[Leg] = Field(min_length=1, max_length=MAX_LEGS)
+    legs: list[Leg] = Field(max_length=MAX_LEGS)  # may be empty when day_legs says what every trading day does
     day_legs: dict[Weekday, Annotated[list[Leg], Field(min_length=1, max_length=MAX_LEGS)]] | None = None
     risk: RulesRisk = Field(default_factory=RulesRisk)
     exit: RulesExit = Field(default_factory=RulesExit)
@@ -647,6 +648,8 @@ def _check_rules(c: RulesConfig, inst: Instrument) -> list[Issue]:
             issues.append(Issue(("holding", "exit"), "must be after the entry time"))
         elif e.until is not None and e.until >= h.exit:
             issues.append(Issue(("entry", "until"), f"must be before the exit time ({h.exit})"))
+    if not c.every_leg():
+        issues.append(Issue(("legs",), "add at least one leg"))
     seen: set[str] = set()
     for prefix, legs in c.leg_sets():
         issues += _check_legs(legs, c.underlying, inst, r.exit_all_on_leg_sl, prefix, seen)

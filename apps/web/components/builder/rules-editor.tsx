@@ -110,6 +110,7 @@ export function RulesEditor({
   const setSignals = (next: typeof signals) => setEntry({ signals: next });
   const legs = config.legs;
   const max = catalog.limits.max_legs;
+  const perDay = config.day_legs != null; // each weekday sets its own legs: the default legs are optional
 
   return (
     <>
@@ -318,7 +319,7 @@ export function RulesEditor({
       <section className="flex flex-col gap-3" aria-label="Legs">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">
-            Legs{" "}
+            {perDay ? "Default legs (optional)" : "Legs"}{" "}
             <span className="text-sm font-normal text-muted">
               ({legs.length} of {max})
             </span>
@@ -334,6 +335,12 @@ export function RulesEditor({
             <Plus className="size-4" aria-hidden /> Add leg
           </Button>
         </div>
+        {perDay && (
+          <p className="text-sm text-muted">
+            Only for weekdays that have no legs of their own below. If every weekday you trade has its own
+            legs, remove these.
+          </p>
+        )}
         {errs.legs && <p className="text-sm text-loss">{errs.legs}</p>}
         {legs.map((leg, i) => (
           <LegEditor
@@ -344,7 +351,7 @@ export function RulesEditor({
             maxOffset={catalog.limits.max_strike_offset}
             errs={errs}
             warns={warns}
-            canRemove={legs.length > 1}
+            canRemove={perDay || legs.length > 1}
             directional={byConditions || byTip}
             onChange={(l) => onChange({ ...config, legs: legs.map((x, j) => (j === i ? l : x)) })}
             onDuplicate={

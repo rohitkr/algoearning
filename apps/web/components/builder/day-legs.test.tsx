@@ -1,5 +1,6 @@
 import type { RulesConfig, StrategyCatalog, StrategyLeg } from "@algoearning/api-types";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import fixture from "./catalog.fixture.json";
@@ -14,9 +15,26 @@ const BASE = {
 
 afterEach(cleanup);
 
+/** The config lives in the builder: a small stand-in that keeps it, like the real parent does. */
 function setup(config: RulesConfig = BASE) {
   const onChange = vi.fn();
-  render(<DayLegs config={config} catalog={catalog} inst={inst} errs={{}} warns={{}} onChange={onChange} />);
+  function Harness() {
+    const [c, setC] = useState(config);
+    return (
+      <DayLegs
+        config={c}
+        catalog={catalog}
+        inst={inst}
+        errs={{}}
+        warns={{}}
+        onChange={(n) => {
+          onChange(n);
+          setC(n);
+        }}
+      />
+    );
+  }
+  render(<Harness />);
   return onChange;
 }
 const last = (f: ReturnType<typeof vi.fn>) => f.mock.calls.at(-1)![0] as RulesConfig;
@@ -28,6 +46,15 @@ describe("DayLegs", () => {
     expect(screen.queryByRole("tablist")).toBeNull();
     fireEvent.click(screen.getByLabelText(/Trade different legs on different weekdays/));
     expect(screen.getByRole("tablist")).toBeTruthy();
+    expect(last(onChange).day_legs).toEqual({});
+  });
+
+  it("switching off removes every weekday's legs", () => {
+    const withMon = {
+      ...BASE,
+      day_legs: { MON: [{ ...BASE.legs[0]!, id: "MON1" }] },
+    } as unknown as RulesConfig;
+    const onChange = setup(withMon);
     fireEvent.click(screen.getByLabelText(/Trade different legs on different weekdays/));
     expect(last(onChange).day_legs).toBeNull();
   });

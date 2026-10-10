@@ -37,7 +37,7 @@ calendars; option-premium indicators. A plain-English strategy writer was consid
 
 **Legs per weekday.** `day_legs` (optional, MON..FRI) gives a weekday its own legs, replacing `legs` on that day: a
 strangle on Monday, an iron condor on Tuesday, an iron fly on Wednesday, each leg with its own strike rule (premium,
-points from the index, ATM offset ...). A weekday without an entry uses `legs`. Leg ids are unique across all sets (a
+points from the index, ATM offset ...). A weekday without an entry uses `legs`; `legs` may be empty, and then a weekday with no legs of its own does not trade (a config needs at least one leg somewhere). Leg ids are unique across all sets (a
 position held overnight finds its leg by id); a weekday with its own legs must be one of the entry days. The builder
 offers Strangle / Straddle / Iron condor / Iron fly per weekday (strikes by premium or points), copy to the other
 weekdays, and the normal leg editor to fine-tune.
