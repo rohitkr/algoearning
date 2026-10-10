@@ -94,10 +94,6 @@ async def history_coverage(_: CurrentUser, db: DbDep, request: Request) -> list[
     return out
 
 
-PREVIEW_MAX_DAYS = 92  # a quick test while building; longer ranges: save the strategy and queue a full backtest
-PREVIEW_AT_ONCE = 3  # previews running in this API process at the same time (they are CPU-bound)
-
-
 @router.post("/v1/backtests/preview", response_model=BacktestPreviewOut)
 async def preview_backtest(
     body: BacktestPreviewIn, user: CurrentUser, s: UserSession, db: DbDep, request: Request, settings: SettingsDep
@@ -106,10 +102,6 @@ async def preview_backtest(
     worker runs for a saved backtest), so its parameters can be tweaked and tried again. Nothing is stored."""
     if body.start_date > body.end_date:
         raise AppError("the start date must not be after the end date")
-    if (body.end_date - body.start_date).days > PREVIEW_MAX_DAYS:
-        raise AppError(
-            f"a quick test covers at most {PREVIEW_MAX_DAYS} days: save the strategy to backtest a longer range"
-        )
     ent = await load_entitlements(s, user.user_id, timedelta(days=settings.subscription_grace_days))
     require_feature(ent, "backtesting")
     config = body.config
@@ -120,16 +112,10 @@ async def preview_backtest(
     if isinstance(config, RulesConfig) and config.entry.mode == "tip":
         raise Conflict(TIP_NOT_SUPPORTED, {"reason": "tips_not_supported"})
     inst = instruments[config.underlying]
-    app = request.app
-    if not hasattr(app.state, "preview_slots"):
-        app.state.preview_slots = asyncio.Semaphore(PREVIEW_AT_ONCE)
-    if app.state.preview_slots.locked():
-        raise Conflict("other tests are running: try again in a moment", {"reason": "busy"})
-    async with app.state.preview_slots:
-        result = await replay(
-            db, config, body.start_date, body.end_date, multiplier=body.multiplier, lot_size=inst.lot_size,
-            strike_step=inst.strike_step, slippage_pct=body.slippage_pct,
-        )  # fmt: skip
+    result = await replay(
+        db, config, body.start_date, body.end_date, multiplier=body.multiplier, lot_size=inst.lot_size,
+        strike_step=inst.strike_step, slippage_pct=body.slippage_pct,
+    )  # fmt: skip
     out = summarize_result(result)
     out["warnings"] = [
         f"Quantities use today's lot size ({inst.lot_size} for {config.underlying}); older periods traded other sizes.",

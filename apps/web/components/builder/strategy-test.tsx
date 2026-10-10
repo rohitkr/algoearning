@@ -12,8 +12,6 @@ import { ApiRequestError, apiRequest } from "@/lib/client-api";
 
 import { NumberField, inputClass } from "./fields";
 
-const MAX_DAYS = 92; // the API's cap for a quick test; longer ranges: save the strategy, then Backtesting
-
 const addDays = (iso: string, days: number) => {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -58,8 +56,6 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
     };
   }, [underlying, getToken]);
 
-  const days = from && to ? (Date.parse(to) - Date.parse(from)) / 86_400_000 : 0;
-  const tooLong = days > MAX_DAYS;
   const stale = out != null && out.config !== JSON.stringify(config);
 
   async function run() {
@@ -120,7 +116,7 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
           onChange={(v) => setSlippage(v ?? 0)}
         />
         <div className="flex items-end">
-          <Button onClick={run} disabled={busy || blocked || !from || !to || tooLong || from > to}>
+          <Button onClick={run} disabled={busy || blocked || !from || !to || from > to}>
             <FlaskConical className="size-4" aria-hidden />{" "}
             {busy ? "Testing…" : out ? "Test again" : "Test now"}
           </Button>
@@ -132,9 +128,6 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
           : cov
             ? `Stored ${underlying} history: ${cov.option_from ?? "no options"} to ${cov.option_to ?? ""} with option prices.`
             : "Stored-history range is not available: pick the dates yourself."}{" "}
-        A quick test covers up to {MAX_DAYS} days
-        {tooLong && <span className="text-loss"> (this range is {Math.round(days)}: shorten it)</span>}; save
-        the strategy to backtest a longer range.
         {blocked && <span className="text-loss"> Fix the checks on the right first.</span>}
       </p>
       {error && (

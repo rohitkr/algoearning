@@ -29,7 +29,6 @@ lack of stored data.
 **Test before saving.** The strategy builder has a "Test before saving" panel: `POST /v1/backtests/preview` takes the
 config exactly as on screen (saved or not), runs the same `ae_marketdata.replay.replay` the worker uses, and returns the
 same result JSON, shown with the same view as a saved backtest's page. Nothing is stored or queued, so a parameter can
-be changed and tried again at once. It runs in the API process (CPU-bound, in a thread), is capped at 92 days and three
-at a time (longer ranges: save and use Backtesting, which still queues to the worker), needs the `backtesting` plan flag
-and the same checks as saving. A strategy that trades Telegram tips cannot be backtested yet (see ADR 0025).
+be changed and tried again at once. It runs in the API process (CPU-bound, in a thread), with no range or concurrency cap while the owner is the only user
+(limits come when customers do), needs the `backtesting` plan flag and the same checks as saving. A strategy that trades Telegram tips cannot be backtested yet (see ADR 0025).
 

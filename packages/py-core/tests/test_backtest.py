@@ -193,3 +193,26 @@ def test_an_opening_range_breakout_trades_through_the_backtester() -> None:
         130,
         "target",
     )  # gapped through the 120 target
+
+
+def _days(h: MemoryHistory, *days: date) -> None:
+    for d in days:
+        t = ts("09:15", d)
+        h.add_spot("NIFTY", [Candle(t + timedelta(minutes=i), 25000, 25001, 24999, 25000) for i in range(375)])
+
+
+def test_an_exit_with_no_trade_at_that_time_uses_the_last_known_price_instead_of_blocking_later_trades() -> None:
+    mon = DAY - timedelta(days=1)
+    h = MemoryHistory()
+    _days(h, mon, DAY)  # no option bar at all on the exit day
+    h.add_option(KEY, [Candle(ts("15:00", mon), *flat(100))])
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "15:00"},
+        "holding": {"mode": "next_day", "exit": "09:30"},
+        "legs": [{"id": "L1", "action": "SELL", "option_type": "CE"}],
+    })  # fmt: skip
+    r = simulate(config, h, mon, DAY, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
+    (t,) = r.trades
+    assert (t.exit_time, t.exit_price, t.reason) == (ts("09:30"), 100, "exit time 09:30")
+    assert any("last known price" in w for w in r.warnings)

@@ -253,6 +253,9 @@ def simulate(
 
     pending_charges: dict[str, float] = {}
     noted: dict[str, int] = {}
+    carried: dict[str, float] = {}  # each contract's last known price from earlier days: only for getting out
+    stale_exits = 0
+
     for day in days:
         spot = history.spot(u, day)
         if not spot:
@@ -277,6 +280,10 @@ def simulate(
             # step A: the minute's open
             for intent in runner.step(m):
                 p = m.price(intent.contract)
+                if p is None and intent.kind == "exit":
+                    # getting out beats waiting for a trade: the contract's last known price (also from earlier days)
+                    p = prices.last.get(intent.contract.key) or carried.get(intent.contract.key)
+                    stale_exits += p is not None
                 if p is None:
                     runner.reject(intent, "no price for the contract in the data")
                 else:
@@ -294,8 +301,13 @@ def simulate(
                 if note["event"].endswith("_signal"):
                     result.signals.append({"time": now.isoformat(), **note})
             runner.notes.clear()
+        carried.update(prices.last)
         if runner.prior_days:
             prior = [*prior, list(spot)][-runner.prior_days :]
+    if stale_exits:
+        result.warnings.append(
+            f"{stale_exits} exit(s) used the contract's last known price because it had no trade at that time"
+        )
     for event, n in noted.items():
         result.warnings.append(f"{n} time(s): {_NOTED[event]}")
     if result.days_without_options:
@@ -309,7 +321,10 @@ def simulate(
     for pos in runner.open_positions():
         last_px = _last_price(history, pos, last_day)
         if last_px is None:
-            result.warnings.append(f"{pos.contract.label} was still open at the end and has no price: not counted")
+            result.warnings.append(
+                f"{pos.contract.label} (opened {pos.entry_time:%d %b}) was still open at the end and had no price to "
+                "exit at: not counted. A strategy that holds one trade at a time cannot start another while it is open."
+            )
             continue
         end_ts = _at(last_day, time(15, 29))
         intent = Intent(
