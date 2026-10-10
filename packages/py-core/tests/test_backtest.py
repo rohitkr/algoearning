@@ -370,3 +370,66 @@ def test_a_day_that_waits_for_a_price_that_is_never_stored_says_which_contract()
     r = simulate(config, h, mon, mon, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
     (row,) = r.day_log
     assert row["trades"] == 0 and any("no price yet for NIFTY 06 Oct 25000 CE" in w for w in row["why"])
+
+
+def _bars(day: date, *rows: tuple[str, tuple[float, float, float, float]]) -> list[Candle]:
+    return [Candle(ts(hm, day), *v) for hm, v in rows]
+
+
+def test_a_profit_lock_that_fires_inside_a_minute_closes_the_trade() -> None:
+    """The lock's exit is a stop: it is taken at the minute's adverse extreme. It used to be thrown away after the trade
+    was marked as ended, leaving the leg open for the rest of the range."""
+    h = MemoryHistory()
+    _days(h, DAY)
+    h.add_option(KEY, _bars(DAY, ("09:20", (100, 100, 100, 100)), ("09:21", (100, 120, 100, 118)),
+                            ("09:22", (118, 119, 105, 106)), ("15:15", (106, 106, 106, 106))))  # fmt: skip
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "09:20"},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [{"id": "L1", "action": "BUY", "option_type": "CE"}],
+        "risk": {"lock_profit": {"at": 1000, "lock": 500}},
+    })  # fmt: skip
+    r = run(config, h)
+    (t,) = r.trades
+    assert t.reason == "profit fell to the locked ₹500" and t.exit_price == 105
+    assert not any("leftover" in w or "still open" in w for w in r.warnings)
+
+
+def test_exit_all_on_leg_stop_loss_closes_the_other_legs_too() -> None:
+    put = f"NIFTY:{DAY:%Y-%m-%d}:25000:PE"
+    h = MemoryHistory()
+    _days(h, DAY)
+    h.add_option(KEY, _bars(DAY, ("09:20", flat(100)), ("09:21", (100, 140, 100, 130)), ("15:15", flat(130))))
+    h.add_option(put, _bars(DAY, ("09:20", flat(100)), ("09:21", flat(100)), ("15:15", flat(100))))
+    sl = {"unit": "percent", "value": 20, "basis": "premium"}
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "09:20"},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [{"id": "A", "action": "SELL", "option_type": "CE", "stop_loss": sl},
+                 {"id": "B", "action": "SELL", "option_type": "PE", "stop_loss": sl}],
+        "risk": {"exit_all_on_leg_sl": True},
+    })  # fmt: skip
+    r = run(config, h)
+    assert {t.leg: t.reason for t in r.trades} == {"A": "stop-loss", "B": "another leg hit its stop-loss"}
+    assert not any("leftover" in w or "still open" in w for w in r.warnings)
+
+
+def test_an_intraday_trade_does_not_sleep_over_when_the_days_data_ends_early() -> None:
+    mon = DAY - timedelta(days=1)
+    h = MemoryHistory()
+    t = ts("09:15", mon)  # the index and the option stop at 14:00: the 15:15 exit minute never comes
+    h.add_spot("NIFTY", [Candle(t + timedelta(minutes=i), 25000, 25001, 24999, 25000) for i in range(285)])
+    h.add_option(KEY, [Candle(ts("09:20", mon), *flat(100)), Candle(ts("13:00", mon), *flat(90))])
+    _days(h, DAY)
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "09:20"},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [{"id": "L1", "action": "SELL", "option_type": "CE"}],
+    })  # fmt: skip
+    r = simulate(config, h, mon, DAY, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
+    (t1,) = r.trades
+    assert t1.exit_time.date() == mon and t1.exit_price == 90 and t1.reason == "end of the day's data"
+    assert any("closed at the last known price" in w for w in r.warnings)

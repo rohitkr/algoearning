@@ -361,6 +361,23 @@ def simulate(
                     result.signals.append({"time": now.isoformat(), **note})
             runner.notes.clear()
         carried.update(prices.last)
+        if isinstance(runner, RulesRunner) and runner.cfg.holding.mode == "intraday" and runner.open_positions():
+            # an intraday trade never sleeps over: the day's index data ended before the exit time (or the exit never
+            # came), so close it at the last price there is
+            for pos in runner.open_positions():
+                px = prices.last.get(pos.contract.key) or carried.get(pos.contract.key)
+                if px is None or pos.id in runner.exiting:
+                    continue
+                intent = Intent("exit", "SELL" if pos.side == "BUY" else "BUY", pos.contract, pos.lots, pos.qty,
+                                "end of the day's data", pos.leg, position_id=pos.id)  # fmt: skip
+                runner.exiting.add(pos.id)
+                fill(intent, px, spot[-1].ts, m)
+                leftovers += 1
+                if len(why) < 4:
+                    why[f"{pos.contract.label} closed at the last price: the day's data ended before the exit time"] = (
+                        None
+                    )
+            runner.s["phase"] = "waiting"
         for pos in runner.open_positions():
             if len(why) < 4 and runner.s.get("phase") != "in":
                 why[f"{pos.contract.label} still open at the close"] = None
@@ -446,11 +463,15 @@ def _extremes(
     m2 = Market(now, m.underlying, m.spot if spot is None else spot, m.spot_bars, ext, m.expiries, m.lot_size,
                 m.strike_step, m.prior_spot_bars, m.quotes)  # fmt: skip
     taken = _STOPS if adverse else _TARGETS
-    for intent in runner.step(m2):
-        if intent.kind != "exit" or not (intent.reason in taken[0] or intent.reason.startswith(taken[1])):
-            runner.reject(intent, "decided again next minute")
-            runner.notes.pop()  # an internal retry, not something to tell the user
-            continue
+    snap = runner.snapshot()
+    intents = runner.step(m2)
+    if any(i.kind != "exit" or not (i.reason in taken[0] or i.reason.startswith(taken[1])) for i in intents):
+        # something other than a stop or target was decided on a minute's extreme (an exit time, an exit condition,
+        # a re-entry): that is decided at the next open, so nothing this probe consumed (the end of the trade, a
+        # re-entry) may stay consumed
+        runner.restore(snap)
+        return
+    for intent in intents:
         pos = runner.position(intent.position_id)
         opened = m.price(intent.contract)
         extreme = ext.get(intent.contract.key)
@@ -471,7 +492,8 @@ def _extremes(
 
 # exits taken inside a minute (exact reasons, reason prefixes): stops and strategy-wide limits on the adverse pass,
 # targets and strategy-wide limits on the favourable one
-_STOPS = (("stop-loss",), ("stop-loss:", "strategy"))
+# the strategy-wide stops are stops too: the profit lock's floor, the combined premium stop, "exit all on a leg's stop"
+_STOPS = (("stop-loss",), ("stop-loss:", "strategy", "profit fell", "sold premiums", "another leg"))
 _TARGETS = (("target",), ("target ", "strategy"))
 # runner notes worth telling the user about, counted (not listed per day), with their plain meaning
 _NOTED = {

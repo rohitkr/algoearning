@@ -32,3 +32,13 @@ same result JSON, shown with the same view as a saved backtest's page. Nothing i
 be changed and tried again at once. It runs in the API process (CPU-bound, in a thread), with no range or concurrency cap while the owner is the only user
 (limits come when customers do), needs the `backtesting` plan flag and the same checks as saving. A strategy that trades Telegram tips cannot be backtested yet (see ADR 0025).
 
+**Exits that must not be lost (fix).** A runner marks a trade as ended when it decides to close it, before the exit
+orders are filled. Two paths could then lose the exits and leave legs open for good, which blocks every later entry of
+a one-trade-at-a-time strategy: (1) the backtest probes each minute's high and low for stops and targets, and threw away
+anything else a probe decided (the profit lock, the combined premium stop, "exit all on a leg's stop-loss", re-entries,
+exit conditions) after the runner had already consumed it; (2) an exit refused for lack of a price was never retried.
+Now: the probe runs on a snapshot and restores it when it decided something that is not a stop or a target (the
+strategy-wide stops count as stops); a refused exit reopens the trade and is sent again after 30 s (live and
+backtest); and as a last net the backtest closes anything left open after its trade ended, and never lets an intraday
+trade sleep over, at the last known price, saying so in the warnings.
+

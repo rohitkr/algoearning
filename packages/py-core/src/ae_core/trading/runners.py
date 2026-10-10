@@ -6,6 +6,7 @@ history. Their state is plain JSON (`state()`), stored on the run after every st
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -77,6 +78,22 @@ class Runner:
         self.on_exit(pos, m)
         return pos
 
+    def snapshot(self) -> tuple[dict[str, Any], list[Position], set[str], float, int]:
+        """The runner's state, to take back a step whose decisions the caller will not act on (a backtest probing a
+        minute's high or low): nothing the step consumed (a re-entry, the end of a trade) may stay consumed."""
+        return (copy.deepcopy(self.s), [copy.copy(p) for p in self.positions], set(self.exiting), self.realized,
+                len(self.notes))  # fmt: skip
+
+    def restore(self, snap: tuple[dict[str, Any], list[Position], set[str], float, int]) -> None:
+        s, positions, exiting, realized, notes = snap
+        self.s.clear()
+        self.s.update(s)
+        self.positions[:] = positions
+        self.exiting.clear()
+        self.exiting.update(exiting)
+        self.realized = realized
+        del self.notes[notes:]
+
     def reject(self, intent: Intent, reason: str) -> None:
         """The engine refused or could not fill an intent (risk check, no price, broker rejection)."""
         self.exiting.discard(intent.position_id)
@@ -134,6 +151,7 @@ class Runner:
                       position_id=pos.id)  # fmt: skip
 
 
+EXIT_RETRY = timedelta(seconds=30)  # a refused exit is sent again after this long
 ARM_FOR = timedelta(minutes=2)  # a fired signal stays valid this long while option prices stream in
 
 
@@ -420,6 +438,7 @@ class RulesRunner(Runner):
             return []
         self.s.pop("entered", None)
         self.s.pop("armed", None)
+        self.s.pop("exit_retry_at", None)
         self.s.update(phase="in", entries_day=today, entries=self._entries_today(m) + 1, final=final.isoformat(),
                       cycle_realized=self.realized, reentries={}, pending=[], sold={}, lock_floor=None,
                       direction=direction, tip_id=tip_id)  # fmt: skip
@@ -431,7 +450,19 @@ class RulesRunner(Runner):
         return _buy_first([self._enter(m, c, leg.action, leg.lots, leg.id, why_in) for leg, c in contracts])
 
     # -- in a trade -------------------------------------------------------------------------------------------------
+    def on_reject(self, intent: Intent, reason: str) -> None:
+        """An exit that was refused (no price, risk check, broker) must not leave a trade that is over on paper but
+        still holds positions: nothing would ever retry it. The trade stays open and the exit is decided again."""
+        if intent.kind == "exit" and self.s.get("phase") != "in":
+            pos = self.position(intent.position_id)
+            if pos is not None and pos.open:
+                self.s["phase"] = "in"
+
     def _close(self, m: Market, reason: str, event: str | None = None, **detail: Any) -> list[Intent]:
+        due = self.s.get("exit_retry_at")
+        if due and m.now < datetime.fromisoformat(due):
+            return []  # an exit order was just sent (or refused): wait before sending it again
+        self.s["exit_retry_at"] = (m.now + EXIT_RETRY).isoformat()
         self._end_cycle(m)
         if event:
             self.note(event, **detail)
