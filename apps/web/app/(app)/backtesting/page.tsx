@@ -17,7 +17,7 @@ export default async function BacktestingPage() {
   const [list, strategies, coverage] = await Promise.all([
     apiGet<Backtest[]>("/v1/backtests"),
     apiGet<StrategyPage>("/v1/strategies?limit=100&status=draft&status=ready"),
-    apiGet<HistoryCoverage[]>("/v1/backtests/coverage"),
+    apiGet<HistoryCoverage[]>("/v1/backtests/coverage", 30000), // scans all stored history the first time
   ]);
   const waiting = list.ok && list.data.some((b) => b.status === "pending" || b.status === "running");
   return (
@@ -29,10 +29,17 @@ export default async function BacktestingPage() {
           Replay a strategy over stored 1-minute history with the same rules that run live.
         </p>
       </div>
-      {strategies.ok && coverage.ok ? (
-        <NewBacktest strategies={strategies.data.items} coverage={coverage.data} />
+      {strategies.ok ? (
+        <>
+          {!coverage.ok && (
+            <StatusPill tone="warning">
+              Stored-history coverage is not available ({coverage.error.message}): pick the dates yourself.
+            </StatusPill>
+          )}
+          <NewBacktest strategies={strategies.data.items} coverage={coverage.ok ? coverage.data : []} />
+        </>
       ) : (
-        <StatusPill tone="danger">Could not load your strategies</StatusPill>
+        <StatusPill tone="danger">Could not load your strategies: {strategies.error.message}</StatusPill>
       )}
       <Card className="p-0">
         <div className="px-5 pt-4 pb-2">

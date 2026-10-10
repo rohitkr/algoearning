@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 import uuid
 from datetime import timedelta
+from typing import Any
 
-from ae_core.strategy import check, parse
+from ae_core.strategy import RulesConfig, check, parse
 from ae_db.models import BacktestRun
 from ae_db.repositories import StrategyRepo
+from ae_db.session import Database
 from ae_marketdata.history import coverage
 from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy import select
@@ -46,10 +50,34 @@ def _out(r: BacktestRun) -> BacktestOut:
     )
 
 
+COVERAGE_TTL_S = 600
+
+
+async def _refresh_coverage(app: Any, db: Database) -> list[HistoryCoverage]:
+    async with app.state.coverage_lock:
+        out = [HistoryCoverage(**c.__dict__) for c in await coverage(db)]
+        app.state.coverage_cache = (time.monotonic(), out)
+        return out
+
+
 @router.get("/v1/backtests/coverage", response_model=list[HistoryCoverage])
-async def history_coverage(_: CurrentUser, db: DbDep) -> list[HistoryCoverage]:
-    """What history exists (per underlying), so the range picker and the results can be honest about it."""
-    return [HistoryCoverage(**c.__dict__) for c in await coverage(db)]
+async def history_coverage(_: CurrentUser, db: DbDep, request: Request) -> list[HistoryCoverage]:
+    """What history exists (per underlying), so the range picker and the results can be honest about it.
+
+    Counting days and expiries scans every stored candle (millions once a year of options is loaded) and takes longer
+    than a page may wait, so the answer is kept for ten minutes; an old answer is served while a fresh one is
+    computed."""
+    app = request.app
+    if not hasattr(app.state, "coverage_lock"):
+        app.state.coverage_lock = asyncio.Lock()
+    cached = getattr(app.state, "coverage_cache", None)
+    if cached is None:
+        return await _refresh_coverage(app, db)
+    stamp, out = cached
+    if time.monotonic() - stamp > COVERAGE_TTL_S and not app.state.coverage_lock.locked():
+        task = asyncio.create_task(_refresh_coverage(app, db))
+        app.state.coverage_task = task  # keep a reference so it is not collected mid-run
+    return out
 
 
 @router.post("/v1/backtests", response_model=BacktestOut, status_code=status.HTTP_201_CREATED)
@@ -69,6 +97,12 @@ async def create_backtest(
     issues = check(config, await _instruments(s))
     if issues:
         raise Conflict(f"the strategy does not pass its checks: {issues[0].msg}", {"reason": "invalid"})
+    if isinstance(config, RulesConfig) and config.entry.mode == "tip":
+        raise Conflict(
+            "a strategy that trades Telegram tips cannot be backtested here yet (the replay over stored tips is not "
+            'built): use "Replay the tips as given" in the Signals tab',
+            {"reason": "tips_not_supported"},
+        )
     waiting = (await s.execute(select(BacktestRun.id).where(BacktestRun.status.in_(("pending", "running"))))).all()
     if len(waiting) >= MAX_PENDING:
         raise Conflict("you already have backtests running: wait for one to finish", {"reason": "busy"})

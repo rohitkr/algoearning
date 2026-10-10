@@ -22,14 +22,14 @@ export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; 
 
 /** Server-side call to the API as the signed-in user: Clerk session token as a Bearer token. The API verifies
  * it independently, so this server never vouches for anyone. */
-export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
+export async function apiGet<T>(path: string, timeoutMs = 5000): Promise<ApiResult<T>> {
   const { getToken } = await auth();
   const token = await getToken();
   try {
     const r = await fetch(`${API_URL}${path}`, {
       cache: "no-store",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (r.ok) return { ok: true, data: (await r.json()) as T };
     const body = (await r.json().catch(() => null)) as ApiError | null;
