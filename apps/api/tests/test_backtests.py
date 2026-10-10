@@ -103,3 +103,24 @@ def test_coverage(api: TestClient, clean_db: str) -> None:
         with e.begin() as c:
             c.execute(text("DELETE FROM history_candles"))
         e.dispose()
+
+
+def test_preview_tests_an_unsaved_strategy_without_storing_anything(api: TestClient, clean_db: str) -> None:
+    body = {"config": CFG, **BODY}
+    r = api.post("/v1/backtests/preview", json=body, headers=A)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "plan_feature"
+    set_backtesting(clean_db, True)
+    try:
+        r = api.post("/v1/backtests/preview", json={**body, "start_date": "2026-01-01"}, headers=A)
+        assert r.status_code == 400  # a quick test is capped; longer ranges go through a saved backtest
+        r = api.post("/v1/backtests/preview", json={"config": {**CFG, "legs": []}, **BODY}, headers=A)
+        assert r.status_code == 409 and r.json()["error"]["details"]["reason"] == "invalid"
+        r = api.post("/v1/backtests/preview", json=body, headers=A)
+        assert r.status_code == 200
+        out = r.json()
+        assert (
+            out["underlying"] == "NIFTY" and out["result"]["summary"]["trades"] == 0
+        )  # no stored history in the test db
+        assert api.get("/v1/backtests", headers=A).json() == []  # nothing was queued or stored
+    finally:
+        set_backtesting(clean_db, False)

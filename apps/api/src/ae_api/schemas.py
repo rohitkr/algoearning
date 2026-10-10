@@ -943,6 +943,26 @@ class BacktestIn(BaseModel):
     slippage_pct: float = Field(default=0.05, ge=0, le=5)
 
 
+class BacktestPreviewIn(BaseModel):
+    """Test a strategy as it stands in the builder, saved or not."""
+
+    model_config = ConfigDict(extra="forbid")
+    config: StrategyConfig
+    start_date: date
+    end_date: date
+    multiplier: int = Field(default=1, ge=1, le=100)
+    slippage_pct: float = Field(default=0.05, ge=0, le=5)
+
+
+class BacktestPreviewOut(BaseModel):
+    underlying: str
+    start_date: date
+    end_date: date
+    multiplier: int
+    slippage_pct: float
+    result: dict[str, Any]  # summary, daily, trades, warnings, signals: as a stored backtest's result
+
+
 class BacktestOut(BaseModel):
     id: uuid.UUID
     strategy_id: uuid.UUID | None

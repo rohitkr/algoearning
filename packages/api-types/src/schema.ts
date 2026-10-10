@@ -411,10 +411,35 @@ export interface paths {
         /**
          * History Coverage
          * @description What history exists (per underlying), so the range picker and the results can be honest about it.
+         *
+         *     Counting days and expiries scans every stored candle (millions once a year of options is loaded) and takes longer
+         *     than a page may wait, so the answer is kept for ten minutes; an old answer is served while a fresh one is
+         *     computed.
          */
         get: operations["history_coverage_v1_backtests_coverage_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/backtests/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Backtest
+         * @description Replay a strategy that is still being built, without saving it or queueing anything (the same replay the
+         *     worker runs for a saved backtest), so its parameters can be tweaked and tried again. Nothing is stored.
+         */
+        post: operations["preview_backtest_v1_backtests_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1777,6 +1802,57 @@ export interface components {
             strategy_name: string;
             /** Trades */
             trades: number | null;
+            /** Underlying */
+            underlying: string;
+        };
+        /**
+         * BacktestPreviewIn
+         * @description Test a strategy as it stands in the builder, saved or not.
+         */
+        BacktestPreviewIn: {
+            /** Config */
+            config: components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * Multiplier
+             * @default 1
+             */
+            multiplier: number;
+            /**
+             * Slippage Pct
+             * @default 0.05
+             */
+            slippage_pct: number;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+        };
+        /** BacktestPreviewOut */
+        BacktestPreviewOut: {
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Multiplier */
+            multiplier: number;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+            /** Slippage Pct */
+            slippage_pct: number;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
             /** Underlying */
             underlying: string;
         };
@@ -6302,6 +6378,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HistoryCoverage"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_backtest_v1_backtests_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BacktestPreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestPreviewOut"];
                 };
             };
             /** @description Bad request */

@@ -915,6 +915,114 @@
         "title": "BacktestOut",
         "type": "object"
       },
+      "BacktestPreviewIn": {
+        "additionalProperties": false,
+        "description": "Test a strategy as it stands in the builder, saved or not.",
+        "properties": {
+          "config": {
+            "discriminator": {
+              "mapping": {
+                "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "rules": "#/components/schemas/RulesConfig",
+                "smc_scalp": "#/components/schemas/SmcScalpConfig",
+                "time_based": "#/components/schemas/TimeBasedConfig",
+                "zero_dte": "#/components/schemas/ZeroDteConfig"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RulesConfig"
+              },
+              {
+                "$ref": "#/components/schemas/TimeBasedConfig"
+              },
+              {
+                "$ref": "#/components/schemas/RangeBreakoutConfig"
+              },
+              {
+                "$ref": "#/components/schemas/ZeroDteConfig"
+              },
+              {
+                "$ref": "#/components/schemas/SmcScalpConfig"
+              }
+            ],
+            "title": "Config"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "multiplier": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Multiplier",
+            "type": "integer"
+          },
+          "slippage_pct": {
+            "default": 0.05,
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Slippage Pct",
+            "type": "number"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "config",
+          "start_date",
+          "end_date"
+        ],
+        "title": "BacktestPreviewIn",
+        "type": "object"
+      },
+      "BacktestPreviewOut": {
+        "properties": {
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "multiplier": {
+            "title": "Multiplier",
+            "type": "integer"
+          },
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          },
+          "slippage_pct": {
+            "title": "Slippage Pct",
+            "type": "number"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "underlying": {
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "required": [
+          "underlying",
+          "start_date",
+          "end_date",
+          "multiplier",
+          "slippage_pct",
+          "result"
+        ],
+        "title": "BacktestPreviewOut",
+        "type": "object"
+      },
       "BreezeSessionIn": {
         "additionalProperties": false,
         "properties": {
@@ -10399,7 +10507,7 @@
     },
     "/v1/backtests/coverage": {
       "get": {
-        "description": "What history exists (per underlying), so the range picker and the results can be honest about it.",
+        "description": "What history exists (per underlying), so the range picker and the results can be honest about it.\n\nCounting days and expiries scans every stored candle (millions once a year of options is loaded) and takes longer\nthan a page may wait, so the answer is kept for ten minutes; an old answer is served while a fresh one is\ncomputed.",
         "operationId": "history_coverage_v1_backtests_coverage_get",
         "responses": {
           "200": {
@@ -10478,6 +10586,98 @@
           }
         },
         "summary": "History Coverage",
+        "tags": [
+          "backtests"
+        ]
+      }
+    },
+    "/v1/backtests/preview": {
+      "post": {
+        "description": "Replay a strategy that is still being built, without saving it or queueing anything (the same replay the\nworker runs for a saved backtest), so its parameters can be tweaked and tried again. Nothing is stored.",
+        "operationId": "preview_backtest_v1_backtests_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestPreviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Preview Backtest",
         "tags": [
           "backtests"
         ]

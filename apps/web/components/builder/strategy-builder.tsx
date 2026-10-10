@@ -30,6 +30,7 @@ import {
 import { Check, Field, NumberField, SelectField, TimeField, inputClass } from "./fields";
 import { RulesEditor } from "./rules-editor";
 import { SmcParams } from "./smc-params";
+import { StrategyTest } from "./strategy-test";
 
 type Errs = Record<string, string>;
 type Proven = RangeBreakoutConfig | ZeroDteConfig;
@@ -476,6 +477,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
           </Card>
         </aside>
       </div>
+      <StrategyTest config={config} blocked={check == null || allErrors.length > 0} />
     </div>
   );
 }
