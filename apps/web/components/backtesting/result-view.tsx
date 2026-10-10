@@ -37,6 +37,7 @@ export type Signals = {
 export type Summary = Record<string, number | null | { day: string; pnl: number }>;
 
 const dt = new Intl.DateTimeFormat("en-IN", {
+  weekday: "short",
   day: "numeric",
   month: "short",
   hour: "2-digit",
