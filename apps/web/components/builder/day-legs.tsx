@@ -2,17 +2,16 @@
 
 import type { Instrument, RulesConfig, StrategyCatalog, StrategyLeg } from "@algoearning/api-types";
 import { Button, Card, cn } from "@algoearning/ui";
-import { Copy } from "lucide-react";
+import { Copy, Plus } from "lucide-react";
 import { useState } from "react";
 
-import { WEEKDAYS, type Weekday } from "@/lib/strategy";
+import { WEEKDAYS, type Weekday, newLeg } from "@/lib/strategy";
 
-import { Check, NumberField, SelectField } from "./fields";
-import { LegEditor, StrikePicker } from "./leg-editor";
+import { Check } from "./fields";
+import { LegEditor } from "./leg-editor";
 
 type Errs = Record<string, string>;
-type Shape = "strangle" | "straddle" | "condor" | "fly";
-type Strike = StrategyLeg["strike"] & object;
+type ByDay = Partial<Record<Weekday, StrategyLeg[]>>;
 
 const DAY_LABEL: Record<Weekday, string> = {
   MON: "Monday",
@@ -20,12 +19,6 @@ const DAY_LABEL: Record<Weekday, string> = {
   WED: "Wednesday",
   THU: "Thursday",
   FRI: "Friday",
-};
-const SHAPE_LABEL: Record<Shape, string> = {
-  strangle: "Sell CE + PE (strangle)",
-  straddle: "Sell ATM CE + PE (straddle)",
-  condor: "Iron condor",
-  fly: "Iron fly",
 };
 
 /** Leg ids stay unique across the whole config: MON1, MON2, ... (at most 12 characters). */
@@ -39,27 +32,9 @@ function idsFor(day: Weekday, n: number, taken: Set<string>): string[] {
   return out;
 }
 
-type Build = { shape: Shape; sell: Strike; wing: Strike; lots: number };
-
-const ATM: Strike = { mode: "atm", offset: 0, premium: null, points: null };
-
-/** The legs of one day for a shape: the sold CE and PE with the chosen strike rule (a straddle or fly sells ATM), and for
- * a condor or fly the bought wings with theirs. Every strike rule the leg editor offers works here. */
-function buildLegs(day: Weekday, b: Build, expiry: StrategyLeg["expiry"], taken: Set<string>): StrategyLeg[] {
-  const leg = (id: string, action: "SELL" | "BUY", option_type: "CE" | "PE", strike: Strike): StrategyLeg => ({
-    id, action, option_type, lots: b.lots, expiry, strike: { ...strike }, direction: "always",
-    stop_loss: null, target: null, trailing: null, reentry_on_sl: null, reentry_on_target: null,
-  }); // prettier-ignore
-  const body = b.shape === "straddle" || b.shape === "fly" ? ATM : b.sell;
-  const wings = b.shape === "condor" || b.shape === "fly";
-  const ids = idsFor(day, wings ? 4 : 2, taken);
-  const legs = [leg(ids[0]!, "SELL", "CE", body), leg(ids[1]!, "SELL", "PE", body)];
-  if (wings) legs.push(leg(ids[2]!, "BUY", "CE", b.wing), leg(ids[3]!, "BUY", "PE", b.wing));
-  return legs;
-}
-
-/** Different legs on different weekdays (a strangle on Monday, an iron condor on Tuesday ...), each with its own strikes.
- * A weekday without its own legs trades the default legs above. */
+/** Different legs on different weekdays: each weekday is a normal list of legs (add, buy or sell, CE or PE, any strike
+ * rule, stop-loss ... exactly like the default legs), so any shape can be built: a strangle, an iron condor, an iron fly,
+ * a single leg. A weekday without legs of its own trades the default legs, or does not trade when there are none. */
 export function DayLegs({
   config,
   catalog,
@@ -75,36 +50,40 @@ export function DayLegs({
   warns: Errs;
   onChange: (c: RulesConfig) => void;
 }) {
-  const dayLegs = (config.day_legs ?? {}) as Partial<Record<Weekday, StrategyLeg[]>>;
+  const dayLegs = (config.day_legs ?? {}) as ByDay;
   const open = config.day_legs != null; // the switch: an empty set is "on, no weekday set up yet"
   const [day, setDay] = useState<Weekday>("MON");
-  const [build, setBuild] = useState<Build>({
-    shape: "strangle",
-    sell: { mode: "premium", offset: 0, premium: 60, points: null },
-    wing: { mode: "premium", offset: 0, premium: 10, points: null },
-    lots: 1,
-  });
-  const expiry: StrategyLeg["expiry"] = inst?.weekly_expiry === false ? "current_month" : "current_week";
-  const taken = new Set([...config.legs, ...Object.values(dayLegs).flat()].map((l) => l!.id));
-  const set = (next: Partial<Record<Weekday, StrategyLeg[]>>) =>
-    onChange({ ...config, day_legs: next as RulesConfig["day_legs"] });
-  const mine = dayLegs[day];
   const max = catalog.limits.max_legs;
-  const wings = build.shape === "condor" || build.shape === "fly";
-  const flat = build.shape === "straddle" || build.shape === "fly";
+  const taken = () => new Set([...config.legs, ...Object.values(dayLegs).flat()].map((l) => l!.id));
+  const set = (next: ByDay) => onChange({ ...config, day_legs: next as RulesConfig["day_legs"] });
+  const mine = dayLegs[day];
 
-  function copyToOthers() {
+  /** Copies of `legs` for a weekday, with ids of that weekday that nobody uses yet. */
+  const copies = (legs: StrategyLeg[], d: Weekday, used: Set<string>): StrategyLeg[] => {
+    const ids = idsFor(d, legs.length, used);
+    ids.forEach((i) => used.add(i));
+    return legs.map((l, i) => ({ ...structuredClone(l), id: ids[i]! }));
+  };
+  const addLeg = () => {
+    const used = taken();
+    const [id] = idsFor(day, 1, used);
+    set({
+      ...dayLegs,
+      [day]: [...(mine ?? []), { ...newLeg({ legs: mine ?? [] }, inst?.weekly_expiry ?? true), id: id! }],
+    });
+  };
+  const copyTo = (targets: Weekday[]) => {
     if (!mine) return;
-    const used = new Set(taken);
+    const used = taken();
     const next = { ...dayLegs };
-    for (const d of WEEKDAYS) {
-      if (d === day) continue;
-      const ids = idsFor(d, mine.length, used);
-      ids.forEach((i) => used.add(i));
-      next[d] = mine.map((l, i) => ({ ...structuredClone(l), id: ids[i]! }));
-    }
+    for (const d of targets) next[d] = copies(mine, d, used);
     set(next);
-  }
+  };
+  const copyFrom = (from: Weekday | "default") => {
+    const src = from === "default" ? config.legs : dayLegs[from];
+    if (!src?.length) return;
+    set({ ...dayLegs, [day]: copies(src, day, taken()) });
+  };
 
   return (
     <Card className="flex flex-col gap-4">
@@ -115,8 +94,9 @@ export function DayLegs({
       />
       {!open ? (
         <p className="text-sm text-muted">
-          Off: the legs above trade on every entry day. Turn on to give a weekday its own legs and strikes
-          (for example sell about ₹60 premium on Monday and ₹50 on Tuesday, or an iron condor on Wednesday).
+          Off: the legs above trade on every entry day. Turn on to give each weekday its own legs: its own
+          strikes, buy or sell, stop-loss and so on (for example sell about ₹60 premium on Monday and ₹50 on
+          Tuesday).
         </p>
       ) : (
         <>
@@ -143,71 +123,29 @@ export function DayLegs({
           <p className="text-xs text-muted">
             ● = has its own legs.{" "}
             {config.legs.length
-              ? `Other days trade the default legs above (${config.legs.length}).`
+              ? `A day without its own legs trades the default legs above (${config.legs.length}).`
               : "A day without legs does not trade."}
           </p>
 
-          <div className="flex flex-col gap-3 rounded-xl border border-border p-3">
-            <p className="text-sm font-medium">
-              {mine ? `${DAY_LABEL[day]}: replace with a new set` : `${DAY_LABEL[day]}: set up legs`}
-            </p>
-            <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-4">
-              <SelectField<Shape>
-                label="Trade"
-                value={build.shape}
-                options={(Object.keys(SHAPE_LABEL) as Shape[]).map((v) => ({
-                  value: v,
-                  label: SHAPE_LABEL[v],
-                }))}
-                onChange={(shape) => setBuild({ ...build, shape })}
-              />
-              <NumberField
-                label="Lots per leg"
-                value={build.lots}
-                min={1}
-                onChange={(v) => setBuild({ ...build, lots: Math.max(1, v ?? 1) })}
-              />
-            </div>
-            {!flat && (
-              <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-4">
-                <StrikePicker
-                  label="Sell strike"
-                  strike={build.sell}
-                  maxOffset={catalog.limits.max_strike_offset}
-                  onChange={(sell) => setBuild({ ...build, sell })}
-                />
-              </div>
-            )}
-            {wings && (
-              <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-4">
-                <StrikePicker
-                  label="Buy wing strike"
-                  strike={build.wing}
-                  maxOffset={catalog.limits.max_strike_offset}
-                  onChange={(wing) => setBuild({ ...build, wing })}
-                />
-              </div>
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-semibold">
+              {DAY_LABEL[day]} legs{" "}
+              <span className="text-sm font-normal text-muted">
+                ({mine?.length ?? 0} of {max})
+              </span>
+            </h3>
             <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                onClick={() =>
-                  set({
-                    ...dayLegs,
-                    [day]: buildLegs(
-                      day,
-                      build,
-                      expiry,
-                      new Set([...taken].filter((id) => !mine?.some((l) => l.id === id))),
-                    ),
-                  })
-                }
-              >
-                {mine ? `Replace ${day} legs` : `Add ${day} legs`}
+              <Button size="sm" variant="secondary" disabled={(mine?.length ?? 0) >= max} onClick={addLeg}>
+                <Plus className="size-4" aria-hidden /> Add leg
               </Button>
               {mine && (
                 <>
-                  <Button size="sm" variant="secondary" onClick={copyToOthers}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => copyTo(WEEKDAYS.filter((d) => d !== day))}
+                    title="Replaces the legs of the other weekdays with these"
+                  >
                     <Copy className="size-4" aria-hidden /> Copy to the other weekdays
                   </Button>
                   <Button
@@ -219,12 +157,34 @@ export function DayLegs({
                       set(next);
                     }}
                   >
-                    Use the default legs on {day}
+                    Remove {day} legs
                   </Button>
                 </>
               )}
             </div>
           </div>
+
+          {!mine && (
+            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border p-3 text-sm text-muted">
+              <p>
+                {DAY_LABEL[day]} has no legs of its own:{" "}
+                {config.legs.length ? "it trades the default legs above." : "it does not trade."} Add a leg,
+                or start from a copy:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {config.legs.length > 0 && (
+                  <Button size="sm" variant="secondary" onClick={() => copyFrom("default")}>
+                    Copy the default legs
+                  </Button>
+                )}
+                {WEEKDAYS.filter((d) => d !== day && dayLegs[d]?.length).map((d) => (
+                  <Button key={d} size="sm" variant="secondary" onClick={() => copyFrom(d)}>
+                    Copy {d}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {mine?.map((leg, i) => (
             <LegEditor
@@ -236,13 +196,19 @@ export function DayLegs({
               maxOffset={catalog.limits.max_strike_offset}
               errs={errs}
               warns={warns}
-              canRemove={mine.length > 1}
+              canRemove
               onChange={(l) => set({ ...dayLegs, [day]: mine.map((x, j) => (j === i ? l : x)) })}
-              onRemove={() => set({ ...dayLegs, [day]: mine.filter((_, j) => j !== i) })}
+              onRemove={() => {
+                const rest = mine.filter((_, j) => j !== i);
+                const next = { ...dayLegs };
+                if (rest.length) next[day] = rest;
+                else delete next[day]; // no legs left: the weekday is back to the default legs
+                set(next);
+              }}
               onDuplicate={
                 mine.length < max
                   ? () => {
-                      const [id] = idsFor(day, 1, taken);
+                      const [id] = idsFor(day, 1, taken());
                       set({
                         ...dayLegs,
                         [day]: [

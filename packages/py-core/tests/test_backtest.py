@@ -296,3 +296,33 @@ def test_every_replayed_day_says_whether_it_had_option_prices_and_why_it_did_not
     assert by_day[DAY.isoformat()]["why"] == ["this weekday is not ticked under Trade on"]
     assert any("05 Oct" in w and "no option prices" in w for w in r.warnings)
     assert summarize_result(r)["day_log"] == r.day_log
+
+
+def test_a_weekday_can_be_an_iron_condor_built_leg_by_leg() -> None:
+    """Sell CE and PE near ₹60, buy the ATM CE and PE: every leg runs, each with its own strike rule."""
+    h = MemoryHistory()
+    _days(h, DAY)
+    for k in range(24500, 25550, 50):  # a smooth smile: premium falls 0.6 per point away from the money
+        for right in ("CE", "PE"):
+            away = (k - 25000) if right == "CE" else (25000 - k)
+            px = max(1.0, round(140 - 0.8 * away, 2))
+            h.add_option(
+                f"NIFTY:{DAY:%Y-%m-%d}:{k}:{right}", [Candle(ts("09:20"), *flat(px)), Candle(ts("15:15"), *flat(px))]
+            )
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "09:20", "days": ["TUE"]},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [],
+        "day_legs": {"TUE": [
+            {"id": "T1", "action": "SELL", "option_type": "CE", "strike": {"mode": "premium", "premium": 60}},
+            {"id": "T2", "action": "SELL", "option_type": "PE", "strike": {"mode": "premium_gte", "premium": 60}},
+            {"id": "T3", "action": "BUY", "option_type": "CE", "strike": {"mode": "atm", "offset": 0}},
+            {"id": "T4", "action": "BUY", "option_type": "PE", "strike": {"mode": "atm", "offset": 0}},
+        ]},
+    })  # fmt: skip
+    r = simulate(config, h, DAY, DAY, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
+    got = {t.leg: (t.side, t.contract) for t in r.trades}
+    assert set(got) == {"T1", "T2", "T3", "T4"}
+    assert got["T1"] == ("SELL", f"NIFTY {DAY:%d %b} 25100 CE")  # premium 60 is 100 points out
+    assert got["T3"] == ("BUY", f"NIFTY {DAY:%d %b} 25000 CE") and got["T4"] == ("BUY", f"NIFTY {DAY:%d %b} 25000 PE")
