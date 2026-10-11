@@ -19,7 +19,7 @@ export default async function EditStrategyPage({
   const [{ id }, q] = await Promise.all([params, searchParams]);
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const [strategy, catalog] = await Promise.all([
-    apiGet<Strategy>(`/v1/strategies/${id}`),
+    apiGet<Strategy>(`/v1/strategies/${id}?as_plans=true`),
     apiGet<StrategyCatalog>("/v1/strategies/catalog"),
   ]);
   if (!strategy.ok && strategy.status === 404) notFound();

@@ -4,10 +4,11 @@ the builder's "test before saving", so both run exactly the same code."""
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from datetime import date, timedelta
 
 from ae_core.backtest import BacktestResult, simulate
-from ae_core.strategy import AnyConfig, RulesConfig, SmcScalpConfig, prior_days_needed
+from ae_core.strategy import AnyConfig, PlansConfig, RulesConfig, SmcScalpConfig, prior_days_needed
 from ae_db.session import Database
 
 from .history import load_history
@@ -24,7 +25,7 @@ async def replay(
     long range of option history never has to fit in memory at once."""
     if not isinstance(config, SmcScalpConfig):
         # rules reading earlier sessions (previous-day levels, indicator warm-up) need the days before the start
-        sessions = prior_days_needed(config) if isinstance(config, RulesConfig) else 0
+        sessions = prior_days_needed(config) if isinstance(config, RulesConfig | PlansConfig) else 0
         first = start - timedelta(days=7 + 2 * sessions) if sessions else start  # weekends and holidays included
         history = await load_history(db, config.underlying, first, end)
         return await asyncio.to_thread(
@@ -41,6 +42,36 @@ async def replay(
         merge(total, part)
     total.warnings.insert(0, f"Option fills include a modelled bid/ask spread of {SMC_SPREAD_PCT}% of the premium.")
     return total
+
+
+async def replay_config(
+    db: Database, config: AnyConfig, start: date, end: date, *, multiplier: int, insts: Mapping[str, tuple[int, int]],
+    slippage_pct: float,
+) -> BacktestResult:  # fmt: skip
+    """`replay` for any config. A strategy of plans may trade several instruments: each instrument's plans are replayed
+    on that instrument's own history and lot size, and the results are put together (every day row then says which
+    instrument it is). `insts`: instrument -> (lot size, strike step)."""
+    if not isinstance(config, PlansConfig) or len(config.underlyings()) == 1:
+        lot, step = insts[config.underlying]
+        return await replay(
+            db, config, start, end, multiplier=multiplier, lot_size=lot, strike_step=step, slippage_pct=slippage_pct
+        )
+    total = BacktestResult()
+    for u in config.underlyings():
+        lot, step = insts[u]
+        part = await replay(
+            db, config.for_underlying(u), start, end, multiplier=multiplier, lot_size=lot, strike_step=step,
+            slippage_pct=slippage_pct,
+        )  # fmt: skip
+        for row in part.day_log:
+            row["underlying"] = u
+        merge(total, part)
+    return total
+
+
+def lot_size_note(insts: Mapping[str, tuple[int, int]], used: list[str]) -> str:
+    sizes = ", ".join(f"{lot} for {u}" for u in used if (lot := insts[u][0]))
+    return f"Quantities use today's lot size ({sizes}); older periods traded other sizes."
 
 
 def months(start: date, end: date) -> list[tuple[date, date]]:

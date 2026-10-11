@@ -1811,7 +1811,7 @@ export interface components {
          */
         BacktestPreviewIn: {
             /** Config */
-            config: components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            config: components["schemas"]["PlansConfig"] | components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
             /**
              * End Date
              * Format: date
@@ -2855,6 +2855,35 @@ export interface components {
              */
             status: "created" | "paid" | "failed";
         };
+        /**
+         * Plan
+         * @description One complete trading routine: on these weekdays, on this instrument, enter like this, trade these legs, leave
+         *     like that. Exactly a rules strategy (entry, holding, legs, risk, exit) plus a name and its weekdays; the engine
+         *     runs each plan as the rules runner it is. A plan's weekdays are also its entry days.
+         */
+        Plan: {
+            /** Days */
+            days?: ("MON" | "TUE" | "WED" | "THU" | "FRI")[];
+            entry?: components["schemas"]["RulesEntry"];
+            exit?: components["schemas"]["RulesExit"];
+            holding?: components["schemas"]["Holding"];
+            /** Id */
+            id: string;
+            /** Legs */
+            legs: components["schemas"]["Leg"][];
+            /**
+             * Name
+             * @default Plan
+             */
+            name: string;
+            risk?: components["schemas"]["RulesRisk"];
+            /**
+             * Underlying
+             * @default NIFTY
+             * @enum {string}
+             */
+            underlying: "NIFTY" | "BANKNIFTY" | "FINNIFTY" | "MIDCPNIFTY" | "SENSEX";
+        };
         /** PlanAdminIn */
         PlanAdminIn: {
             /** Code */
@@ -2943,6 +2972,27 @@ export interface components {
             /** Price Paise */
             price_paise: number;
         };
+        /**
+         * PlansConfig
+         * @description A strategy made of plans (ADR 0026): each plan its own weekdays, entry, legs and exit, on any instrument; plans
+         *     may overlap on a day and run independently (one trade at a time within each plan). `underlying` is the first
+         *     plan's, derived: a run trades one instrument, so deploying and backtesting split the plans by instrument.
+         */
+        PlansConfig: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "plans";
+            /** Plans */
+            plans: components["schemas"]["Plan"][];
+            /**
+             * Underlying
+             * @default NIFTY
+             * @enum {string}
+             */
+            underlying: "NIFTY" | "BANKNIFTY" | "FINNIFTY" | "MIDCPNIFTY" | "SENSEX";
+        };
         /** PositionOut */
         PositionOut: {
             /** Current Sl */
@@ -3014,7 +3064,7 @@ export interface components {
         /** PresetOut */
         PresetOut: {
             /** Config */
-            config: components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            config: components["schemas"]["PlansConfig"] | components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
             /** Description */
             description: string;
             /** Id */
@@ -3236,7 +3286,8 @@ export interface components {
          * RulesConfig
          * @description `legs` trade on every entry day, unless `day_legs` names legs for that weekday: then those replace `legs` on
          *     that day (a strangle on Monday, an iron condor on Tuesday, an iron fly on Wednesday, each with its own strikes).
-         *     Leg ids are unique across all of them, so a position held overnight finds its leg.
+         *     `legs` may be empty: a weekday with neither its own legs nor default legs does not trade. Leg ids are unique
+         *     across all of them, so a position held overnight finds its leg.
          */
         RulesConfig: {
             /** Day Legs */
@@ -4031,7 +4082,7 @@ export interface components {
         /** StrategyIn */
         StrategyIn: {
             /** Config */
-            config?: components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            config?: components["schemas"]["PlansConfig"] | components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
             /** Description */
             description?: string | null;
             /** Name */
@@ -4051,7 +4102,7 @@ export interface components {
         /** StrategyOut */
         StrategyOut: {
             /** Config */
-            config: components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            config: components["schemas"]["PlansConfig"] | components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
             /**
              * Created At
              * Format: date-time
@@ -4068,7 +4119,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "rules" | "time_based" | "range_breakout" | "zero_dte" | "smc_scalp";
+            kind: "plans" | "rules" | "time_based" | "range_breakout" | "zero_dte" | "smc_scalp";
             /** Name */
             name: string;
             /** Schema Version */
@@ -4089,7 +4140,7 @@ export interface components {
         /** StrategyPatch */
         StrategyPatch: {
             /** Config */
-            config?: (components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"]) | null;
+            config?: (components["schemas"]["PlansConfig"] | components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"]) | null;
             /** Description */
             description?: string | null;
             /** Name */
@@ -11067,7 +11118,10 @@ export interface operations {
     };
     get_strategy_v1_strategies__strategy_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Return a rules strategy as plans (not saved) */
+                as_plans?: boolean;
+            };
             header?: never;
             path: {
                 strategy_id: string;

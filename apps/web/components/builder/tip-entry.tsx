@@ -1,7 +1,7 @@
 "use client";
 
-import type { RulesConfig, SignalSource, StrategyLeg } from "@algoearning/api-types";
-import { Button, Card } from "@algoearning/ui";
+import type { RulesEntry, SignalSource, StrategyLeg } from "@algoearning/api-types";
+import { Card } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -58,14 +58,14 @@ export const TIP_SETUPS: Record<string, { label: string; legs: StrategyLeg[] }> 
 };
 
 /** "On a Telegram tip" (ADR 0025): which source, how fresh a tip must be, and what the channel's own exit does. */
-export function TipEntry({
+export function TipEntry<T extends { entry?: Partial<RulesEntry> | null; legs: StrategyLeg[] }>({
   config,
   errs,
   onChange,
 }: {
-  config: RulesConfig;
+  config: T;
   errs: Errs;
-  onChange: (c: RulesConfig) => void;
+  onChange: (c: T) => void;
 }) {
   const { getToken } = useAuth();
   const e = entryOf(config);
@@ -80,7 +80,7 @@ export function TipEntry({
       alive = false;
     };
   }, []);
-  const setEntry = (p: Partial<typeof e>) => onChange({ ...config, entry: { ...e, ...p } });
+  const setEntry = (p: Partial<typeof e>) => onChange({ ...config, entry: { ...e, ...p } } as T);
 
   return (
     <Card className="flex flex-col gap-4">
@@ -133,14 +133,6 @@ export function TipEntry({
           />
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted">Quick legs:</span>
-        {Object.entries(TIP_SETUPS).map(([k, s]) => (
-          <Button key={k} size="sm" variant="secondary" onClick={() => onChange({ ...config, legs: s.legs })}>
-            {s.label}
-          </Button>
-        ))}
-      </div>
     </Card>
   );
 }

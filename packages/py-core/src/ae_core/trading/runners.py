@@ -7,7 +7,7 @@ history. Their state is plain JSON (`state()`), stored on the run after every st
 from __future__ import annotations
 
 import copy
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -15,6 +15,7 @@ from ..strategy import (
     PREMIUM_MODES,
     AnyConfig,
     Leg,
+    PlansConfig,
     RangeBreakoutConfig,
     RulesConfig,
     SmcScalpConfig,
@@ -77,6 +78,15 @@ class Runner:
         self.realized = round(self.realized + pos.pnl(), 2)
         self.on_exit(pos, m)
         return pos
+
+    def idle_positions(self) -> list[Position]:
+        """Positions still open although the trade they belong to has ended and nothing is closing them (a safety net
+        for the backtest: such a position would block every later entry). Only the rules runner can have them."""
+        return []
+
+    def same_day_positions(self) -> list[Position]:
+        """Open positions that must be out by the end of the day (intraday holding)."""
+        return []
 
     def snapshot(self) -> tuple[dict[str, Any], list[Position], set[str], float, int]:
         """The runner's state, to take back a step whose decisions the caller will not act on (a backtest probing a
@@ -458,6 +468,14 @@ class RulesRunner(Runner):
             if pos is not None and pos.open:
                 self.s["phase"] = "in"
 
+    def idle_positions(self) -> list[Position]:
+        if self.s.get("phase") == "in":
+            return []
+        return [p for p in self.open_positions() if p.id not in self.exiting]
+
+    def same_day_positions(self) -> list[Position]:
+        return self.open_positions() if self.cfg.holding.mode == "intraday" else []
+
     def _close(self, m: Market, reason: str, event: str | None = None, **detail: Any) -> list[Intent]:
         due = self.s.get("exit_retry_at")
         if due and m.now < datetime.fromisoformat(due):
@@ -641,6 +659,180 @@ class TimeBasedRunner(RulesRunner):
         if isinstance(config, TimeBasedConfig):
             config = rules_from_time_based(config)
         super().__init__(config, multiplier, state)
+
+
+# -- plans (ADR 0026) --------------------------------------------------------------------------------------------------
+class _Exiting:
+    """The `exiting` set of a PlansRunner: a view over its plans' sets, routed by position id."""
+
+    def __init__(self, owner: PlansRunner) -> None:
+        self._o = owner
+
+    def add(self, pid: str) -> None:
+        self._o.sub_of(pid).exiting.add(pid)
+
+    def discard(self, pid: str) -> None:
+        self._o.sub_of(pid).exiting.discard(pid)
+
+    def __contains__(self, pid: object) -> bool:
+        return any(pid in sub.exiting for sub in self._o.subs.values())
+
+    def __iter__(self) -> Iterator[str]:
+        return iter([pid for sub in self._o.subs.values() for pid in sub.exiting])
+
+    def __len__(self) -> int:
+        return sum(len(sub.exiting) for sub in self._o.subs.values())
+
+    def __bool__(self) -> bool:
+        return any(sub.exiting for sub in self._o.subs.values())
+
+
+class PlansRunner(Runner):
+    """Runs the plans of a strategy (one instrument) side by side: each plan is the rules runner it always was, with
+    its own state and positions; this class only hands every plan the same market, merges their orders, and sends each
+    fill or refusal back to the plan that placed the order. Plans never see each other's positions."""
+
+    kind = "plans"
+    cfg: PlansConfig
+    OWNERS = 1000  # position ids remembered (the oldest are forgotten)
+
+    def __init__(self, config: PlansConfig, multiplier: int = 1, state: Mapping[str, Any] | None = None) -> None:
+        if len(config.underlyings()) > 1:
+            raise ValueError("a plans runner trades one instrument: split the plans by instrument first")
+        st = dict(state or {})
+        self.cfg = config
+        self.multiplier = max(1, int(multiplier))
+        saved = st.get("plans", {})
+        self.subs: dict[str, RulesRunner] = {
+            plan.id: RulesRunner(rules, multiplier, saved.get(plan.id)) for plan, rules in config.rules()
+        }
+        self.owner: dict[str, str] = dict(st.get("owner", {}))  # position id -> plan id
+        self._notes: list[dict[str, Any]] = []
+        self.prior_days = max((r.prior_days for r in self.subs.values()), default=0)
+        self._exiting = _Exiting(self)
+        self._names = {plan.id: plan.name for plan in config.plans}
+        self._days = {plan.id: set(plan.days) for plan in config.plans}
+
+    # -- the engine's view: positions, notes, state --------------------------------------------------------------
+    @property
+    def positions(self) -> list[Position]:  # type: ignore[override]
+        return [p for sub in self.subs.values() for p in sub.positions]
+
+    @property
+    def exiting(self) -> _Exiting:  # type: ignore[override]
+        return self._exiting
+
+    @property
+    def realized(self) -> float:  # type: ignore[override]
+        return round(sum(sub.realized for sub in self.subs.values()), 2)
+
+    @property
+    def notes(self) -> list[dict[str, Any]]:  # type: ignore[override]
+        for pid, sub in self.subs.items():
+            for n in sub.notes:
+                self._notes.append({**n, "plan": self._names[pid]})
+            sub.notes.clear()
+        return self._notes
+
+    @property
+    def s(self) -> dict[str, Any]:  # type: ignore[override]
+        """What a backtest reads of a runner's own state: the counts of why setups did or did not trade, summed."""
+        funnel: dict[str, int] = {}
+        for sub in self.subs.values():
+            for k, v in sub.s.get("funnel", {}).items():
+                funnel[k] = funnel.get(k, 0) + v
+        return {"funnel": funnel}
+
+    def state(self) -> dict[str, Any]:
+        return {"plans": {pid: sub.state() for pid, sub in self.subs.items()}, "owner": dict(self.owner)}
+
+    def sub_of(self, pid: str) -> RulesRunner:
+        plan = self.owner.get(pid)
+        if plan in self.subs:
+            return self.subs[plan]
+        for sub in self.subs.values():
+            if sub.position(pid) is not None or pid in sub.exiting:
+                return sub
+        raise KeyError(f"no plan knows position {pid}")
+
+    def _owned(self, intents: list[Intent], plan_id: str) -> list[Intent]:
+        for i in intents:
+            self.owner[i.position_id] = plan_id
+        while len(self.owner) > self.OWNERS:
+            del self.owner[next(iter(self.owner))]
+        return intents
+
+    # -- a step ------------------------------------------------------------------------------------------------
+    def step(self, m: Market) -> list[Intent]:
+        out: list[Intent] = []
+        for pid, sub in self.subs.items():
+            out += self._owned(sub.step(m), pid)
+        return out
+
+    def wanted(self, m: Market) -> set[str]:
+        today = m.now.strftime("%a").upper()[:3]
+        keys: set[str] = set()
+        for pid, sub in self.subs.items():
+            # a plan that does not trade today only needs prices for what it still holds
+            if today in self._days[pid] or sub.open_positions() or sub.s.get("pending"):
+                keys |= sub.wanted(m)
+        return keys
+
+    def fill(self, intent: Intent, price: float, ts: datetime, m: Market) -> Position | None:
+        try:
+            sub = self.sub_of(intent.position_id)
+        except KeyError:
+            return None  # an order nobody here placed (a plan removed since): nothing to book
+        return sub.fill(intent, price, ts, m)
+
+    def reject(self, intent: Intent, reason: str) -> None:
+        try:
+            self.sub_of(intent.position_id).reject(intent, reason)
+        except KeyError:
+            return
+
+    def exit_all(self, reason: str, m: Market | None = None) -> list[Intent]:
+        out: list[Intent] = []
+        for pid, sub in self.subs.items():
+            out += self._owned(sub.exit_all(reason, m), pid)
+        return out
+
+    def _exit(self, pos: Position, reason: str) -> Intent | None:
+        pid = self.sub_of(pos.id)
+        intent = pid._exit(pos, reason)
+        if intent is not None:
+            plan = next(k for k, v in self.subs.items() if v is pid)
+            self._owned([intent], plan)
+        return intent
+
+    def open_positions(self) -> list[Position]:
+        return [p for sub in self.subs.values() for p in sub.open_positions()]
+
+    def position(self, pid: str) -> Position | None:
+        return next((p for sub in self.subs.values() if (p := sub.position(pid)) is not None), None)
+
+    def unrealized(self, m: Market) -> float:
+        return round(sum(sub.unrealized(m) for sub in self.subs.values()), 2)
+
+    def drop_closed_before(self, day: date) -> None:
+        for sub in self.subs.values():
+            sub.drop_closed_before(day)
+
+    def idle_positions(self) -> list[Position]:
+        return [p for sub in self.subs.values() for p in sub.idle_positions()]
+
+    def same_day_positions(self) -> list[Position]:
+        return [p for sub in self.subs.values() for p in sub.same_day_positions()]
+
+    def snapshot(self) -> Any:
+        return ({pid: sub.snapshot() for pid, sub in self.subs.items()}, dict(self.owner))
+
+    def restore(self, snap: Any) -> None:
+        subs, owner = snap
+        for pid, sub_snap in subs.items():
+            self.subs[pid].restore(sub_snap)
+        self.owner.clear()
+        self.owner.update(owner)
 
 
 # -- positional range breakout ----------------------------------------------------------------------------------------
@@ -919,6 +1111,8 @@ def make_runner(config: AnyConfig, multiplier: int = 1, state: Mapping[str, Any]
         from .smc_runner import SmcScalpRunner  # it builds on this module
 
         return SmcScalpRunner(config, multiplier, state)
+    if isinstance(config, PlansConfig):
+        return PlansRunner(config, multiplier, state)
     if isinstance(config, RulesConfig):
         return RulesRunner(config, multiplier, state)
     if isinstance(config, TimeBasedConfig):

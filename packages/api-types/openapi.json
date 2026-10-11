@@ -922,6 +922,7 @@
           "config": {
             "discriminator": {
               "mapping": {
+                "plans": "#/components/schemas/PlansConfig",
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
                 "rules": "#/components/schemas/RulesConfig",
                 "smc_scalp": "#/components/schemas/SmcScalpConfig",
@@ -931,6 +932,9 @@
               "propertyName": "kind"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlansConfig"
+              },
               {
                 "$ref": "#/components/schemas/RulesConfig"
               },
@@ -3924,6 +3928,79 @@
         "title": "PaymentOut",
         "type": "object"
       },
+      "Plan": {
+        "additionalProperties": false,
+        "description": "One complete trading routine: on these weekdays, on this instrument, enter like this, trade these legs, leave\nlike that. Exactly a rules strategy (entry, holding, legs, risk, exit) plus a name and its weekdays; the engine\nruns each plan as the rules runner it is. A plan's weekdays are also its entry days.",
+        "properties": {
+          "days": {
+            "items": {
+              "enum": [
+                "MON",
+                "TUE",
+                "WED",
+                "THU",
+                "FRI"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Days",
+            "type": "array"
+          },
+          "entry": {
+            "$ref": "#/components/schemas/RulesEntry"
+          },
+          "exit": {
+            "$ref": "#/components/schemas/RulesExit"
+          },
+          "holding": {
+            "$ref": "#/components/schemas/Holding"
+          },
+          "id": {
+            "pattern": "^[A-Za-z0-9_-]{1,12}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "legs": {
+            "items": {
+              "$ref": "#/components/schemas/Leg"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Legs",
+            "type": "array"
+          },
+          "name": {
+            "default": "Plan",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/RulesRisk"
+          },
+          "underlying": {
+            "default": "NIFTY",
+            "enum": [
+              "NIFTY",
+              "BANKNIFTY",
+              "FINNIFTY",
+              "MIDCPNIFTY",
+              "SENSEX"
+            ],
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "legs"
+        ],
+        "title": "Plan",
+        "type": "object"
+      },
       "PlanAdminIn": {
         "additionalProperties": false,
         "properties": {
@@ -4165,6 +4242,44 @@
         "title": "PlanOut",
         "type": "object"
       },
+      "PlansConfig": {
+        "additionalProperties": false,
+        "description": "A strategy made of plans (ADR 0026): each plan its own weekdays, entry, legs and exit, on any instrument; plans\nmay overlap on a day and run independently (one trade at a time within each plan). `underlying` is the first\nplan's, derived: a run trades one instrument, so deploying and backtesting split the plans by instrument.",
+        "properties": {
+          "kind": {
+            "const": "plans",
+            "default": "plans",
+            "title": "Kind",
+            "type": "string"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/Plan"
+            },
+            "maxItems": 12,
+            "minItems": 1,
+            "title": "Plans",
+            "type": "array"
+          },
+          "underlying": {
+            "default": "NIFTY",
+            "enum": [
+              "NIFTY",
+              "BANKNIFTY",
+              "FINNIFTY",
+              "MIDCPNIFTY",
+              "SENSEX"
+            ],
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plans"
+        ],
+        "title": "PlansConfig",
+        "type": "object"
+      },
       "PositionOut": {
         "properties": {
           "current_sl": {
@@ -4386,6 +4501,7 @@
           "config": {
             "discriminator": {
               "mapping": {
+                "plans": "#/components/schemas/PlansConfig",
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
                 "rules": "#/components/schemas/RulesConfig",
                 "smc_scalp": "#/components/schemas/SmcScalpConfig",
@@ -4395,6 +4511,9 @@
               "propertyName": "kind"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlansConfig"
+              },
               {
                 "$ref": "#/components/schemas/RulesConfig"
               },
@@ -4928,7 +5047,7 @@
       },
       "RulesConfig": {
         "additionalProperties": false,
-        "description": "`legs` trade on every entry day, unless `day_legs` names legs for that weekday: then those replace `legs` on\nthat day (a strangle on Monday, an iron condor on Tuesday, an iron fly on Wednesday, each with its own strikes).\nLeg ids are unique across all of them, so a position held overnight finds its leg.",
+        "description": "`legs` trade on every entry day, unless `day_legs` names legs for that weekday: then those replace `legs` on\nthat day (a strangle on Monday, an iron condor on Tuesday, an iron fly on Wednesday, each with its own strikes).\n`legs` may be empty: a weekday with neither its own legs nor default legs does not trade. Leg ids are unique\nacross all of them, so a position held overnight finds its leg.",
         "properties": {
           "day_legs": {
             "anyOf": [
@@ -4978,7 +5097,6 @@
               "$ref": "#/components/schemas/Leg"
             },
             "maxItems": 6,
-            "minItems": 1,
             "title": "Legs",
             "type": "array"
           },
@@ -6800,6 +6918,7 @@
           "config": {
             "discriminator": {
               "mapping": {
+                "plans": "#/components/schemas/PlansConfig",
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
                 "rules": "#/components/schemas/RulesConfig",
                 "smc_scalp": "#/components/schemas/SmcScalpConfig",
@@ -6809,6 +6928,9 @@
               "propertyName": "kind"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlansConfig"
+              },
               {
                 "$ref": "#/components/schemas/RulesConfig"
               },
@@ -6892,6 +7014,7 @@
           "config": {
             "discriminator": {
               "mapping": {
+                "plans": "#/components/schemas/PlansConfig",
                 "range_breakout": "#/components/schemas/RangeBreakoutConfig",
                 "rules": "#/components/schemas/RulesConfig",
                 "smc_scalp": "#/components/schemas/SmcScalpConfig",
@@ -6901,6 +7024,9 @@
               "propertyName": "kind"
             },
             "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlansConfig"
+              },
               {
                 "$ref": "#/components/schemas/RulesConfig"
               },
@@ -6942,6 +7068,7 @@
           },
           "kind": {
             "enum": [
+              "plans",
               "rules",
               "time_based",
               "range_breakout",
@@ -7001,6 +7128,7 @@
               {
                 "discriminator": {
                   "mapping": {
+                    "plans": "#/components/schemas/PlansConfig",
                     "range_breakout": "#/components/schemas/RangeBreakoutConfig",
                     "rules": "#/components/schemas/RulesConfig",
                     "smc_scalp": "#/components/schemas/SmcScalpConfig",
@@ -7010,6 +7138,9 @@
                   "propertyName": "kind"
                 },
                 "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PlansConfig"
+                  },
                   {
                     "$ref": "#/components/schemas/RulesConfig"
                   },
@@ -16794,6 +16925,18 @@
               "format": "uuid",
               "title": "Strategy Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Return a rules strategy as plans (not saved)",
+            "in": "query",
+            "name": "as_plans",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Return a rules strategy as plans (not saved)",
+              "title": "As Plans",
+              "type": "boolean"
             }
           }
         ],

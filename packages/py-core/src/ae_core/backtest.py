@@ -27,7 +27,7 @@ from typing import Any, Protocol
 from .reports import ClosedTrade, Day, Summary, daily, max_losing_streak, summarize
 from .strategy import AnyConfig
 from .trading.model import IST, Intent, Market, Position, Quote
-from .trading.runners import RulesRunner, Runner, make_runner
+from .trading.runners import Runner, make_runner
 
 TICK = 0.05
 
@@ -334,22 +334,20 @@ def simulate(
                 _extremes(runner, m, prices, now, fill, adverse=True, spot=spot_px)
             for spot_px in (bar.high, bar.low):
                 _extremes(runner, m, prices, now, fill, adverse=False, spot=spot_px)
-            if isinstance(runner, RulesRunner) and runner.s.get("phase") != "in":
-                # a trade that has ended must have no open positions: if an exit was refused after the trade was
-                # closed, nothing would ever retry it and the leg would block every later entry (and be reported at
-                # the very end as having no price). Close such leftovers now, at the last price there is.
-                left = [p for p in runner.open_positions() if p.id not in runner.exiting]
-                for pos in left:
-                    px = prices.last.get(pos.contract.key) or carried.get(pos.contract.key)
-                    if px is None:
-                        continue
-                    intent = Intent("exit", "SELL" if pos.side == "BUY" else "BUY", pos.contract, pos.lots, pos.qty,
-                                    "closing a leftover position", pos.leg, position_id=pos.id)  # fmt: skip
-                    runner.exiting.add(pos.id)
-                    fill(intent, px, now, m)
-                    leftovers += 1
-                    if len(why) < 4:
-                        why[f"{pos.contract.label} was left open and closed at the last price"] = None
+            # a trade that has ended must have no open positions: if an exit was refused after the trade was
+            # closed, nothing would ever retry it and the leg would block every later entry (and be reported at
+            # the very end as having no price). Close such leftovers now, at the last price there is.
+            for pos in runner.idle_positions():
+                px = prices.last.get(pos.contract.key) or carried.get(pos.contract.key)
+                if px is None:
+                    continue
+                intent = Intent("exit", "SELL" if pos.side == "BUY" else "BUY", pos.contract, pos.lots, pos.qty,
+                                "closing a leftover position", pos.leg, position_id=pos.id)  # fmt: skip
+                runner.exiting.add(pos.id)
+                fill(intent, px, now, m)
+                leftovers += 1
+                if len(why) < 4:
+                    why[f"{pos.contract.label} was left open and closed at the last price"] = None
             for k in keys | {p.contract.key for p in runner.positions if p.exit_time == now}:
                 prices.close(k, now)
             for note in runner.notes:
@@ -361,10 +359,10 @@ def simulate(
                     result.signals.append({"time": now.isoformat(), **note})
             runner.notes.clear()
         carried.update(prices.last)
-        if isinstance(runner, RulesRunner) and runner.cfg.holding.mode == "intraday" and runner.open_positions():
+        if runner.same_day_positions():
             # an intraday trade never sleeps over: the day's index data ended before the exit time (or the exit never
             # came), so close it at the last price there is
-            for pos in runner.open_positions():
+            for pos in runner.same_day_positions():
                 px = prices.last.get(pos.contract.key) or carried.get(pos.contract.key)
                 if px is None or pos.id in runner.exiting:
                     continue
@@ -377,9 +375,8 @@ def simulate(
                     why[f"{pos.contract.label} closed at the last price: the day's data ended before the exit time"] = (
                         None
                     )
-            runner.s["phase"] = "waiting"
-        for pos in runner.open_positions():
-            if len(why) < 4 and runner.s.get("phase") != "in":
+        for pos in runner.idle_positions():
+            if len(why) < 4:
                 why[f"{pos.contract.label} still open at the close"] = None
         result.day_log.append({
             "day": day.isoformat(), "weekday": f"{day:%a}", "options": has_options,

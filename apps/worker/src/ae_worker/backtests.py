@@ -8,10 +8,18 @@ from typing import Any
 
 import structlog
 from ae_core.backtest import BacktestResult, summarize_result
-from ae_core.strategy import SmcScalpConfig, migrate, parse
+from ae_core.strategy import SmcScalpConfig, migrate, parse, underlyings_of
 from ae_db.models import BacktestRun, Instrument
 from ae_db.session import Database
-from ae_marketdata.replay import SMC_SPREAD_PCT, WARMUP, merge, months, replay  # noqa: F401
+from ae_marketdata.replay import (  # noqa: F401
+    SMC_SPREAD_PCT,
+    WARMUP,
+    lot_size_note,
+    merge,
+    months,
+    replay,
+    replay_config,
+)
 from sqlalchemy import select
 
 log = structlog.get_logger("ae_worker.backtests")
@@ -38,17 +46,13 @@ async def run_pending(db: Database) -> int:
             run = await s.get(BacktestRun, rid)
             assert run is not None
             config = parse(migrate(run.schema_version, run.config_snapshot))
-            inst = (await s.execute(select(Instrument).where(Instrument.code == config.underlying))).scalar_one()
+            used = underlyings_of(config)
+            rows = (await s.execute(select(Instrument).where(Instrument.code.in_(used)))).scalars()
+            insts = {i.code: (i.lot_size, i.strike_step) for i in rows}
             start, end, mult, slip = run.start_date, run.end_date, run.multiplier, run.slippage_pct
-            lot, step = inst.lot_size, inst.strike_step
-        result = await replay(
-            db, config, start, end, multiplier=mult, lot_size=lot, strike_step=step, slippage_pct=slip
-        )
+        result = await replay_config(db, config, start, end, multiplier=mult, insts=insts, slippage_pct=slip)
         out = summarize_result(result)
-        out["warnings"] = [
-            f"Quantities use today's lot size ({lot} for {config.underlying}); older periods traded other sizes.",
-            *out["warnings"],
-        ]
+        out["warnings"] = [lot_size_note(insts, used), *out["warnings"]]
         async with db.system_session() as s:
             run = await s.get(BacktestRun, rid)
             assert run is not None

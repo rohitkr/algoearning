@@ -17,10 +17,13 @@ from ae_core.strategy import (
     Instrument,
     Instruments,
     Issue,
+    RulesConfig,
+    TimeBasedConfig,
     check,
     parse,
     parse_issues,
     plan_warnings,
+    plans_from_rules,
 )
 from ae_db.enums import RunStatus, StrategyStatus
 from ae_db.models import Strategy, StrategyRun
@@ -121,7 +124,17 @@ async def strategy_catalog(user: CurrentUser, s: UserSession, settings: Settings
     ent = await load_entitlements(s, user.user_id, timedelta(days=settings.subscription_grace_days))
     return StrategyCatalogOut(
         instruments=[InstrumentOut.model_validate(r) for r in await InstrumentRepo(s).list_active()],
-        presets=[PresetOut(id=p.id, name=p.name, description=p.description, config=p.config) for p in PRESETS],
+        presets=[
+            PresetOut(
+                id=p.id,
+                name=p.name,
+                description=p.description,
+                config=plans_from_rules(p.config, p.name[:60])
+                if isinstance(p.config, RulesConfig | TimeBasedConfig)
+                else p.config,
+            )
+            for p in PRESETS
+        ],
         limits=StrategyLimits(
             max_legs=MAX_LEGS,
             max_strike_offset=MAX_STRIKE_OFFSET,
@@ -155,9 +168,25 @@ async def create_strategy(
     return StrategyOut.model_validate(obj)
 
 
+def _as_plans(out: StrategyOut) -> StrategyOut:
+    """A rules / time-based strategy as the plans it always meant (ADR 0026), for the builder; nothing is saved until
+    the user saves."""
+    if out.kind in ("rules", "time_based"):
+        cfg = parse(out.config.model_dump(mode="json"))
+        if isinstance(cfg, RulesConfig | TimeBasedConfig):
+            out.config, out.kind = plans_from_rules(cfg, out.name[:60] or "Plan"), "plans"
+    return out
+
+
 @router.get("/{strategy_id}", response_model=StrategyOut)
-async def get_strategy(strategy_id: uuid.UUID, user: CurrentUser, s: UserSession) -> StrategyOut:
-    return StrategyOut.model_validate(await _own(StrategyRepo(s, user.user_id), strategy_id))
+async def get_strategy(
+    strategy_id: uuid.UUID,
+    user: CurrentUser,
+    s: UserSession,
+    as_plans: Annotated[bool, Query(description="Return a rules strategy as plans (not saved)")] = False,
+) -> StrategyOut:
+    out = StrategyOut.model_validate(await _own(StrategyRepo(s, user.user_id), strategy_id))
+    return _as_plans(out) if as_plans else out
 
 
 @router.patch("/{strategy_id}", response_model=StrategyOut)

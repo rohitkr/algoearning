@@ -30,3 +30,4 @@ supersedes the old one, never by editing history.
 | 0023 | [Conditions, levels and signals: entering and exiting on index moves](0023-conditions-and-levels.md) | Accepted                     |
 | 0024 | [Indicators: EMA, RSI, MACD, Supertrend and others as condition values](0024-indicators.md)          | Accepted                     |
 | 0025 | [Signal sources: reading a Telegram tips channel and trading its direction](0025-signal-sources.md)  | Accepted                     |
+| 0026 | [Day plans: a strategy is a list of plans](0026-day-plans.md)                                       | Accepted                     |

@@ -72,16 +72,21 @@ describe("StrategyBuilder", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save/ }));
     await flush();
     const post = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies");
-    const cfg = (post?.body as { config: { legs: { id: string; action: string; strike: unknown }[] } })
-      .config;
-    expect(cfg.legs.map((l) => `${l.id}:${l.action}`)).toEqual(["L1:SELL", "L2:SELL", "L3:BUY"]);
-    expect(cfg.legs[2]!.strike).toEqual({ mode: "atm", offset: 4, premium: null, points: null });
+    const cfg = (
+      post?.body as {
+        config: { kind: string; plans: { legs: { id: string; action: string; strike: unknown }[] }[] };
+      }
+    ).config;
+    expect(cfg.kind).toBe("plans");
+    const legsOut = cfg.plans[0]!.legs;
+    expect(legsOut.map((l) => `${l.id}:${l.action}`)).toEqual(["L1:SELL", "L2:SELL", "L3:BUY"]);
+    expect(legsOut[2]!.strike).toEqual({ mode: "atm", offset: 4, premium: null, points: null });
     expect(push).toHaveBeenCalledWith("/builder/11111111-1111-1111-1111-111111111111?saved=1");
   });
 
   it("moves legs to monthly expiries for monthly-only indices", () => {
     render(<StrategyBuilder catalog={catalog} />);
-    fireEvent.change(screen.getByLabelText("Underlying"), { target: { value: "BANKNIFTY" } });
+    fireEvent.change(screen.getByLabelText("Instrument"), { target: { value: "BANKNIFTY" } });
     expect((within(legs()[0]!).getByLabelText("Expiry") as HTMLSelectElement).value).toBe("current_month");
     expect(screen.getByText(/Lot size 30 · strikes every 100 · monthly expiries/)).toBeTruthy();
   });
@@ -89,9 +94,15 @@ describe("StrategyBuilder", () => {
   it("shows the server's errors next to the field and plan warnings", async () => {
     validateReply = {
       valid: false,
-      errors: [{ loc: ["holding", "exit"], msg: "must be after the entry time", type: "value_error" }],
+      errors: [
+        { loc: ["plans", 0, "holding", "exit"], msg: "must be after the entry time", type: "value_error" },
+      ],
       warnings: [
-        { loc: ["legs", 0, "lots"], msg: "your plan allows 10 lot(s) per order", type: "plan_limit" },
+        {
+          loc: ["plans", 0, "legs", 0, "lots"],
+          msg: "your plan allows 10 lot(s) per order",
+          type: "plan_limit",
+        },
       ],
     };
     render(<StrategyBuilder catalog={catalog} />);
@@ -123,7 +134,7 @@ describe("StrategyBuilder", () => {
     fireEvent.change(within(legs()[1]!).getByLabelText("Points"), { target: { value: "300" } });
     expect(screen.getByText(/Leg 2: Sell 1 lot \(65 qty\) NIFTY 300 pts OTM PE/)).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Combined premium stop (sold legs together)"));
-    fireEvent.click(screen.getByLabelText("Lock profit"));
+    fireEvent.click(screen.getByLabelText("Lock profit (and trail it)"));
     expect(screen.getByText(/sold premiums together rise 30% above/)).toBeTruthy();
     expect(screen.getByText(/Once the profit reaches ₹2000, keep at least ₹1000\./)).toBeTruthy();
 
@@ -132,15 +143,14 @@ describe("StrategyBuilder", () => {
     const saved = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies")!.body as {
       config: {
         kind: string;
-        entry: { at: string; dte: number[] };
-        holding: object;
-        legs: { strike: object }[];
+        plans: { entry: { at: string; dte: number[] }; holding: object; legs: { strike: object }[] }[];
       };
     };
-    expect(saved.config.kind).toBe("rules");
-    expect(saved.config.entry).toMatchObject({ at: "15:00", dte: [2] });
-    expect(saved.config.holding).toEqual({ mode: "days", exit: "09:30", days: 2 });
-    expect(saved.config.legs[1]!.strike).toEqual({ mode: "points", offset: 0, premium: null, points: 300 });
+    expect(saved.config.kind).toBe("plans");
+    const plan = saved.config.plans[0]!;
+    expect(plan.entry).toMatchObject({ at: "15:00", dte: [2] });
+    expect(plan.holding).toEqual({ mode: "days", exit: "09:30", days: 2 });
+    expect(plan.legs[1]!.strike).toEqual({ mode: "points", offset: 0, premium: null, points: 300 });
   });
 
   it("builds a breakout from the opening range preset and edits its signals", async () => {
@@ -171,14 +181,19 @@ describe("StrategyBuilder", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save/ }));
     await flush();
     const saved = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies")!.body as {
-      config: { entry: { mode: string; signals: { direction: string; conditions: { candle: number }[] }[] } };
+      config: {
+        plans: {
+          entry: { mode: string; signals: { direction: string; conditions: { candle: number }[] }[] };
+        }[];
+      };
     };
-    expect(saved.config.entry.mode).toBe("conditions");
-    expect(saved.config.entry.signals[0]).toMatchObject({ direction: "up" });
-    expect(saved.config.entry.signals[0]!.conditions.map((c) => c.candle)).toEqual([15, 5]);
+    const entry = saved.config.plans[0]!.entry;
+    expect(entry.mode).toBe("conditions");
+    expect(entry.signals[0]).toMatchObject({ direction: "up" });
+    expect(entry.signals[0]!.conditions.map((c) => c.candle)).toEqual([15, 5]);
 
     fireEvent.change(screen.getByLabelText("Enter"), { target: { value: "time" } });
-    expect(screen.queryByRole("heading", { name: "Signals" })).toBeNull();
+    expect(screen.queryByText("Start from:")).toBeNull();
   });
 
   it("builds an indicator strategy and saves its settings", async () => {
@@ -197,9 +212,9 @@ describe("StrategyBuilder", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save/ }));
     await flush();
     const saved = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies")!.body as {
-      config: { entry: { signals: { conditions: { right: object }[] }[] } };
+      config: { plans: { entry: { signals: { conditions: { right: object }[] }[] } }[] };
     };
-    expect(saved.config.entry.signals[0]!.conditions[0]!.right).toMatchObject({
+    expect(saved.config.plans[0]!.entry.signals[0]!.conditions[0]!.right).toMatchObject({
       kind: "indicator",
       indicator: "supertrend",
       period: 7,
@@ -219,34 +234,132 @@ describe("StrategyBuilder", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save/ }));
     await flush();
     const saved = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies")!.body as {
-      config: { entry: { mode: string; max_tip_age_s: number; on_tip_exit: string }; legs: object[] };
+      config: {
+        plans: { entry: { mode: string; max_tip_age_s: number; on_tip_exit: string }; legs: object[] }[];
+      };
     };
-    expect(saved.config.entry).toMatchObject({ mode: "tip", max_tip_age_s: 120, on_tip_exit: "close" });
-    expect(saved.config.legs).toMatchObject([
+    const tipPlan = saved.config.plans[0]!;
+    expect(tipPlan.entry).toMatchObject({ mode: "tip", max_tip_age_s: 120, on_tip_exit: "close" });
+    expect(tipPlan.legs).toMatchObject([
       { action: "SELL", option_type: "PE", direction: "up" },
       { action: "SELL", option_type: "CE", direction: "down" },
     ]);
   });
 
-  it("opens an old time-based strategy as rules", () => {
-    const old = {
-      kind: "time_based" as const,
+  it("opens a saved plans strategy and describes every plan", () => {
+    const saved = {
+      kind: "plans" as const,
       underlying: "NIFTY" as const,
-      timing: { entry: "09:30", exit: "15:00", days: ["MON" as const] },
-      legs: [
+      plans: [
         {
-          id: "L1",
-          action: "SELL" as const,
-          option_type: "CE" as const,
-          lots: 1,
-          expiry: "current_week" as const,
+          id: "P1",
+          name: "Monday",
+          underlying: "NIFTY" as const,
+          days: ["MON" as const],
+          entry: { mode: "time" as const, at: "09:30" },
+          holding: { mode: "intraday" as const, exit: "15:00" },
+          legs: [
+            {
+              id: "L1",
+              action: "SELL" as const,
+              option_type: "CE" as const,
+              lots: 1,
+              expiry: "current_week" as const,
+            },
+          ],
+        },
+        {
+          id: "P2",
+          name: "Friday",
+          underlying: "SENSEX" as const,
+          days: ["FRI" as const],
+          entry: { mode: "time" as const, at: "10:00" },
+          holding: { mode: "intraday" as const, exit: "15:00" },
+          legs: [
+            {
+              id: "L1",
+              action: "BUY" as const,
+              option_type: "PE" as const,
+              lots: 1,
+              expiry: "current_week" as const,
+            },
+          ],
         },
       ],
     };
-    const strategy = { id: "s1", name: "Old", description: null, config: old, status: "draft", version: 1 };
+    const strategy = {
+      id: "s1",
+      name: "Week",
+      description: null,
+      config: saved,
+      status: "draft",
+      version: 1,
+    };
     render(<StrategyBuilder catalog={catalog} strategy={strategy as never} />);
-    expect(screen.getByText("Rule builder", { exact: false })).toBeTruthy();
-    expect(screen.getByText(/Enter at 09:30, Mon; exit at 15:00 the same day\./)).toBeTruthy();
+    expect(
+      screen.getByText(/Monday · NIFTY: Enter at 09:30, Mon; exit at 15:00 the same day\./),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Friday · SENSEX: Enter at 10:00, Fri; exit at 15:00 the same day\./),
+    ).toBeTruthy();
+  });
+
+  it("adds a plan for the days nobody trades, with its own instrument, entry and legs", async () => {
+    render(<StrategyBuilder catalog={catalog} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Short strangle/ }));
+    const week = within(screen.getByLabelText("Week at a glance"));
+    expect(week.getAllByText("Short strangle")).toHaveLength(5); // the one plan trades every weekday
+
+    fireEvent.click(screen.getByRole("button", { name: "Mon" })); // untick Monday on the first plan
+    expect(week.getByText("no trade")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Add plan/ }));
+    // the new plan takes the free day and is the one being edited
+    expect(week.queryByText("no trade")).toBeNull();
+    expect(week.getByText("Plan 2")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Plan 2/ })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Instrument"), { target: { value: "SENSEX" } });
+    fireEvent.change(screen.getByLabelText("Plan name"), { target: { value: "Monday sensex" } });
+    fireEvent.change(screen.getByLabelText("Enter"), { target: { value: "conditions" } });
+    fireEvent.click(screen.getByRole("button", { name: "Opening range breakout / breakdown" }));
+    fireEvent.click(screen.getByRole("button", { name: "Follow the tip (buy ATM CE / PE)" }));
+
+    await flush();
+    fireEvent.click(screen.getByRole("button", { name: /Save/ }));
+    await flush();
+    const saved = calls.find((c) => c.method === "POST" && c.path === "/v1/strategies")!.body as {
+      config: {
+        underlying: string;
+        plans: {
+          id: string;
+          name: string;
+          underlying: string;
+          days: string[];
+          entry: { mode: string };
+          legs: { direction: string }[];
+        }[];
+      };
+    };
+    const [first, second] = saved.config.plans;
+    expect(first).toMatchObject({
+      name: "Short strangle",
+      underlying: "NIFTY",
+      days: ["TUE", "WED", "THU", "FRI"],
+    });
+    expect(second).toMatchObject({ id: "P2", name: "Monday sensex", underlying: "SENSEX", days: ["MON"] });
+    expect(second!.entry.mode).toBe("conditions");
+    expect(second!.legs.map((l) => l.direction)).toEqual(["up", "down"]);
+    expect(first!.entry.mode).toBe("time");
+  });
+
+  it("duplicates and removes plans", () => {
+    render(<StrategyBuilder catalog={catalog} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Short strangle/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Duplicate plan/ }));
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect((screen.getByLabelText("Plan name") as HTMLInputElement).value).toBe("Short strangle copy");
+    fireEvent.click(screen.getByRole("button", { name: "Remove plan" }));
+    expect(screen.getAllByRole("tab")).toHaveLength(1);
+    expect((screen.getByRole("button", { name: "Remove plan" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("shows the proven strategies' parameters instead of legs", () => {

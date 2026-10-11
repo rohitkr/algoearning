@@ -7,6 +7,7 @@ import type {
   Instrument,
   LegStrike,
   LegThreshold,
+  PlansConfig,
   RulesConfig,
   RulesEntry,
   RulesExit,
@@ -16,9 +17,11 @@ import type {
   StrategyConfig,
   StrategyLeg,
   TimeBasedConfig,
+  TradePlan,
 } from "@algoearning/api-types";
 
 export const KIND_LABEL: Record<StrategyConfig["kind"], string> = {
+  plans: "Day plans",
   rules: "Rule builder",
   time_based: "Time based",
   range_breakout: "Range breakout",
@@ -48,7 +51,7 @@ export const HOLD_LABEL: Record<RulesHolding["mode"], string> = {
 };
 
 /** A rules config's parts with the API's defaults filled in, ready to spread and change. */
-export function entryOf(c: RulesConfig): RulesEntry {
+export function entryOf(c: { entry?: Partial<RulesEntry> | null }): RulesEntry {
   return {
     mode: "time",
     at: "09:20",
@@ -64,7 +67,7 @@ export function entryOf(c: RulesConfig): RulesEntry {
   };
 }
 
-export function exitOf(c: RulesConfig): RulesExit {
+export function exitOf(c: { exit?: Partial<RulesExit> | null }): RulesExit {
   return { when: null, on_opposite_signal: false, ...c.exit };
 }
 
@@ -192,11 +195,11 @@ export function groupText(g: ConditionGroup): string {
   return parts.length > 1 ? parts.join(g.match === "all" ? " and " : " or ") : (parts[0] ?? "");
 }
 
-export function holdingOf(c: RulesConfig): RulesHolding {
+export function holdingOf(c: { holding?: Partial<RulesHolding> | null }): RulesHolding {
   return { mode: "intraday", exit: "15:15", days: 1, ...c.holding };
 }
 
-export function rulesRiskOf(c: RulesConfig): RulesRisk {
+export function rulesRiskOf(c: { risk?: Partial<RulesRisk> | null }): RulesRisk {
   return {
     mtm_stop_loss: null,
     mtm_target: null,
@@ -293,6 +296,7 @@ function days(d: readonly string[] | undefined): string {
 /** The whole strategy in a few sentences (builder summary panel). */
 export function describeConfig(c: StrategyConfig, instruments: Instrument[]): string[] {
   const inst = instruments.find((i) => i.code === c.underlying);
+  if (c.kind === "plans") return describePlans(c, instruments);
   if (c.kind === "rules") return describeRules(c, inst);
   if (c.kind === "time_based") {
     const t = c.timing;
@@ -325,6 +329,64 @@ export function describeConfig(c: StrategyConfig, instruments: Instrument[]): st
   ];
 }
 
+/** A plan as the rules config it runs as (the API's `Plan.to_rules`). */
+export function planAsRules(p: TradePlan): RulesConfig {
+  return {
+    kind: "rules",
+    underlying: p.underlying ?? "NIFTY",
+    entry: { ...entryOf(p), days: p.days ?? [...WEEKDAYS] },
+    holding: holdingOf(p),
+    legs: p.legs,
+    risk: rulesRiskOf(p),
+    exit: exitOf(p),
+  };
+}
+
+/** Every plan in a few sentences: "Mon, Tue · NIFTY: Enter at 09:20 ...". */
+function describePlans(c: PlansConfig, instruments: Instrument[]): string[] {
+  const lines: string[] = [];
+  for (const p of c.plans) {
+    const inst = instruments.find((i) => i.code === p.underlying);
+    const [first, ...rest] = describeRules(planAsRules(p), inst);
+    lines.push(`${p.name} · ${p.underlying}: ${first ?? ""}`, ...rest);
+  }
+  return lines;
+}
+
+/** A plan id not used yet: P1, P2, ... */
+export function nextPlanId(plans: readonly { id: string }[]): string {
+  const used = new Set(plans.map((p) => p.id));
+  let n = plans.length + 1;
+  while (used.has(`P${n}`)) n += 1;
+  return `P${n}`;
+}
+
+/** A new plan on a weekday set: sells an ATM CE and PE at 09:20 and leaves at 15:15 the same day. */
+export function newPlan(
+  plans: readonly { id: string; name?: string }[],
+  underlying: Underlying,
+  weekly: boolean,
+  days: Weekday[] = [...WEEKDAYS],
+): TradePlan {
+  const id = nextPlanId(plans);
+  const leg = (i: string, option_type: "CE" | "PE"): StrategyLeg => ({
+    ...newLeg({ legs: [] }, weekly),
+    id: i,
+    option_type,
+  });
+  return {
+    id,
+    name: `Plan ${id.slice(1)}`,
+    underlying,
+    days,
+    entry: entryOf({}),
+    holding: holdingOf({}),
+    legs: [leg("L1", "CE"), leg("L2", "PE")],
+    risk: rulesRiskOf({}),
+    exit: exitOf({}),
+  };
+}
+
 function dteText(dte: number[]): string {
   return [...dte]
     .sort((x, y) => x - y)
@@ -341,7 +403,7 @@ export function holdingText(h: RulesHolding): string {
   return `hold and exit at ${h.exit} on expiry day`;
 }
 
-function describeRules(c: RulesConfig, inst: Instrument | undefined): string[] {
+export function describeRules(c: RulesConfig, inst: Instrument | undefined): string[] {
   const e = entryOf(c);
   const h = holdingOf(c);
   const r = rulesRiskOf(c);
@@ -403,6 +465,11 @@ function describeSmc(c: SmcScalpConfig, inst: Instrument | undefined): string[] 
 
 /** One line for the strategies list: "NIFTY · 2 legs · 09:20–15:15". */
 export function configSummary(c: StrategyConfig): string {
+  if (c.kind === "plans") {
+    const u = [...new Set(c.plans.map((p) => p.underlying ?? "NIFTY"))].join(" + ");
+    const n = c.plans.length;
+    return `${u} · ${n} plan${n === 1 ? "" : "s"} · ${c.plans.map((p) => p.name).join(", ")}`;
+  }
   if (c.kind === "rules") {
     const n = c.legs.length;
     const e = entryOf(c);
@@ -453,7 +520,10 @@ export function newLeg(c: { legs: StrategyLeg[] }, weekly: boolean): StrategyLeg
 export function issueKey(loc: ConfigIssue["loc"]): string {
   let l = [...loc];
   if (l[0] === "body" && l[1] === "config") l = l.slice(2);
-  if (typeof l[0] === "string" && l[0] in KIND_LABEL) l = l.slice(1);
+  // the union tag comes first; for a plans config the path itself starts with "plans", so that one is the tag only
+  // when it is doubled ("plans", "plans", 0, ...)
+  if (typeof l[0] === "string" && l[0] in KIND_LABEL && (l[0] !== "plans" || l[1] === "plans"))
+    l = l.slice(1);
   return l.join(".");
 }
 
@@ -468,8 +538,14 @@ export function issueLabel(key: string): string {
   if (!key) return "Strategy";
   return key
     .split(".")
-    .map((p, i, all) => (all[i - 1] === "legs" && /^\d+$/.test(p) ? `Leg ${Number(p) + 1}` : p))
-    .filter((p) => p !== "legs")
+    .map((p, i, all) =>
+      all[i - 1] === "legs" && /^\d+$/.test(p)
+        ? `Leg ${Number(p) + 1}`
+        : all[i - 1] === "plans" && /^\d+$/.test(p)
+          ? `Plan ${Number(p) + 1}`
+          : p,
+    )
+    .filter((p) => p !== "legs" && p !== "plans")
     .map((p) => p.replaceAll("_", " "))
     .join(" · ");
 }

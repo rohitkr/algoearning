@@ -28,7 +28,7 @@ from ae_brokers.kite import ContractBook, KiteClient
 from ae_core.backtest import Candle
 from ae_core.notifications import FROM_ENGINE, compose
 from ae_core.secrets import SecretBox
-from ae_core.strategy import RulesConfig, holds_overnight, migrate, parse
+from ae_core.strategy import holds_overnight, migrate, parse, tip_source_ids
 from ae_core.trading.model import IST, Contract, Intent, Market, Position, Quote, Tip
 from ae_core.trading.risk import RiskContext, RiskSettings, breach, check_entry
 from ae_core.trading.runners import Runner, make_runner
@@ -188,11 +188,7 @@ class Engine:
 
     async def _tips(self, s: Any, user_id: uuid.UUID, runners: Any, now: datetime) -> list[Tip]:
         """Today's Telegram tips of the signal sources this user's runs trade on (ADR 0025), oldest first."""
-        sources = {
-            rn.cfg.entry.source_id
-            for rn in runners
-            if isinstance(rn.cfg, RulesConfig) and rn.cfg.entry.mode == "tip" and rn.cfg.entry.source_id
-        }
+        sources = {sid for rn in runners for sid in tip_source_ids(rn.cfg)}
         if not sources:
             return []
         since = datetime.combine(now.astimezone(IST).date(), datetime.min.time(), tzinfo=IST)

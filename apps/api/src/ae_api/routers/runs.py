@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from ae_core.strategy import AnyConfig, RulesConfig, check, max_order_lots, parse
+from ae_core.strategy import AnyConfig, PlansConfig, check, max_order_lots, parse, tip_source_ids, uses_tips
 from ae_db.enums import BrokerAccountStatus, RunStatus, StrategyStatus, TradingMode
 from ae_db.models import (
     BrokerAccount,
@@ -132,15 +133,13 @@ async def deploy(
                 raise Conflict("switch on the Trading Engine for this broker account", {"reason": "engine_off"})
             if (body.confirm or "").strip() != strat.name.strip():
                 raise Conflict("type the strategy's name to confirm real orders", {"reason": "confirm"})
-    if isinstance(config, RulesConfig) and config.entry.mode == "tip":
+    if uses_tips(config):
         if body.mode == "live":
             require_feature(ent, "signal_trading")
-        src = (
-            await s.execute(select(SignalSource).where(SignalSource.id == config.entry.source_id))
-        ).scalar_one_or_none()
-        if src is None or src.status != "connected" or src.chat_id is None:
-            raise Conflict("connect the Telegram signal source and pick its chat first", {"reason": "no_source"})
-    require_within(ent, "max_running_strategies", ent.usage["max_running_strategies"])
+        for source_id in tip_source_ids(config):
+            src = (await s.execute(select(SignalSource).where(SignalSource.id == source_id))).scalar_one_or_none()
+            if src is None or src.status != "connected" or src.chat_id is None:
+                raise Conflict("connect the Telegram signal source and pick its chat first", {"reason": "no_source"})
     lots, cap = _max_lots(config) * body.multiplier, ent.limit("max_lots_per_order")
     if cap is not None and lots > cap:
         raise PlanLimitReached(
@@ -152,25 +151,37 @@ async def deploy(
         and await BrokerAccountRepo(s, user.user_id).get(body.broker_account_id) is None
     ):
         raise NotFound("broker account not found")
-    run = StrategyRun(
-        user_id=user.user_id,
-        strategy_id=strat.id,
-        broker_account_id=body.broker_account_id,
-        mode=TradingMode(body.mode),
-        status=RunStatus.PENDING,
-        config_snapshot=dict(strat.config),
-        strategy_name=strat.name,
-        kind=strat.kind,
-        schema_version=strat.schema_version,
-        multiplier=body.multiplier,
-        dry_run=body.mode == "live" and body.dry_run,
-    )
-    s.add(run)
+    # a run trades one instrument (one market feed): a strategy of plans on several instruments deploys as one run per
+    # instrument, all of them started and stopped together from the page, each holding every plan of its instrument
+    parts: list[tuple[str, dict[str, Any]]] = [(strat.name, dict(strat.config))]
+    if isinstance(config, PlansConfig) and len(config.underlyings()) > 1:
+        parts = [
+            (f"{strat.name} · {u}", config.for_underlying(u).model_dump(mode="json")) for u in config.underlyings()
+        ]
+    runs: list[StrategyRun] = []
+    for n, (name, snapshot) in enumerate(parts):
+        require_within(ent, "max_running_strategies", ent.usage["max_running_strategies"] + n)
+        run = StrategyRun(
+            user_id=user.user_id,
+            strategy_id=strat.id,
+            broker_account_id=body.broker_account_id,
+            mode=TradingMode(body.mode),
+            status=RunStatus.PENDING,
+            config_snapshot=snapshot,
+            strategy_name=name,
+            kind=strat.kind,
+            schema_version=strat.schema_version,
+            multiplier=body.multiplier,
+            dry_run=body.mode == "live" and body.dry_run,
+        )
+        s.add(run)
+        runs.append(run)
     await s.flush()
-    await s.refresh(run)
-    await audit(s, request, "run.deploy", user.user_id, "strategy_run", run.id, strategy=str(strat.id), mode=body.mode,
-                multiplier=body.multiplier, dry_run=run.dry_run)  # fmt: skip
-    return run_out(run)
+    for run in runs:
+        await s.refresh(run)
+        await audit(s, request, "run.deploy", user.user_id, "strategy_run", run.id, strategy=str(strat.id),
+                    mode=body.mode, multiplier=body.multiplier, dry_run=run.dry_run)  # fmt: skip
+    return run_out(runs[0])
 
 
 @router.get("/v1/runs", response_model=list[RunOut])

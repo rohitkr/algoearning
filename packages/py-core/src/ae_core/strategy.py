@@ -33,7 +33,7 @@ from datetime import date
 from itertools import pairwise
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, ValidationError, model_validator
 
 SCHEMA_VERSION = 1
 MAX_LEGS = 6
@@ -344,9 +344,11 @@ SESSION_MINUTES = 375  # 09:15 - 15:30
 MAX_WARMUP_DAYS = 10
 
 
-def prior_days_needed(c: RulesConfig) -> int:
+def prior_days_needed(c: RulesConfig | PlansConfig) -> int:
     """Earlier sessions the conditions read: one for the previous day's levels; for indicators about three times the
     longest period in candles (smoothed averages need that much to settle), in sessions, at most 10."""
+    if isinstance(c, PlansConfig):
+        return max(prior_days_needed(r) for _, r in c.rules())
     need = 1 if uses_previous_day(c) else 0
     for k in rules_conditions(c):
         for o in (k.left, k.right):
@@ -369,6 +371,105 @@ def rules_from_time_based(c: TimeBasedConfig) -> RulesConfig:
             exit_all_on_leg_sl=c.risk.exit_all_on_leg_sl,
         ),
     )
+
+
+# -- plans: a strategy as a list of day plans (ADR 0026) ---------------------------------------------------------
+MAX_PLANS = 12
+
+
+class Plan(_Model):
+    """One complete trading routine: on these weekdays, on this instrument, enter like this, trade these legs, leave
+    like that. Exactly a rules strategy (entry, holding, legs, risk, exit) plus a name and its weekdays; the engine
+    runs each plan as the rules runner it is. A plan's weekdays are also its entry days."""
+
+    id: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]{1,12}$")]
+    name: str = Field(default="Plan", min_length=1, max_length=60)
+    underlying: Underlying = "NIFTY"
+    days: list[Weekday] = Field(default_factory=lambda: list(WEEKDAYS), min_length=1, max_length=5)
+    entry: RulesEntry = Field(default_factory=RulesEntry)
+    holding: Holding = Field(default_factory=Holding)
+    legs: list[Leg] = Field(min_length=1, max_length=MAX_LEGS)
+    risk: RulesRisk = Field(default_factory=RulesRisk)
+    exit: RulesExit = Field(default_factory=RulesExit)
+
+    @model_validator(mode="after")
+    def _days_are_the_entry_days(self) -> Plan:
+        self.entry = self.entry.model_copy(update={"days": list(self.days)})
+        return self
+
+    def to_rules(self) -> RulesConfig:
+        return RulesConfig(
+            underlying=self.underlying,
+            entry=self.entry.model_copy(update={"days": list(self.days)}),
+            holding=self.holding,
+            legs=[leg.model_copy(deep=True) for leg in self.legs],
+            risk=self.risk,
+            exit=self.exit,
+        )
+
+
+class PlansConfig(_Model):
+    """A strategy made of plans (ADR 0026): each plan its own weekdays, entry, legs and exit, on any instrument; plans
+    may overlap on a day and run independently (one trade at a time within each plan). `underlying` is the first
+    plan's, derived: a run trades one instrument, so deploying and backtesting split the plans by instrument."""
+
+    kind: Literal["plans"] = "plans"
+    underlying: Underlying = "NIFTY"
+    plans: list[Plan] = Field(min_length=1, max_length=MAX_PLANS)
+
+    @model_validator(mode="after")
+    def _primary_instrument(self) -> PlansConfig:
+        self.underlying = self.plans[0].underlying
+        return self
+
+    def underlyings(self) -> list[str]:
+        return list(dict.fromkeys(p.underlying for p in self.plans))
+
+    def for_underlying(self, underlying: str) -> PlansConfig:
+        return PlansConfig(plans=[p.model_copy(deep=True) for p in self.plans if p.underlying == underlying])
+
+    def rules(self) -> list[tuple[Plan, RulesConfig]]:
+        return [(p, p.to_rules()) for p in self.plans]
+
+
+def underlyings_of(c: AnyConfig) -> list[str]:
+    return c.underlyings() if isinstance(c, PlansConfig) else [c.underlying]
+
+
+def tip_source_ids(c: AnyConfig) -> list[uuid.UUID]:
+    """The Telegram signal sources a config enters on (rules and plans with entry mode tip)."""
+    rules = [r for _, r in c.rules()] if isinstance(c, PlansConfig) else [c] if isinstance(c, RulesConfig) else []
+    return [r.entry.source_id for r in rules if r.entry.mode == "tip" and r.entry.source_id is not None]
+
+
+def uses_tips(c: AnyConfig) -> bool:
+    rules = [r for _, r in c.rules()] if isinstance(c, PlansConfig) else [c] if isinstance(c, RulesConfig) else []
+    return any(r.entry.mode == "tip" for r in rules)
+
+
+def plans_from_rules(c: RulesConfig | TimeBasedConfig, name: str = "Plan") -> PlansConfig:
+    """A rules (or time-based) strategy as the plans it always meant: the same behaviour, as day plans. Legs that
+    `day_legs` gave a weekday become that weekday's plan; the days without own legs keep the default legs (if any)."""
+    if isinstance(c, TimeBasedConfig):
+        c = rules_from_time_based(c)
+    days = list(c.entry.days)
+    own = {d: legs for d, legs in (c.day_legs or {}).items() if d in days}
+
+    def plan(pid: str, title: str, pdays: list[Weekday], legs: list[Leg]) -> Plan:
+        return Plan(
+            id=pid, name=title, underlying=c.underlying, days=pdays, entry=c.entry.model_copy(deep=True),
+            holding=c.holding.model_copy(deep=True), legs=[leg.model_copy(deep=True) for leg in legs],
+            risk=c.risk.model_copy(deep=True), exit=c.exit.model_copy(deep=True),
+        )  # fmt: skip
+
+    plans: list[Plan] = []
+    rest = [d for d in days if d not in own]
+    if c.legs and rest:
+        plans.append(plan("P1", name, rest, c.legs))
+    for d in days:
+        if d in own:
+            plans.append(plan(f"P{len(plans) + 1}", f"{d.title()} plan", [d], own[d]))
+    return PlansConfig(plans=plans)
 
 
 # -- the two proven strategies from algo-trading-claude --------------------------------------------------------
@@ -499,10 +600,11 @@ class SmcScalpConfig(_Model):
 
 
 StrategyConfig = Annotated[
-    RulesConfig | TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig, Field(discriminator="kind")
+    PlansConfig | RulesConfig | TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig,
+    Field(discriminator="kind"),
 ]
-StrategyKind = Literal["rules", "time_based", "range_breakout", "zero_dte", "smc_scalp"]
-AnyConfig = RulesConfig | TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig
+StrategyKind = Literal["plans", "rules", "time_based", "range_breakout", "zero_dte", "smc_scalp"]
+AnyConfig = PlansConfig | RulesConfig | TimeBasedConfig | RangeBreakoutConfig | ZeroDteConfig | SmcScalpConfig
 _ADAPTER: TypeAdapter[AnyConfig] = TypeAdapter(StrategyConfig)
 
 
@@ -524,7 +626,7 @@ def parse(raw: Any) -> AnyConfig:
 
 def parse_issues(exc: ValidationError) -> list[Issue]:
     """Pydantic errors as Issues, without the union tag Pydantic puts first (("time_based", "legs", 0, ...))."""
-    kinds = {"rules", "time_based", "range_breakout", "zero_dte", "smc_scalp"}
+    kinds = {"plans", "rules", "time_based", "range_breakout", "zero_dte", "smc_scalp"}
     out = []
     for e in exc.errors():
         loc = tuple(e["loc"])
@@ -566,6 +668,8 @@ def check(c: AnyConfig, instruments: Instruments) -> list[Issue]:
     if inst is None:
         return [Issue(("underlying",), f"{c.underlying} is not available for trading right now")]
     issues: list[Issue] = []
+    if isinstance(c, PlansConfig):
+        return _check_plans(c, instruments)
     if isinstance(c, RulesConfig):
         return _check_rules(c, inst)
     if isinstance(c, TimeBasedConfig):
@@ -595,6 +699,24 @@ def check(c: AnyConfig, instruments: Instruments) -> list[Issue]:
         issues += _times(c, inst, ["first_entry", "last_entry", "exit_time"])
         if c.last_entry == c.exit_time:
             issues.append(Issue(("exit_time",), "must be after the last entry time"))
+    return issues
+
+
+def _check_plans(c: PlansConfig, instruments: Instruments) -> list[Issue]:
+    issues: list[Issue] = []
+    seen: set[str] = set()
+    for i, (plan, rules) in enumerate(c.rules()):
+        if plan.id in seen:
+            issues.append(Issue(("plans", i, "id"), f"plan id {plan.id} is used twice"))
+        seen.add(plan.id)
+        inst = instruments.get(plan.underlying)
+        if inst is None:
+            issues.append(
+                Issue(("plans", i, "underlying"), f"{plan.underlying} is not available for trading right now")
+            )
+            continue
+        for iss in _check_rules(rules, inst):
+            issues.append(Issue(("plans", i, *iss.loc), iss.msg, iss.type))
     return issues
 
 
@@ -781,6 +903,12 @@ def plan_warnings(c: AnyConfig, max_lots_per_order: int | None) -> list[Issue]:
     if max_lots_per_order is None:
         return []
     msg = f"your plan allows {max_lots_per_order} lot(s) per order"
+    if isinstance(c, PlansConfig):
+        return [
+            Issue(("plans", n, *w.loc), w.msg, w.type)
+            for n, (_, rules) in enumerate(c.rules())
+            for w in plan_warnings(rules, max_lots_per_order)
+        ]
     if isinstance(c, RulesConfig):
         return [
             Issue((*prefix, i, "lots"), msg, "plan_limit")
@@ -802,6 +930,8 @@ def plan_warnings(c: AnyConfig, max_lots_per_order: int | None) -> list[Issue]:
 
 def holds_overnight(c: AnyConfig) -> bool:
     """Whether positions may be carried past the close, so orders need the NRML product (MIS is squared off)."""
+    if isinstance(c, PlansConfig):
+        return any(holds_overnight(r) for _, r in c.rules())
     if isinstance(c, RulesConfig):
         return c.holding.mode != "intraday"
     if isinstance(c, RangeBreakoutConfig):
@@ -811,6 +941,8 @@ def holds_overnight(c: AnyConfig) -> bool:
 
 def max_order_lots(c: AnyConfig) -> int:
     """The most lots this config puts in one order."""
+    if isinstance(c, PlansConfig):
+        return max(max_order_lots(r) for _, r in c.rules())
     if isinstance(c, RulesConfig):
         return max(leg.lots for leg in c.every_leg())
     if isinstance(c, TimeBasedConfig):

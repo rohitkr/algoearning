@@ -23,12 +23,12 @@ import {
   issueKey,
   issueLabel,
   issueMap,
-  rulesFromTimeBased,
+  newPlan,
   type Underlying,
 } from "@/lib/strategy";
 
 import { Check, Field, NumberField, SelectField, TimeField, inputClass } from "./fields";
-import { RulesEditor } from "./rules-editor";
+import { PlansEditor } from "./plans-editor";
 import { SmcParams } from "./smc-params";
 import { StrategyTest } from "./strategy-test";
 
@@ -132,10 +132,11 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
   const [presetId, setPresetId] = useState<string | null>(strategy ? null : (presets[0]?.id ?? null));
   const [name, setName] = useState(strategy?.name ?? "");
   const [description, setDescription] = useState(strategy?.description ?? "");
-  const [config, setConfig] = useState<StrategyConfig>(() => {
-    const c = strategy?.config ?? presets[0]?.config ?? { kind: "rules", underlying: "NIFTY", legs: [] };
-    return c.kind === "time_based" ? rulesFromTimeBased(c) : c; // one builder (ADR 0022)
-  });
+  const [config, setConfig] = useState<StrategyConfig>(
+    () =>
+      strategy?.config ??
+      presets[0]?.config ?? { kind: "plans", underlying: "NIFTY", plans: [newPlan([], "NIFTY", true)] },
+  );
   const [ready, setReady] = useState(strategy?.status === "ready");
   const [check, setCheck] = useState<ConfigValidation | null>(null);
   const [saveErrors, setSaveErrors] = useState<Errs>({});
@@ -295,7 +296,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                   {p.config.kind === "smc_scalp" ? (
                     <StatusPill tone="info">SMC</StatusPill>
                   ) : (
-                    p.config.kind !== "rules" && <StatusPill tone="info">Proven</StatusPill>
+                    p.config.kind !== "plans" && <StatusPill tone="info">Proven</StatusPill>
                   )}
                 </span>
                 <span className="mt-1 block text-xs text-muted">{p.description}</span>
@@ -324,36 +325,25 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                   />
                 )}
               </Field>
-              <SelectField
-                label="Underlying"
-                value={config.underlying}
-                error={errs.underlying}
-                hint={
-                  inst
-                    ? `Lot size ${inst.lot_size} · strikes every ${inst.strike_step} · ${inst.weekly_expiry ? "weekly" : "monthly"} expiries · trades ${inst.session_open}–${inst.session_close}`
-                    : undefined
-                }
-                options={catalog.instruments.map((i) => ({
-                  value: i.code as Underlying,
-                  label: `${i.code} · ${i.name}`,
-                }))}
-                onChange={(v) => {
-                  const next = catalog.instruments.find((i) => i.code === v);
-                  if (config.kind === "rules" && next && !next.weekly_expiry)
-                    update({
-                      ...config,
-                      underlying: v,
-                      legs: config.legs.map((l) =>
-                        l.expiry === "current_week"
-                          ? { ...l, expiry: "current_month" }
-                          : l.expiry === "next_week"
-                            ? { ...l, expiry: "next_month" }
-                            : l,
-                      ),
-                    });
-                  else update({ ...config, underlying: v });
-                }}
-              />
+              {config.kind !== "plans" && (
+                <SelectField
+                  label="Underlying"
+                  value={config.underlying}
+                  error={errs.underlying}
+                  hint={
+                    inst
+                      ? `Lot size ${inst.lot_size} · strikes every ${inst.strike_step} · ${inst.weekly_expiry ? "weekly" : "monthly"} expiries · trades ${inst.session_open}–${inst.session_close}`
+                      : undefined
+                  }
+                  options={catalog.instruments.map((i) => ({
+                    value: i.code as Underlying,
+                    label: `${i.code} · ${i.name}`,
+                  }))}
+                  onChange={(v) => {
+                    update({ ...config, underlying: v });
+                  }}
+                />
+              )}
             </div>
             <Field label="Notes (optional)">
               {(a) => (
@@ -371,16 +361,8 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
             </Field>
           </Card>
 
-          {config.kind === "rules" ? (
-            <RulesEditor
-              config={config}
-              catalog={catalog}
-              inst={inst}
-              hours={hours}
-              errs={errs}
-              warns={warns}
-              onChange={update}
-            />
+          {config.kind === "plans" ? (
+            <PlansEditor config={config} catalog={catalog} errs={errs} warns={warns} onChange={update} />
           ) : config.kind === "smc_scalp" ? (
             <SmcParams
               config={config}

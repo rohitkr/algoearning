@@ -9,12 +9,12 @@ from datetime import timedelta
 from typing import Any
 
 from ae_core.backtest import summarize_result
-from ae_core.strategy import RulesConfig, check, parse
+from ae_core.strategy import check, parse, underlyings_of, uses_tips
 from ae_db.models import BacktestRun
 from ae_db.repositories import StrategyRepo
 from ae_db.session import Database
 from ae_marketdata.history import coverage
-from ae_marketdata.replay import replay
+from ae_marketdata.replay import lot_size_note, replay_config
 from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy import select
 
@@ -109,18 +109,16 @@ async def preview_backtest(
     issues = check(config, instruments)
     if issues:
         raise Conflict(f"the strategy does not pass its checks: {issues[0].msg}", {"reason": "invalid"})
-    if isinstance(config, RulesConfig) and config.entry.mode == "tip":
+    if uses_tips(config):
         raise Conflict(TIP_NOT_SUPPORTED, {"reason": "tips_not_supported"})
-    inst = instruments[config.underlying]
-    result = await replay(
-        db, config, body.start_date, body.end_date, multiplier=body.multiplier, lot_size=inst.lot_size,
-        strike_step=inst.strike_step, slippage_pct=body.slippage_pct,
+    used = underlyings_of(config)
+    insts = {u: (instruments[u].lot_size, instruments[u].strike_step) for u in used}
+    result = await replay_config(
+        db, config, body.start_date, body.end_date, multiplier=body.multiplier, insts=insts,
+        slippage_pct=body.slippage_pct,
     )  # fmt: skip
     out = summarize_result(result)
-    out["warnings"] = [
-        f"Quantities use today's lot size ({inst.lot_size} for {config.underlying}); older periods traded other sizes.",
-        *out["warnings"],
-    ]
+    out["warnings"] = [lot_size_note(insts, used), *out["warnings"]]
     return BacktestPreviewOut(
         underlying=config.underlying, start_date=body.start_date, end_date=body.end_date,
         multiplier=body.multiplier, slippage_pct=body.slippage_pct, result=out,
@@ -144,12 +142,8 @@ async def create_backtest(
     issues = check(config, await _instruments(s))
     if issues:
         raise Conflict(f"the strategy does not pass its checks: {issues[0].msg}", {"reason": "invalid"})
-    if isinstance(config, RulesConfig) and config.entry.mode == "tip":
-        raise Conflict(
-            "a strategy that trades Telegram tips cannot be backtested here yet (the replay over stored tips is not "
-            'built): use "Replay the tips as given" in the Signals tab',
-            {"reason": "tips_not_supported"},
-        )
+    if uses_tips(config):
+        raise Conflict(TIP_NOT_SUPPORTED, {"reason": "tips_not_supported"})
     waiting = (await s.execute(select(BacktestRun.id).where(BacktestRun.status.in_(("pending", "running"))))).all()
     if len(waiting) >= MAX_PENDING:
         raise Conflict("you already have backtests running: wait for one to finish", {"reason": "busy"})

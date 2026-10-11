@@ -62,54 +62,65 @@
       "name": "Start from scratch",
       "description": "One leg to build on: buy the ATM call at 09:20, exit at 15:15.",
       "config": {
-        "kind": "rules",
+        "kind": "plans",
         "underlying": "NIFTY",
-        "entry": {
-          "mode": "time",
-          "at": "09:20",
-          "until": null,
-          "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null,
-          "signals": [],
-          "max_per_day": 1
-        },
-        "holding": {
-          "mode": "intraday",
-          "exit": "15:15",
-          "days": 1
-        },
-        "legs": [
+        "plans": [
           {
-            "id": "L1",
-            "action": "BUY",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
+            "id": "P1",
+            "name": "Start from scratch",
+            "underlying": "NIFTY",
+            "days": ["MON", "TUE", "WED", "THU", "FRI"],
+            "entry": {
+              "mode": "time",
+              "at": "09:20",
+              "until": null,
+              "days": ["MON", "TUE", "WED", "THU", "FRI"],
+              "dte": null,
+              "signals": [],
+              "max_per_day": 1,
+              "source_id": null,
+              "max_tip_age_s": 120,
+              "on_tip_exit": "close"
             },
-            "stop_loss": null,
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
+            "holding": {
+              "mode": "intraday",
+              "exit": "15:15",
+              "days": 1
+            },
+            "legs": [
+              {
+                "id": "L1",
+                "action": "BUY",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": null,
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              }
+            ],
+            "risk": {
+              "mtm_stop_loss": null,
+              "mtm_target": null,
+              "exit_all_on_leg_sl": false,
+              "combined_stop": null,
+              "lock_profit": null
+            },
+            "exit": {
+              "when": null,
+              "on_opposite_signal": false
+            }
           }
-        ],
-        "risk": {
-          "mtm_stop_loss": null,
-          "mtm_target": null,
-          "exit_all_on_leg_sl": false,
-          "combined_stop": null,
-          "lock_profit": null
-        },
-        "exit": {
-          "when": null,
-          "on_opposite_signal": false
-        }
+        ]
       }
     },
     {
@@ -117,81 +128,92 @@
       "name": "Short straddle",
       "description": "Sell the ATM call and put at 09:20 with a 30% stop-loss on each, exit at 15:15.",
       "config": {
-        "kind": "rules",
+        "kind": "plans",
         "underlying": "NIFTY",
-        "entry": {
-          "mode": "time",
-          "at": "09:20",
-          "until": null,
-          "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null,
-          "signals": [],
-          "max_per_day": 1
-        },
-        "holding": {
-          "mode": "intraday",
-          "exit": "15:15",
-          "days": 1
-        },
-        "legs": [
+        "plans": [
           {
-            "id": "L1",
-            "action": "SELL",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
+            "id": "P1",
+            "name": "Short straddle",
+            "underlying": "NIFTY",
+            "days": ["MON", "TUE", "WED", "THU", "FRI"],
+            "entry": {
+              "mode": "time",
+              "at": "09:20",
+              "until": null,
+              "days": ["MON", "TUE", "WED", "THU", "FRI"],
+              "dte": null,
+              "signals": [],
+              "max_per_day": 1,
+              "source_id": null,
+              "max_tip_age_s": 120,
+              "on_tip_exit": "close"
             },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 30.0,
-              "basis": "premium"
+            "holding": {
+              "mode": "intraday",
+              "exit": "15:15",
+              "days": 1
             },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
-          },
-          {
-            "id": "L2",
-            "action": "SELL",
-            "option_type": "PE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
+            "legs": [
+              {
+                "id": "L1",
+                "action": "SELL",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 30.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              },
+              {
+                "id": "L2",
+                "action": "SELL",
+                "option_type": "PE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 30.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              }
+            ],
+            "risk": {
+              "mtm_stop_loss": null,
+              "mtm_target": null,
+              "exit_all_on_leg_sl": false,
+              "combined_stop": null,
+              "lock_profit": null
             },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 30.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
+            "exit": {
+              "when": null,
+              "on_opposite_signal": false
+            }
           }
-        ],
-        "risk": {
-          "mtm_stop_loss": null,
-          "mtm_target": null,
-          "exit_all_on_leg_sl": false,
-          "combined_stop": null,
-          "lock_profit": null
-        },
-        "exit": {
-          "when": null,
-          "on_opposite_signal": false
-        }
+        ]
       }
     },
     {
@@ -199,81 +221,92 @@
       "name": "Short strangle",
       "description": "Sell a call and a put two strikes out of the money with a 40% stop-loss on each.",
       "config": {
-        "kind": "rules",
+        "kind": "plans",
         "underlying": "NIFTY",
-        "entry": {
-          "mode": "time",
-          "at": "09:20",
-          "until": null,
-          "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null,
-          "signals": [],
-          "max_per_day": 1
-        },
-        "holding": {
-          "mode": "intraday",
-          "exit": "15:15",
-          "days": 1
-        },
-        "legs": [
+        "plans": [
           {
-            "id": "L1",
-            "action": "SELL",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 2,
-              "premium": null,
-              "points": null
+            "id": "P1",
+            "name": "Short strangle",
+            "underlying": "NIFTY",
+            "days": ["MON", "TUE", "WED", "THU", "FRI"],
+            "entry": {
+              "mode": "time",
+              "at": "09:20",
+              "until": null,
+              "days": ["MON", "TUE", "WED", "THU", "FRI"],
+              "dte": null,
+              "signals": [],
+              "max_per_day": 1,
+              "source_id": null,
+              "max_tip_age_s": 120,
+              "on_tip_exit": "close"
             },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 40.0,
-              "basis": "premium"
+            "holding": {
+              "mode": "intraday",
+              "exit": "15:15",
+              "days": 1
             },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
-          },
-          {
-            "id": "L2",
-            "action": "SELL",
-            "option_type": "PE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 2,
-              "premium": null,
-              "points": null
+            "legs": [
+              {
+                "id": "L1",
+                "action": "SELL",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 2,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 40.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              },
+              {
+                "id": "L2",
+                "action": "SELL",
+                "option_type": "PE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 2,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 40.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              }
+            ],
+            "risk": {
+              "mtm_stop_loss": null,
+              "mtm_target": null,
+              "exit_all_on_leg_sl": false,
+              "combined_stop": null,
+              "lock_profit": null
             },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 40.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
+            "exit": {
+              "when": null,
+              "on_opposite_signal": false
+            }
           }
-        ],
-        "risk": {
-          "mtm_stop_loss": null,
-          "mtm_target": null,
-          "exit_all_on_leg_sl": false,
-          "combined_stop": null,
-          "lock_profit": null
-        },
-        "exit": {
-          "when": null,
-          "on_opposite_signal": false
-        }
+        ]
       }
     },
     {
@@ -281,111 +314,122 @@
       "name": "Iron condor",
       "description": "Sell two strikes out of the money and buy protection six strikes out, on both sides.",
       "config": {
-        "kind": "rules",
+        "kind": "plans",
         "underlying": "NIFTY",
-        "entry": {
-          "mode": "time",
-          "at": "09:20",
-          "until": null,
-          "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null,
-          "signals": [],
-          "max_per_day": 1
-        },
-        "holding": {
-          "mode": "intraday",
-          "exit": "15:15",
-          "days": 1
-        },
-        "legs": [
+        "plans": [
           {
-            "id": "L1",
-            "action": "SELL",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 2,
-              "premium": null,
-              "points": null
+            "id": "P1",
+            "name": "Iron condor",
+            "underlying": "NIFTY",
+            "days": ["MON", "TUE", "WED", "THU", "FRI"],
+            "entry": {
+              "mode": "time",
+              "at": "09:20",
+              "until": null,
+              "days": ["MON", "TUE", "WED", "THU", "FRI"],
+              "dte": null,
+              "signals": [],
+              "max_per_day": 1,
+              "source_id": null,
+              "max_tip_age_s": 120,
+              "on_tip_exit": "close"
             },
-            "stop_loss": null,
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
-          },
-          {
-            "id": "L2",
-            "action": "SELL",
-            "option_type": "PE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 2,
-              "premium": null,
-              "points": null
+            "holding": {
+              "mode": "intraday",
+              "exit": "15:15",
+              "days": 1
             },
-            "stop_loss": null,
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
-          },
-          {
-            "id": "L3",
-            "action": "BUY",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 6,
-              "premium": null,
-              "points": null
+            "legs": [
+              {
+                "id": "L1",
+                "action": "SELL",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 2,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": null,
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              },
+              {
+                "id": "L2",
+                "action": "SELL",
+                "option_type": "PE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 2,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": null,
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              },
+              {
+                "id": "L3",
+                "action": "BUY",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 6,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": null,
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              },
+              {
+                "id": "L4",
+                "action": "BUY",
+                "option_type": "PE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 6,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": null,
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              }
+            ],
+            "risk": {
+              "mtm_stop_loss": 3000.0,
+              "mtm_target": null,
+              "exit_all_on_leg_sl": false,
+              "combined_stop": null,
+              "lock_profit": null
             },
-            "stop_loss": null,
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
-          },
-          {
-            "id": "L4",
-            "action": "BUY",
-            "option_type": "PE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 6,
-              "premium": null,
-              "points": null
-            },
-            "stop_loss": null,
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
+            "exit": {
+              "when": null,
+              "on_opposite_signal": false
+            }
           }
-        ],
-        "risk": {
-          "mtm_stop_loss": 3000.0,
-          "mtm_target": null,
-          "exit_all_on_leg_sl": false,
-          "combined_stop": null,
-          "lock_profit": null
-        },
-        "exit": {
-          "when": null,
-          "on_opposite_signal": false
-        }
+        ]
       }
     },
     {
@@ -393,81 +437,92 @@
       "name": "Overnight straddle (₹60)",
       "description": "At 15:00 sell the call and put whose premiums are nearest ₹60, 50% stop-loss on each, exit 09:30 next day.",
       "config": {
-        "kind": "rules",
+        "kind": "plans",
         "underlying": "NIFTY",
-        "entry": {
-          "mode": "time",
-          "at": "15:00",
-          "until": "15:20",
-          "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null,
-          "signals": [],
-          "max_per_day": 1
-        },
-        "holding": {
-          "mode": "next_day",
-          "exit": "09:30",
-          "days": 1
-        },
-        "legs": [
+        "plans": [
           {
-            "id": "L1",
-            "action": "SELL",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "premium",
-              "offset": 0,
-              "premium": 60.0,
-              "points": null
+            "id": "P1",
+            "name": "Overnight straddle (₹60)",
+            "underlying": "NIFTY",
+            "days": ["MON", "TUE", "WED", "THU", "FRI"],
+            "entry": {
+              "mode": "time",
+              "at": "15:00",
+              "until": "15:20",
+              "days": ["MON", "TUE", "WED", "THU", "FRI"],
+              "dte": null,
+              "signals": [],
+              "max_per_day": 1,
+              "source_id": null,
+              "max_tip_age_s": 120,
+              "on_tip_exit": "close"
             },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 50.0,
-              "basis": "premium"
+            "holding": {
+              "mode": "next_day",
+              "exit": "09:30",
+              "days": 1
             },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
-          },
-          {
-            "id": "L2",
-            "action": "SELL",
-            "option_type": "PE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "premium",
-              "offset": 0,
-              "premium": 60.0,
-              "points": null
+            "legs": [
+              {
+                "id": "L1",
+                "action": "SELL",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "premium",
+                  "offset": 0,
+                  "premium": 60.0,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 50.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              },
+              {
+                "id": "L2",
+                "action": "SELL",
+                "option_type": "PE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "premium",
+                  "offset": 0,
+                  "premium": 60.0,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 50.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              }
+            ],
+            "risk": {
+              "mtm_stop_loss": 3000.0,
+              "mtm_target": 2000.0,
+              "exit_all_on_leg_sl": false,
+              "combined_stop": null,
+              "lock_profit": null
             },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 50.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
+            "exit": {
+              "when": null,
+              "on_opposite_signal": false
+            }
           }
-        ],
-        "risk": {
-          "mtm_stop_loss": 3000.0,
-          "mtm_target": 2000.0,
-          "exit_all_on_leg_sl": false,
-          "combined_stop": null,
-          "lock_profit": null
-        },
-        "exit": {
-          "when": null,
-          "on_opposite_signal": false
-        }
+        ]
       }
     },
     {
@@ -475,76 +530,87 @@
       "name": "Positional strangle to expiry",
       "description": "Three trading days before expiry sell calls and puts 300 points out; exit everything if the two premiums together rise 40%, else hold to expiry day 15:15.",
       "config": {
-        "kind": "rules",
+        "kind": "plans",
         "underlying": "NIFTY",
-        "entry": {
-          "mode": "time",
-          "at": "09:30",
-          "until": null,
-          "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": [3],
-          "signals": [],
-          "max_per_day": 1
-        },
-        "holding": {
-          "mode": "expiry",
-          "exit": "15:15",
-          "days": 1
-        },
-        "legs": [
+        "plans": [
           {
-            "id": "L1",
-            "action": "SELL",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "points",
-              "offset": 0,
-              "premium": null,
-              "points": 300
+            "id": "P1",
+            "name": "Positional strangle to expiry",
+            "underlying": "NIFTY",
+            "days": ["MON", "TUE", "WED", "THU", "FRI"],
+            "entry": {
+              "mode": "time",
+              "at": "09:30",
+              "until": null,
+              "days": ["MON", "TUE", "WED", "THU", "FRI"],
+              "dte": [3],
+              "signals": [],
+              "max_per_day": 1,
+              "source_id": null,
+              "max_tip_age_s": 120,
+              "on_tip_exit": "close"
             },
-            "stop_loss": null,
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
-          },
-          {
-            "id": "L2",
-            "action": "SELL",
-            "option_type": "PE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "points",
-              "offset": 0,
-              "premium": null,
-              "points": 300
+            "holding": {
+              "mode": "expiry",
+              "exit": "15:15",
+              "days": 1
             },
-            "stop_loss": null,
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "always"
+            "legs": [
+              {
+                "id": "L1",
+                "action": "SELL",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "points",
+                  "offset": 0,
+                  "premium": null,
+                  "points": 300
+                },
+                "stop_loss": null,
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              },
+              {
+                "id": "L2",
+                "action": "SELL",
+                "option_type": "PE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "points",
+                  "offset": 0,
+                  "premium": null,
+                  "points": 300
+                },
+                "stop_loss": null,
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "always"
+              }
+            ],
+            "risk": {
+              "mtm_stop_loss": null,
+              "mtm_target": null,
+              "exit_all_on_leg_sl": false,
+              "combined_stop": {
+                "unit": "percent",
+                "value": 40.0
+              },
+              "lock_profit": null
+            },
+            "exit": {
+              "when": null,
+              "on_opposite_signal": false
+            }
           }
-        ],
-        "risk": {
-          "mtm_stop_loss": null,
-          "mtm_target": null,
-          "exit_all_on_leg_sl": false,
-          "combined_stop": {
-            "unit": "percent",
-            "value": 40.0
-          },
-          "lock_profit": null
-        },
-        "exit": {
-          "when": null,
-          "on_opposite_signal": false
-        }
+        ]
       }
     },
     {
@@ -552,150 +618,161 @@
       "name": "Opening range breakout",
       "description": "From 09:30, buy an ATM call when a 5-minute candle closes above the first 15 minutes' high, a put below its low; 30% stop-loss, exit on the opposite signal or at 15:15.",
       "config": {
-        "kind": "rules",
+        "kind": "plans",
         "underlying": "NIFTY",
-        "entry": {
-          "mode": "conditions",
-          "at": "09:30",
-          "until": "14:30",
-          "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null,
-          "signals": [
-            {
-              "match": "all",
-              "conditions": [
+        "plans": [
+          {
+            "id": "P1",
+            "name": "Opening range breakout",
+            "underlying": "NIFTY",
+            "days": ["MON", "TUE", "WED", "THU", "FRI"],
+            "entry": {
+              "mode": "conditions",
+              "at": "09:30",
+              "until": "14:30",
+              "days": ["MON", "TUE", "WED", "THU", "FRI"],
+              "dte": null,
+              "signals": [
                 {
-                  "left": {
-                    "kind": "price",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "crosses_above",
-                  "right": {
-                    "kind": "level",
-                    "level": "opening_high",
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 5
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "left": {
+                        "kind": "price",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "crosses_above",
+                      "right": {
+                        "kind": "level",
+                        "level": "opening_high",
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 5
+                    }
+                  ],
+                  "direction": "up"
+                },
+                {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "left": {
+                        "kind": "price",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "crosses_below",
+                      "right": {
+                        "kind": "level",
+                        "level": "opening_low",
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 5
+                    }
+                  ],
+                  "direction": "down"
                 }
               ],
-              "direction": "up"
+              "max_per_day": 2,
+              "source_id": null,
+              "max_tip_age_s": 120,
+              "on_tip_exit": "close"
             },
-            {
-              "match": "all",
-              "conditions": [
-                {
-                  "left": {
-                    "kind": "price",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "crosses_below",
-                  "right": {
-                    "kind": "level",
-                    "level": "opening_low",
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 5
-                }
-              ],
-              "direction": "down"
+            "holding": {
+              "mode": "intraday",
+              "exit": "15:15",
+              "days": 1
+            },
+            "legs": [
+              {
+                "id": "L1",
+                "action": "BUY",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 30.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "up"
+              },
+              {
+                "id": "L2",
+                "action": "BUY",
+                "option_type": "PE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 30.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "down"
+              }
+            ],
+            "risk": {
+              "mtm_stop_loss": null,
+              "mtm_target": null,
+              "exit_all_on_leg_sl": false,
+              "combined_stop": null,
+              "lock_profit": null
+            },
+            "exit": {
+              "when": null,
+              "on_opposite_signal": true
             }
-          ],
-          "max_per_day": 2
-        },
-        "holding": {
-          "mode": "intraday",
-          "exit": "15:15",
-          "days": 1
-        },
-        "legs": [
-          {
-            "id": "L1",
-            "action": "BUY",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
-            },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 30.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "up"
-          },
-          {
-            "id": "L2",
-            "action": "BUY",
-            "option_type": "PE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
-            },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 30.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "down"
           }
-        ],
-        "risk": {
-          "mtm_stop_loss": null,
-          "mtm_target": null,
-          "exit_all_on_leg_sl": false,
-          "combined_stop": null,
-          "lock_profit": null
-        },
-        "exit": {
-          "when": null,
-          "on_opposite_signal": true
-        }
+        ]
       }
     },
     {
@@ -703,150 +780,161 @@
       "name": "Previous day high/low breakout",
       "description": "From 09:30, buy an ATM call when a 5-minute candle closes above yesterday's high, a put below its low; 30% stop-loss, exit on the opposite signal or at 15:15.",
       "config": {
-        "kind": "rules",
+        "kind": "plans",
         "underlying": "NIFTY",
-        "entry": {
-          "mode": "conditions",
-          "at": "09:30",
-          "until": "14:30",
-          "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null,
-          "signals": [
-            {
-              "match": "all",
-              "conditions": [
+        "plans": [
+          {
+            "id": "P1",
+            "name": "Previous day high/low breakout",
+            "underlying": "NIFTY",
+            "days": ["MON", "TUE", "WED", "THU", "FRI"],
+            "entry": {
+              "mode": "conditions",
+              "at": "09:30",
+              "until": "14:30",
+              "days": ["MON", "TUE", "WED", "THU", "FRI"],
+              "dte": null,
+              "signals": [
                 {
-                  "left": {
-                    "kind": "price",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "crosses_above",
-                  "right": {
-                    "kind": "level",
-                    "level": "prev_high",
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 5
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "left": {
+                        "kind": "price",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "crosses_above",
+                      "right": {
+                        "kind": "level",
+                        "level": "prev_high",
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 5
+                    }
+                  ],
+                  "direction": "up"
+                },
+                {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "left": {
+                        "kind": "price",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "crosses_below",
+                      "right": {
+                        "kind": "level",
+                        "level": "prev_low",
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 5
+                    }
+                  ],
+                  "direction": "down"
                 }
               ],
-              "direction": "up"
+              "max_per_day": 2,
+              "source_id": null,
+              "max_tip_age_s": 120,
+              "on_tip_exit": "close"
             },
-            {
-              "match": "all",
-              "conditions": [
-                {
-                  "left": {
-                    "kind": "price",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "crosses_below",
-                  "right": {
-                    "kind": "level",
-                    "level": "prev_low",
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 5
-                }
-              ],
-              "direction": "down"
+            "holding": {
+              "mode": "intraday",
+              "exit": "15:15",
+              "days": 1
+            },
+            "legs": [
+              {
+                "id": "L1",
+                "action": "BUY",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 30.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "up"
+              },
+              {
+                "id": "L2",
+                "action": "BUY",
+                "option_type": "PE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 30.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "down"
+              }
+            ],
+            "risk": {
+              "mtm_stop_loss": null,
+              "mtm_target": null,
+              "exit_all_on_leg_sl": false,
+              "combined_stop": null,
+              "lock_profit": null
+            },
+            "exit": {
+              "when": null,
+              "on_opposite_signal": true
             }
-          ],
-          "max_per_day": 2
-        },
-        "holding": {
-          "mode": "intraday",
-          "exit": "15:15",
-          "days": 1
-        },
-        "legs": [
-          {
-            "id": "L1",
-            "action": "BUY",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
-            },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 30.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "up"
-          },
-          {
-            "id": "L2",
-            "action": "BUY",
-            "option_type": "PE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
-            },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 30.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "down"
           }
-        ],
-        "risk": {
-          "mtm_stop_loss": null,
-          "mtm_target": null,
-          "exit_all_on_leg_sl": false,
-          "combined_stop": null,
-          "lock_profit": null
-        },
-        "exit": {
-          "when": null,
-          "on_opposite_signal": true
-        }
+        ]
       }
     },
     {
@@ -854,206 +942,217 @@
       "name": "EMA 9/21 crossover",
       "description": "On 5-minute candles, EMA 9 crossing above EMA 21 with RSI(14) above 50 buys the ATM call; the opposite buys the put. 30% stop-loss, exit on the opposite signal, up to 3 trades a day.",
       "config": {
-        "kind": "rules",
+        "kind": "plans",
         "underlying": "NIFTY",
-        "entry": {
-          "mode": "conditions",
-          "at": "09:30",
-          "until": "14:30",
-          "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null,
-          "signals": [
-            {
-              "match": "all",
-              "conditions": [
+        "plans": [
+          {
+            "id": "P1",
+            "name": "EMA 9/21 crossover",
+            "underlying": "NIFTY",
+            "days": ["MON", "TUE", "WED", "THU", "FRI"],
+            "entry": {
+              "mode": "conditions",
+              "at": "09:30",
+              "until": "14:30",
+              "days": ["MON", "TUE", "WED", "THU", "FRI"],
+              "dte": null,
+              "signals": [
                 {
-                  "left": {
-                    "kind": "indicator",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": "ema",
-                    "period": 9,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "crosses_above",
-                  "right": {
-                    "kind": "indicator",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": "ema",
-                    "period": 21,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 5
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "left": {
+                        "kind": "indicator",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": "ema",
+                        "period": 9,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "crosses_above",
+                      "right": {
+                        "kind": "indicator",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": "ema",
+                        "period": 21,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 5
+                    },
+                    {
+                      "left": {
+                        "kind": "indicator",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": "rsi",
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "above",
+                      "right": {
+                        "kind": "number",
+                        "level": null,
+                        "minutes": 15,
+                        "value": 50.0,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 5
+                    }
+                  ],
+                  "direction": "up"
                 },
                 {
-                  "left": {
-                    "kind": "indicator",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": "rsi",
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "above",
-                  "right": {
-                    "kind": "number",
-                    "level": null,
-                    "minutes": 15,
-                    "value": 50.0,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 5
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "left": {
+                        "kind": "indicator",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": "ema",
+                        "period": 9,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "crosses_below",
+                      "right": {
+                        "kind": "indicator",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": "ema",
+                        "period": 21,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 5
+                    },
+                    {
+                      "left": {
+                        "kind": "indicator",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": "rsi",
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "below",
+                      "right": {
+                        "kind": "number",
+                        "level": null,
+                        "minutes": 15,
+                        "value": 50.0,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 5
+                    }
+                  ],
+                  "direction": "down"
                 }
               ],
-              "direction": "up"
+              "max_per_day": 3,
+              "source_id": null,
+              "max_tip_age_s": 120,
+              "on_tip_exit": "close"
             },
-            {
-              "match": "all",
-              "conditions": [
-                {
-                  "left": {
-                    "kind": "indicator",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": "ema",
-                    "period": 9,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "crosses_below",
-                  "right": {
-                    "kind": "indicator",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": "ema",
-                    "period": 21,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 5
+            "holding": {
+              "mode": "intraday",
+              "exit": "15:15",
+              "days": 1
+            },
+            "legs": [
+              {
+                "id": "L1",
+                "action": "BUY",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
                 },
-                {
-                  "left": {
-                    "kind": "indicator",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": "rsi",
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "below",
-                  "right": {
-                    "kind": "number",
-                    "level": null,
-                    "minutes": 15,
-                    "value": 50.0,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 5
-                }
-              ],
-              "direction": "down"
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 30.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "up"
+              },
+              {
+                "id": "L2",
+                "action": "BUY",
+                "option_type": "PE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 30.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "down"
+              }
+            ],
+            "risk": {
+              "mtm_stop_loss": null,
+              "mtm_target": null,
+              "exit_all_on_leg_sl": false,
+              "combined_stop": null,
+              "lock_profit": null
+            },
+            "exit": {
+              "when": null,
+              "on_opposite_signal": true
             }
-          ],
-          "max_per_day": 3
-        },
-        "holding": {
-          "mode": "intraday",
-          "exit": "15:15",
-          "days": 1
-        },
-        "legs": [
-          {
-            "id": "L1",
-            "action": "BUY",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
-            },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 30.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "up"
-          },
-          {
-            "id": "L2",
-            "action": "BUY",
-            "option_type": "PE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
-            },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 30.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "down"
           }
-        ],
-        "risk": {
-          "mtm_stop_loss": null,
-          "mtm_target": null,
-          "exit_all_on_leg_sl": false,
-          "combined_stop": null,
-          "lock_profit": null
-        },
-        "exit": {
-          "when": null,
-          "on_opposite_signal": true
-        }
+        ]
       }
     },
     {
@@ -1061,150 +1160,161 @@
       "name": "Supertrend (10, 3)",
       "description": "On 15-minute candles, a close crossing above Supertrend buys the ATM call, below it the put; 35% stop-loss, exit on the opposite signal, up to 2 trades a day.",
       "config": {
-        "kind": "rules",
+        "kind": "plans",
         "underlying": "NIFTY",
-        "entry": {
-          "mode": "conditions",
-          "at": "09:30",
-          "until": "14:30",
-          "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null,
-          "signals": [
-            {
-              "match": "all",
-              "conditions": [
+        "plans": [
+          {
+            "id": "P1",
+            "name": "Supertrend (10, 3)",
+            "underlying": "NIFTY",
+            "days": ["MON", "TUE", "WED", "THU", "FRI"],
+            "entry": {
+              "mode": "conditions",
+              "at": "09:30",
+              "until": "14:30",
+              "days": ["MON", "TUE", "WED", "THU", "FRI"],
+              "dte": null,
+              "signals": [
                 {
-                  "left": {
-                    "kind": "price",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "crosses_above",
-                  "right": {
-                    "kind": "indicator",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": "supertrend",
-                    "period": 10,
-                    "line": "value",
-                    "multiplier": 3.0,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 15
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "left": {
+                        "kind": "price",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "crosses_above",
+                      "right": {
+                        "kind": "indicator",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": "supertrend",
+                        "period": 10,
+                        "line": "value",
+                        "multiplier": 3.0,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 15
+                    }
+                  ],
+                  "direction": "up"
+                },
+                {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "left": {
+                        "kind": "price",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "crosses_below",
+                      "right": {
+                        "kind": "indicator",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": "supertrend",
+                        "period": 10,
+                        "line": "value",
+                        "multiplier": 3.0,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 15
+                    }
+                  ],
+                  "direction": "down"
                 }
               ],
-              "direction": "up"
+              "max_per_day": 2,
+              "source_id": null,
+              "max_tip_age_s": 120,
+              "on_tip_exit": "close"
             },
-            {
-              "match": "all",
-              "conditions": [
-                {
-                  "left": {
-                    "kind": "price",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "crosses_below",
-                  "right": {
-                    "kind": "indicator",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": "supertrend",
-                    "period": 10,
-                    "line": "value",
-                    "multiplier": 3.0,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 15
-                }
-              ],
-              "direction": "down"
+            "holding": {
+              "mode": "intraday",
+              "exit": "15:15",
+              "days": 1
+            },
+            "legs": [
+              {
+                "id": "L1",
+                "action": "BUY",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 35.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "up"
+              },
+              {
+                "id": "L2",
+                "action": "BUY",
+                "option_type": "PE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 35.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "down"
+              }
+            ],
+            "risk": {
+              "mtm_stop_loss": null,
+              "mtm_target": null,
+              "exit_all_on_leg_sl": false,
+              "combined_stop": null,
+              "lock_profit": null
+            },
+            "exit": {
+              "when": null,
+              "on_opposite_signal": true
             }
-          ],
-          "max_per_day": 2
-        },
-        "holding": {
-          "mode": "intraday",
-          "exit": "15:15",
-          "days": 1
-        },
-        "legs": [
-          {
-            "id": "L1",
-            "action": "BUY",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
-            },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 35.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "up"
-          },
-          {
-            "id": "L2",
-            "action": "BUY",
-            "option_type": "PE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
-            },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 35.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "down"
           }
-        ],
-        "risk": {
-          "mtm_stop_loss": null,
-          "mtm_target": null,
-          "exit_all_on_leg_sl": false,
-          "combined_stop": null,
-          "lock_profit": null
-        },
-        "exit": {
-          "when": null,
-          "on_opposite_signal": true
-        }
+        ]
       }
     },
     {
@@ -1212,150 +1322,161 @@
       "name": "RSI reversal",
       "description": "On 5-minute candles, RSI(14) crossing back above 30 buys the ATM call, back below 70 the put; 25% stop-loss, exit on the opposite signal.",
       "config": {
-        "kind": "rules",
+        "kind": "plans",
         "underlying": "NIFTY",
-        "entry": {
-          "mode": "conditions",
-          "at": "09:30",
-          "until": "14:30",
-          "days": ["MON", "TUE", "WED", "THU", "FRI"],
-          "dte": null,
-          "signals": [
-            {
-              "match": "all",
-              "conditions": [
+        "plans": [
+          {
+            "id": "P1",
+            "name": "RSI reversal",
+            "underlying": "NIFTY",
+            "days": ["MON", "TUE", "WED", "THU", "FRI"],
+            "entry": {
+              "mode": "conditions",
+              "at": "09:30",
+              "until": "14:30",
+              "days": ["MON", "TUE", "WED", "THU", "FRI"],
+              "dte": null,
+              "signals": [
                 {
-                  "left": {
-                    "kind": "indicator",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": "rsi",
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "crosses_above",
-                  "right": {
-                    "kind": "number",
-                    "level": null,
-                    "minutes": 15,
-                    "value": 30.0,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 5
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "left": {
+                        "kind": "indicator",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": "rsi",
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "crosses_above",
+                      "right": {
+                        "kind": "number",
+                        "level": null,
+                        "minutes": 15,
+                        "value": 30.0,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 5
+                    }
+                  ],
+                  "direction": "up"
+                },
+                {
+                  "match": "all",
+                  "conditions": [
+                    {
+                      "left": {
+                        "kind": "indicator",
+                        "level": null,
+                        "minutes": 15,
+                        "value": null,
+                        "indicator": "rsi",
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "op": "crosses_below",
+                      "right": {
+                        "kind": "number",
+                        "level": null,
+                        "minutes": 15,
+                        "value": 70.0,
+                        "indicator": null,
+                        "period": 14,
+                        "line": "value",
+                        "multiplier": null,
+                        "fast": 12,
+                        "smoothing": 9
+                      },
+                      "candle": 5
+                    }
+                  ],
+                  "direction": "down"
                 }
               ],
-              "direction": "up"
+              "max_per_day": 3,
+              "source_id": null,
+              "max_tip_age_s": 120,
+              "on_tip_exit": "close"
             },
-            {
-              "match": "all",
-              "conditions": [
-                {
-                  "left": {
-                    "kind": "indicator",
-                    "level": null,
-                    "minutes": 15,
-                    "value": null,
-                    "indicator": "rsi",
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "op": "crosses_below",
-                  "right": {
-                    "kind": "number",
-                    "level": null,
-                    "minutes": 15,
-                    "value": 70.0,
-                    "indicator": null,
-                    "period": 14,
-                    "line": "value",
-                    "multiplier": null,
-                    "fast": 12,
-                    "smoothing": 9
-                  },
-                  "candle": 5
-                }
-              ],
-              "direction": "down"
+            "holding": {
+              "mode": "intraday",
+              "exit": "15:15",
+              "days": 1
+            },
+            "legs": [
+              {
+                "id": "L1",
+                "action": "BUY",
+                "option_type": "CE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 25.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "up"
+              },
+              {
+                "id": "L2",
+                "action": "BUY",
+                "option_type": "PE",
+                "lots": 1,
+                "expiry": "current_week",
+                "strike": {
+                  "mode": "atm",
+                  "offset": 0,
+                  "premium": null,
+                  "points": null
+                },
+                "stop_loss": {
+                  "unit": "percent",
+                  "value": 25.0,
+                  "basis": "premium"
+                },
+                "target": null,
+                "trailing": null,
+                "reentry_on_sl": null,
+                "reentry_on_target": null,
+                "direction": "down"
+              }
+            ],
+            "risk": {
+              "mtm_stop_loss": null,
+              "mtm_target": null,
+              "exit_all_on_leg_sl": false,
+              "combined_stop": null,
+              "lock_profit": null
+            },
+            "exit": {
+              "when": null,
+              "on_opposite_signal": true
             }
-          ],
-          "max_per_day": 3
-        },
-        "holding": {
-          "mode": "intraday",
-          "exit": "15:15",
-          "days": 1
-        },
-        "legs": [
-          {
-            "id": "L1",
-            "action": "BUY",
-            "option_type": "CE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
-            },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 25.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "up"
-          },
-          {
-            "id": "L2",
-            "action": "BUY",
-            "option_type": "PE",
-            "lots": 1,
-            "expiry": "current_week",
-            "strike": {
-              "mode": "atm",
-              "offset": 0,
-              "premium": null,
-              "points": null
-            },
-            "stop_loss": {
-              "unit": "percent",
-              "value": 25.0,
-              "basis": "premium"
-            },
-            "target": null,
-            "trailing": null,
-            "reentry_on_sl": null,
-            "reentry_on_target": null,
-            "direction": "down"
           }
-        ],
-        "risk": {
-          "mtm_stop_loss": null,
-          "mtm_target": null,
-          "exit_all_on_leg_sl": false,
-          "combined_stop": null,
-          "lock_profit": null
-        },
-        "exit": {
-          "when": null,
-          "on_opposite_signal": true
-        }
+        ]
       }
     },
     {
