@@ -17,6 +17,7 @@ const RESULT = {
 let posted: { path: string; body: Record<string, unknown> }[] = [];
 beforeEach(() => {
   posted = [];
+  window.localStorage.clear();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init: RequestInit) => {
@@ -46,7 +47,7 @@ afterEach(() => {
 });
 
 describe("StrategyTest", () => {
-  it("tests the unsaved config over the last month of stored option history and flags a stale result", async () => {
+  it("tests the unsaved config over the last 3 months of stored option history and flags a stale result", async () => {
     const { rerender } = render(<StrategyTest config={CONFIG} blocked={false} />);
     const button = await screen.findByText("Test now");
     await screen.findByDisplayValue("2026-10-09");
@@ -55,7 +56,7 @@ describe("StrategyTest", () => {
       path: "/v1/backtests/preview",
       body: {
         config: CONFIG,
-        start_date: "2026-09-09",
+        start_date: "2026-07-09",
         end_date: "2026-10-09",
         multiplier: 1,
         slippage_pct: 0.05,
@@ -66,6 +67,16 @@ describe("StrategyTest", () => {
     expect(screen.queryByText("Parameters changed since this result")).toBeNull();
     rerender(<StrategyTest config={{ ...CONFIG, underlying: "SENSEX" } as StrategyConfig} blocked={false} />);
     expect(screen.getByText("Parameters changed since this result")).toBeTruthy();
+  });
+
+  it("remembers the dates chosen, so the next test (or a reopened strategy) starts from them", async () => {
+    const first = render(<StrategyTest config={CONFIG} blocked={false} />);
+    await screen.findByDisplayValue("2026-07-09");
+    fireEvent.change(screen.getByDisplayValue("2026-07-09"), { target: { value: "2026-08-03" } });
+    first.unmount();
+    render(<StrategyTest config={CONFIG} blocked={false} />);
+    expect(await screen.findByDisplayValue("2026-08-03")).toBeTruthy();
+    expect(screen.getByDisplayValue("2026-10-09")).toBeTruthy();
   });
 
   it("will not run while the strategy has errors", async () => {

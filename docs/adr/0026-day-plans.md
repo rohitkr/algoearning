@@ -16,7 +16,7 @@ places.
    lock, combined premium stop, exit all on a leg's stop, exit on a condition). It is exactly a rules strategy plus a name
    and its weekdays; a plan's weekdays are its entry days (`Plan.to_rules()`).
 2. A strategy of kind `plans` is a list of 1-12 plans. Plans may share a day: each runs independently, with its own state
-   and positions, one trade at a time within the plan.
+   and positions. Within a plan, `max_open` (default 1) trades may be open at once (see 8).
 3. **The engine is unchanged in substance.** `PlansRunner` wraps one `RulesRunner` per plan, hands every plan the same
    market, merges the orders, and sends each fill or refusal back to the plan that placed the order (a position id ->
    plan map). Its state (`{"plans": {id: state}, "owner": {...}}`) is plain JSON, so a restart rebuilds it.
@@ -31,6 +31,11 @@ places.
    1 Entry, 2 Legs, 3 Exit. One-click starting points for conditions: opening-range breakout / breakdown, previous-day
    high / low break, EMA 9/21 crossover, RSI 30/70, Supertrend flip. Errors are shown on the plan and field they belong to.
 7. Tip entries (ADR 0025) work per plan; a strategy with tip plans cannot be backtested yet.
+8. **Trades open at once.** With `max_open` 1 a plan's next trade starts only after the held one closed (a daily straddle
+   held two days then re-enters at the exit, not at its entry time). With N > 1 the plan runs N lanes, each the same rules
+   runner with its own state; the first lane with no trade open takes a new entry, the plan's `max_per_day` counts across
+   lanes, and when every lane is busy that day's entry is skipped with a `max_open_reached` note. N = 1 is the runner as
+   before (same state shape; lane 0 keeps the plan's id, further lanes are `<id>~2`, `<id>~3`).
 
 **Safety.** Tests: the older strategies convert to plans with identical trades (five kinds, including weekday legs and a
 held-two-days strategy); overlapping plans run independently and see only their own positions; the runner state survives a

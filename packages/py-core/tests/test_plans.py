@@ -4,6 +4,7 @@ trades, as plans), plans running side by side in one runner, and a stress run ov
 from __future__ import annotations
 
 import collections
+import itertools
 import random
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -350,3 +351,80 @@ def test_a_plans_runner_trades_one_instrument_and_ignores_orders_it_never_placed
                    position_id=str(uuid.uuid4()))  # fmt: skip
     one.reject(stray, "whatever")  # no error: an unknown order is ignored
     assert one.fill(stray, 10.0, ts(date(2026, 9, 7), "10:00"), None) is None  # type: ignore[arg-type]
+
+
+# -- several trades open at once within a plan ------------------------------------------------------------------------
+def _straddle(max_open: int | None, **kw: Any) -> Any:
+    extra = {} if max_open is None else {"max_open": max_open}
+    return parse({"kind": "plans", "plans": [
+        plan("D", ["MON", "TUE", "WED", "THU", "FRI"], [leg("A", "SELL", "CE", expiry="next_week"),
+                                                       leg("B", "SELL", "PE", expiry="next_week")],
+             entry={"at": "09:20", **kw}, holding={"mode": "next_day", "exit": "15:00"}, **extra),
+    ]})  # fmt: skip
+
+
+def test_one_trade_at_a_time_is_the_default_so_the_next_entry_waits_for_the_held_trade_to_close() -> None:
+    h = world(START, END, seed=7)
+    for cfg in (_straddle(None), _straddle(1)):
+        r = run(cfg, h, START, END)
+        entries = sorted({t.entry_time for t in r.trades})
+        assert entries[0].strftime("%H:%M") == "09:20"
+        # after the first, each trade can only start once the held one closed (15:00) instead of at 09:20
+        assert {e.strftime("%H:%M") for e in entries[1:]} == {"15:01"}
+        assert all(a.date() < b.date() or a == b for a, b in itertools.pairwise(entries))
+
+
+def test_with_more_open_trades_every_day_enters_even_while_yesterdays_is_held() -> None:
+    h = world(START, END, seed=7)
+    r = run(_straddle(2), h, START, END)
+    days = [d for d in weekdays(START, END)]
+    entered = {t.entry_time.date() for t in r.trades}
+    assert {t.entry_time.strftime("%H:%M") for t in r.trades} == {"09:20"}  # every entry at its own time
+    assert entered >= set(days[:-1])
+    assert len(r.trades) >= 2 * (len(days) - 1)  # two legs a day, one trade a day
+    held = [t for t in r.trades if t.entry_time.date() < days[-1]]
+    assert all(t.exit_time.date() > t.entry_time.date() for t in held)  # each held to the next day
+    # never more than two straddles open at once (4 legs), nothing left over
+    events = sorted([(t.entry_time, 1) for t in r.trades] + [(t.exit_time, -1) for t in r.trades])
+    open_now = peak = 0
+    for _, d in events:
+        open_now += d
+        peak = max(peak, open_now)
+    assert peak <= 4 and open_now == 0
+
+
+def test_the_open_trades_cap_skips_the_entry_when_every_lane_is_busy() -> None:
+    h = world(START, END, seed=7)
+    cfg = parse({"kind": "plans", "plans": [
+        plan("D", ["MON", "TUE", "WED", "THU", "FRI"], [leg("A", "SELL", "CE")], max_open=2,
+             holding={"mode": "days", "days": 3, "exit": "15:00"}),
+    ]})  # fmt: skip
+    r = run(cfg, h, START, END)
+    events = sorted([(t.entry_time, 1) for t in r.trades] + [(t.exit_time, -1) for t in r.trades])
+    open_now = peak = 0
+    for _, d in events:
+        open_now += d
+        peak = max(peak, open_now)
+    assert peak == 2 and open_now == 0
+
+
+def test_max_per_day_still_holds_across_lanes() -> None:
+    h = world(START, date(2026, 9, 11), seed=4)
+    r = run(_straddle(3), h, START, date(2026, 9, 11))
+    per_day = collections.Counter(t.entry_time.date() for t in r.trades if t.leg == "A")
+    assert set(per_day.values()) == {1}
+
+
+def test_lanes_survive_a_restart_and_n1_state_keeps_its_shape() -> None:
+    import json
+
+    cfg = _straddle(3)
+    runner = PlansRunner(cfg, 1)
+    assert list(runner.state()["plans"]) == ["D", "D~2", "D~3"]
+    again = PlansRunner(cfg, 1, json.loads(json.dumps(runner.state(), default=str)))
+    assert list(again.subs) == ["D", "D~2", "D~3"]
+    assert list(PlansRunner(_straddle(1), 1).state()["plans"]) == ["D"]
+    with pytest.raises(ValidationError):
+        _straddle(0)
+    with pytest.raises(ValidationError):
+        _straddle(11)

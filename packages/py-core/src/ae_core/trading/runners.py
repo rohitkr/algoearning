@@ -703,15 +703,22 @@ class PlansRunner(Runner):
         self.cfg = config
         self.multiplier = max(1, int(multiplier))
         saved = st.get("plans", {})
-        self.subs: dict[str, RulesRunner] = {
-            plan.id: RulesRunner(rules, multiplier, saved.get(plan.id)) for plan, rules in config.rules()
-        }
+        # a plan allowing N open trades runs N lanes (one rules runner each); lane 0 keeps the plan's id
+        self.subs: dict[str, RulesRunner] = {}
+        self.lanes: dict[str, list[str]] = {}
+        for plan, plan_rules in config.rules():
+            keys = [plan.id] + [f"{plan.id}~{k}" for k in range(2, plan.max_open + 1)]
+            self.lanes[plan.id] = keys
+            for key in keys:
+                self.subs[key] = RulesRunner(plan_rules, multiplier, saved.get(key))
         self.owner: dict[str, str] = dict(st.get("owner", {}))  # position id -> plan id
         self._notes: list[dict[str, Any]] = []
         self.prior_days = max((r.prior_days for r in self.subs.values()), default=0)
         self._exiting = _Exiting(self)
-        self._names = {plan.id: plan.name for plan in config.plans}
-        self._days = {plan.id: set(plan.days) for plan in config.plans}
+        self._names = {key: plan.name for plan in config.plans for key in self.lanes[plan.id]}
+        self._days = {key: set(plan.days) for plan in config.plans for key in self.lanes[plan.id]}
+        self._max_per_day = {plan.id: plan.entry.max_per_day for plan in config.plans}
+        self._full_noted: dict[str, str] = {}
 
     # -- the engine's view: positions, notes, state --------------------------------------------------------------
     @property
@@ -765,9 +772,35 @@ class PlansRunner(Runner):
     # -- a step ------------------------------------------------------------------------------------------------
     def step(self, m: Market) -> list[Intent]:
         out: list[Intent] = []
-        for pid, sub in self.subs.items():
-            out += self._owned(sub.step(m), pid)
+        for plan_id, keys in self.lanes.items():
+            idle_claimed = False
+            for key in keys:
+                sub = self.subs[key]
+                if sub.s.get("phase") != "in":
+                    # of the lanes with no trade open only the first may start one, and only while the plan's
+                    # entries for today are not used up
+                    if idle_claimed or (len(keys) > 1 and self._used_up(plan_id, m)):
+                        continue
+                    idle_claimed = True
+                out += self._owned(sub.step(m), key)
+            self._note_full(plan_id, keys, m)
         return out
+
+    def _used_up(self, plan_id: str, m: Market) -> bool:
+        return sum(self.subs[k]._entries_today(m) for k in self.lanes[plan_id]) >= self._max_per_day[plan_id]
+
+    def _note_full(self, plan_id: str, keys: list[str], m: Market) -> None:
+        """Every lane is busy at the entry time of a trading day: say once that today's entry had to be skipped."""
+        if len(keys) < 2 or any(self.subs[k].s.get("phase") != "in" for k in keys):
+            return
+        today = m.now.date().isoformat()
+        if self._full_noted.get(plan_id) == today or m.now.strftime("%a").upper()[:3] not in self._days[plan_id]:
+            return
+        if rules.hhmm(m.now) < self.subs[keys[0]].cfg.entry.at or self._used_up(plan_id, m):
+            return
+        self._full_noted[plan_id] = today
+        self._notes.append({"event": "max_open_reached", "plan": self._names[plan_id], "open": len(keys),
+                            "reason": f"{len(keys)} trades are already open: today's entry is skipped"})  # fmt: skip
 
     def wanted(self, m: Market) -> set[str]:
         today = m.now.strftime("%a").upper()[:3]

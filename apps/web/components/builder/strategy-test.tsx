@@ -1,5 +1,6 @@
 "use client";
 
+import { defaultRange, loadSettings, saveSettings, type TestSettings } from "@/lib/backtest-range";
 import type { BacktestPreview, HistoryCoverage, StrategyConfig } from "@algoearning/api-types";
 import { Button, Card, CardTitle, StatusPill } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
@@ -11,12 +12,6 @@ import { BacktestResultView, type BacktestResultData } from "@/components/backte
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
 
 import { NumberField, inputClass } from "./fields";
-
-const addDays = (iso: string, days: number) => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-};
 
 /** Test the strategy as it stands in the builder, without saving it: change a parameter above, test again. */
 export function StrategyTest({ config, blocked }: { config: StrategyConfig; blocked: boolean }) {
@@ -40,13 +35,18 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
         if (!live) return;
         const c = all.find((x) => x.underlying === underlying) ?? null;
         setCov(c);
-        const end = c?.option_to ?? c?.index_to ?? "";
-        const first = c?.option_from ?? c?.index_from ?? "";
-        if (end) {
-          setTo(end);
-          const month = addDays(end, -30);
-          setFrom(first && month < first ? first : month);
+        // the dates (and settings) used last time, else the last 3 months of stored data
+        const saved = loadSettings();
+        const dflt = defaultRange(c);
+        if (saved.from && saved.to && saved.from <= saved.to) {
+          setFrom(saved.from);
+          setTo(saved.to);
+        } else {
+          setFrom(dflt.from);
+          setTo(dflt.to);
         }
+        if (saved.multiplier != null) setMultiplier(Math.max(1, saved.multiplier));
+        if (saved.slippage != null) setSlippage(saved.slippage);
       } catch {
         if (live) setCov(null); // slow or unavailable: the dates can still be typed
       }
@@ -56,6 +56,7 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
     };
   }, [underlying, getToken]);
 
+  const remember = (next: Partial<TestSettings>) => saveSettings({ from, to, multiplier, slippage, ...next });
   const stale = out != null && out.config !== JSON.stringify(config);
 
   async function run() {
@@ -96,24 +97,46 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <label className="flex flex-col gap-1 text-xs font-medium text-muted">
           From
-          <input type="date" className={inputClass} value={from} onChange={(e) => setFrom(e.target.value)} />
+          <input
+            type="date"
+            className={inputClass}
+            value={from}
+            onChange={(e) => {
+              setFrom(e.target.value);
+              remember({ from: e.target.value });
+            }}
+          />
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-muted">
           To
-          <input type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} />
+          <input
+            type="date"
+            className={inputClass}
+            value={to}
+            onChange={(e) => {
+              setTo(e.target.value);
+              remember({ to: e.target.value });
+            }}
+          />
         </label>
         <NumberField
           label="Multiplier"
           value={multiplier}
           step={1}
-          onChange={(v) => setMultiplier(Math.max(1, v ?? 1))}
+          onChange={(v) => {
+            setMultiplier(Math.max(1, v ?? 1));
+            remember({ multiplier: Math.max(1, v ?? 1) });
+          }}
         />
         <NumberField
           label="Slippage"
           value={slippage}
           suffix="%"
           step={0.01}
-          onChange={(v) => setSlippage(v ?? 0)}
+          onChange={(v) => {
+            setSlippage(v ?? 0);
+            remember({ slippage: v ?? 0 });
+          }}
         />
         <div className="flex items-end">
           <Button onClick={run} disabled={busy || blocked || !from || !to || from > to}>

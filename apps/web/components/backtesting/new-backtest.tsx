@@ -5,9 +5,10 @@ import { Button, Card, CardTitle, cn } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { NumberField, inputClass } from "@/components/builder/fields";
+import { defaultRange, loadSettings, saveSettings, type TestSettings } from "@/lib/backtest-range";
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
 
 /** Pick a strategy and a range; the worker replays it over stored history and the result page fills in. */
@@ -24,11 +25,24 @@ export function NewBacktest({
   const cov = (u: string) => coverage.find((c) => c.underlying === u);
   const strategy = strategies.find((s) => s.id === sid);
   const c = strategy ? cov(strategy.config.underlying) : undefined;
-  // default to the range that has option data (the whole point of a backtest), else the index range
-  const [from, setFrom] = useState(c?.option_from ?? c?.index_from ?? "");
-  const [to, setTo] = useState(c?.option_to ?? c?.index_to ?? "");
+  // the dates used last time, else the last 3 months of stored data (option range, else the index range)
+  const [from, setFrom] = useState(defaultRange(c).from);
+  const [to, setTo] = useState(defaultRange(c).to);
   const [multiplier, setMultiplier] = useState(1);
   const [slippage, setSlippage] = useState(0.05);
+  useEffect(() => {
+    // browser storage is only readable after mount (the server render has none)
+    /* eslint-disable react-hooks/set-state-in-effect */
+    const saved = loadSettings();
+    if (saved.from && saved.to && saved.from <= saved.to) {
+      setFrom(saved.from);
+      setTo(saved.to);
+    }
+    if (saved.multiplier != null) setMultiplier(Math.max(1, saved.multiplier));
+    if (saved.slippage != null) setSlippage(saved.slippage);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+  const remember = (next: Partial<TestSettings>) => saveSettings({ from, to, multiplier, slippage, ...next });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; upgrade?: boolean } | null>(null);
 
@@ -36,9 +50,10 @@ export function NewBacktest({
     setSid(id);
     const st = strategies.find((s) => s.id === id);
     const cv = st ? cov(st.config.underlying) : undefined;
-    if (cv) {
-      setFrom(cv.option_from ?? cv.index_from ?? "");
-      setTo(cv.option_to ?? cv.index_to ?? "");
+    if (cv && !(loadSettings().from && loadSettings().to)) {
+      const d = defaultRange(cv);
+      setFrom(d.from);
+      setTo(d.to);
     }
   }
 
@@ -93,7 +108,10 @@ export function NewBacktest({
                 value={from}
                 min={c?.index_from ?? undefined}
                 max={to || undefined}
-                onChange={(e) => setFrom(e.target.value)}
+                onChange={(e) => {
+                  setFrom(e.target.value);
+                  remember({ from: e.target.value });
+                }}
               />
             </label>
             <label className="flex flex-col gap-1 text-xs font-medium text-muted">
@@ -104,7 +122,10 @@ export function NewBacktest({
                 value={to}
                 min={from || undefined}
                 max={c?.index_to ?? undefined}
-                onChange={(e) => setTo(e.target.value)}
+                onChange={(e) => {
+                  setTo(e.target.value);
+                  remember({ to: e.target.value });
+                }}
               />
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -112,7 +133,10 @@ export function NewBacktest({
                 label="Multiplier"
                 min={1}
                 value={multiplier}
-                onChange={(v) => setMultiplier(v ?? 1)}
+                onChange={(v) => {
+                  setMultiplier(v ?? 1);
+                  remember({ multiplier: v ?? 1 });
+                }}
               />
               <NumberField
                 label="Slippage"
@@ -120,7 +144,10 @@ export function NewBacktest({
                 step={0.01}
                 min={0}
                 value={slippage}
-                onChange={(v) => setSlippage(v ?? 0)}
+                onChange={(v) => {
+                  setSlippage(v ?? 0);
+                  remember({ slippage: v ?? 0 });
+                }}
               />
             </div>
           </div>

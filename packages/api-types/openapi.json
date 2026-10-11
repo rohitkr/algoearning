@@ -3971,6 +3971,13 @@
             "title": "Legs",
             "type": "array"
           },
+          "max_open": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Open",
+            "type": "integer"
+          },
           "name": {
             "default": "Plan",
             "maxLength": 60,
@@ -4244,7 +4251,7 @@
       },
       "PlansConfig": {
         "additionalProperties": false,
-        "description": "A strategy made of plans (ADR 0026): each plan its own weekdays, entry, legs and exit, on any instrument; plans\nmay overlap on a day and run independently (one trade at a time within each plan). `underlying` is the first\nplan's, derived: a run trades one instrument, so deploying and backtesting split the plans by instrument.",
+        "description": "A strategy made of plans (ADR 0026): each plan its own weekdays, entry, legs and exit, on any instrument; plans\nmay overlap on a day and run independently (within a plan, `max_open` trades may be open at once). `underlying` is\nthe first plan's, derived: a run trades one instrument, so deploying and backtesting split the plans by\ninstrument.",
         "properties": {
           "kind": {
             "const": "plans",

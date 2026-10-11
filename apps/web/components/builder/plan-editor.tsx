@@ -193,7 +193,7 @@ export function PlanEditor({
     <div className="flex flex-col gap-4">
       {/* 1 · ENTRY */}
       <Card className="flex flex-col gap-4">
-        <Step n={1} title="Entry" hint="When a trade starts. One trade at a time within this plan." />
+        <Step n={1} title="Entry" hint="When a trade starts." />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SelectField
             label="Enter"
@@ -251,6 +251,23 @@ export function PlanEditor({
             </>
           )}
         </div>
+        {h.mode !== "intraday" && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <NumberField
+              label="Trades open at once (at most)"
+              value={plan.max_open ?? 1}
+              min={1}
+              max={10}
+              error={errs["max_open"]}
+              onChange={(v) => onChange({ ...plan, max_open: v ?? Number.NaN })}
+            />
+            <p className="col-span-2 self-end text-xs text-muted sm:col-span-3">
+              {(plan.max_open ?? 1) === 1
+                ? "1: a new trade waits until the held one is closed, so an entry that falls on a day a trade is still open is skipped."
+                : `Up to ${plan.max_open}: each day's entry runs even while earlier trades are still held; a day with ${plan.max_open} already open is skipped.`}
+            </p>
+          </div>
+        )}
         <details className="text-sm" open={!!e.dte?.length}>
           <summary className="cursor-pointer text-muted">More: only on certain days before expiry</summary>
           <div className="mt-3">

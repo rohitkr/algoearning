@@ -382,6 +382,7 @@ export function newPlan(
     entry: entryOf({}),
     holding: holdingOf({}),
     legs: [leg("L1", "CE"), leg("L2", "PE")],
+    max_open: 1,
     risk: rulesRiskOf({}),
     exit: exitOf({}),
   };

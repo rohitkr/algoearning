@@ -391,6 +391,9 @@ class Plan(_Model):
     legs: list[Leg] = Field(min_length=1, max_length=MAX_LEGS)
     risk: RulesRisk = Field(default_factory=RulesRisk)
     exit: RulesExit = Field(default_factory=RulesExit)
+    # how many trades of this plan may be open at once: 1 = a new trade waits until the last one is closed; more lets
+    # tomorrow's entry run while yesterday's (held overnight) is still open
+    max_open: int = Field(default=1, ge=1, le=10)
 
     @model_validator(mode="after")
     def _days_are_the_entry_days(self) -> Plan:
@@ -410,8 +413,9 @@ class Plan(_Model):
 
 class PlansConfig(_Model):
     """A strategy made of plans (ADR 0026): each plan its own weekdays, entry, legs and exit, on any instrument; plans
-    may overlap on a day and run independently (one trade at a time within each plan). `underlying` is the first
-    plan's, derived: a run trades one instrument, so deploying and backtesting split the plans by instrument."""
+    may overlap on a day and run independently (within a plan, `max_open` trades may be open at once). `underlying` is
+    the first plan's, derived: a run trades one instrument, so deploying and backtesting split the plans by
+    instrument."""
 
     kind: Literal["plans"] = "plans"
     underlying: Underlying = "NIFTY"

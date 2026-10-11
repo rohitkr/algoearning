@@ -2872,6 +2872,11 @@ export interface components {
             /** Legs */
             legs: components["schemas"]["Leg"][];
             /**
+             * Max Open
+             * @default 1
+             */
+            max_open: number;
+            /**
              * Name
              * @default Plan
              */
@@ -2975,8 +2980,9 @@ export interface components {
         /**
          * PlansConfig
          * @description A strategy made of plans (ADR 0026): each plan its own weekdays, entry, legs and exit, on any instrument; plans
-         *     may overlap on a day and run independently (one trade at a time within each plan). `underlying` is the first
-         *     plan's, derived: a run trades one instrument, so deploying and backtesting split the plans by instrument.
+         *     may overlap on a day and run independently (within a plan, `max_open` trades may be open at once). `underlying` is
+         *     the first plan's, derived: a run trades one instrument, so deploying and backtesting split the plans by
+         *     instrument.
          */
         PlansConfig: {
             /**
