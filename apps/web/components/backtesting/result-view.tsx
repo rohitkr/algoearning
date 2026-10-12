@@ -4,6 +4,7 @@ import { TriangleAlert } from "lucide-react";
 
 import { DailyPnlBars, EquityCurve } from "@/components/reports/pnl-charts";
 import { type ReportMeta } from "@/lib/backtest-export";
+import { DaywiseBreakdown } from "@/components/backtesting/daywise";
 import { TradesByDay } from "@/components/backtesting/trades-by-day";
 import { SignalCard, type SmcSignal } from "@/components/smc/signal-card";
 
@@ -228,6 +229,7 @@ export function BacktestResultView({ res, meta }: { res: BacktestResultData; met
           </Card>
         </div>
       )}
+      <DaywiseBreakdown daily={res.daily} />
       {res.day_log && res.day_log.length > 0 && <DayTable rows={res.day_log} />}
       {res.trades.length > 0 && (
         <TradesByDay
