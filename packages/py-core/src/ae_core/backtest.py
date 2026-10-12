@@ -293,6 +293,7 @@ def simulate(
     carried: dict[str, float] = {}  # each contract's last known price from earlier days: only for getting out
     prev_opens: dict[str, float] = {}  # each contract's price at the previous minute's open (for fills at a level)
     stale_exits = leftovers = 0
+    incomplete: list[str] = []  # days whose option prices ended before the trade did
 
     no_options: list[date] = []
     for day in days:
@@ -370,8 +371,12 @@ def simulate(
                 px = prices.last.get(pos.contract.key) or carried.get(pos.contract.key)
                 if px is None or pos.id in runner.exiting:
                     continue
+                bars = history.option(pos.contract.key, day)
+                last_at = f"{max(bars):%H:%M}" if bars else "the open"
+                incomplete.append(f"{day:%a %d %b}: {pos.contract.label} has no prices after {last_at}")
                 intent = Intent("exit", "SELL" if pos.side == "BUY" else "BUY", pos.contract, pos.lots, pos.qty,
-                                "end of the day's data", pos.leg, position_id=pos.id)  # fmt: skip
+                                f"no prices after {last_at}: closed at the last price", pos.leg,
+                                position_id=pos.id)  # fmt: skip
                 runner.exiting.add(pos.id)
                 fill(intent, px, spot[-1].ts, m)
                 leftovers += 1
@@ -388,6 +393,14 @@ def simulate(
         })  # fmt: skip
         if runner.prior_days:
             prior = [*prior, list(spot)][-runner.prior_days :]
+    if incomplete:
+        shown = "; ".join(incomplete[:6]) + (f"; and {len(incomplete) - 6} more" if len(incomplete) > 6 else "")
+        result.warnings.insert(
+            0,
+            f"{len(incomplete)} trade(s) ran into missing option prices and were closed at the last price there was, "
+            f"so those days are not full days and their result is not reliable: {shown}. Re-import the missing "
+            "candles and run again.",
+        )
     if leftovers:
         result.warnings.append(
             f"{leftovers} position(s) were still open after their trade had ended (an exit order had not gone "

@@ -432,8 +432,11 @@ def test_an_intraday_trade_does_not_sleep_over_when_the_days_data_ends_early() -
     })  # fmt: skip
     r = simulate(config, h, mon, DAY, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
     (t1,) = r.trades
-    assert t1.exit_time.date() == mon and t1.exit_price == 90 and t1.reason == "end of the day's data"
+    assert t1.exit_time.date() == mon and t1.exit_price == 90
+    assert t1.reason == "no prices after 13:00: closed at the last price"
     assert any("closed at the last known price" in w for w in r.warnings)
+    # and the report says plainly that this is not a full day, naming the day and the contract
+    assert any("not full days" in w and "Mon 05 Oct" in w and "no prices after 13:00" in w for w in r.warnings)
 
 
 def test_a_combined_target_is_not_reached_by_adding_up_each_legs_best_price_of_the_minute() -> None:
