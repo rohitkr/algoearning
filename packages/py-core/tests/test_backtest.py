@@ -517,3 +517,21 @@ def test_locked_profit_exits_at_the_locked_amount_not_at_the_lower_price_it_gapp
     )  # +1,950 at 10:00 (the lock engages at 1,000), then back to 0 at 10:01
     assert {t.reason for t in r.trades} == {"profit fell to the locked ₹500"}
     assert abs(r.gross_pnl - 500) <= 65 * 0.1
+
+
+def test_an_exit_on_a_price_that_is_hours_old_makes_the_day_not_a_full_day() -> None:
+    """The option's candles stop at 12:08, the exit time comes at 15:15: the trade used to look like a normal trade
+    that exited on time (at the 12:08 price). The report must say the day is not a full day."""
+    h = MemoryHistory()
+    _days(h, DAY)
+    h.add_option(KEY, _bars(DAY, ("09:20", flat(100)), ("12:08", flat(130))))
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "09:20"},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [{"id": "L1", "action": "BUY", "option_type": "CE"}],
+    })  # fmt: skip
+    r = run(config, h)
+    (t,) = r.trades
+    assert t.exit_price == 130
+    assert any("not full days" in w and "no prices after 12:08" in w and "" in w for w in r.warnings)

@@ -263,6 +263,12 @@ def simulate(
         result.warnings.append(f"no {u} option data at all: only index-based logic can run")
 
     def fill(intent: Intent, px: float, ts: datetime, m: Market) -> None:
+        bars = history.option(intent.contract.key, ts.date())
+        seen = max((t for t in bars if t <= ts), default=None)
+        if seen is not None and ts - seen >= timedelta(minutes=30):
+            # a quiet minute or two is normal, hours of silence is a hole in the data: that fill is on an old price
+            note = f"{ts:%a %d %b}: {intent.contract.label} has no prices after {seen:%H:%M}"
+            incomplete.setdefault((ts.date(), intent.contract.label), note)
         price = slip(px, intent.side, slippage_pct + spread_pct / 2)
         pos = runner.fill(intent, price, ts, m)
         if pos is None:
@@ -289,11 +295,11 @@ def simulate(
             )
 
     pending_charges: dict[str, float] = {}
+    incomplete: dict[tuple[date, str], str] = {}  # days whose option prices have a hole where a fill happened
     noted: dict[str, int] = {}
     carried: dict[str, float] = {}  # each contract's last known price from earlier days: only for getting out
     prev_opens: dict[str, float] = {}  # each contract's price at the previous minute's open (for fills at a level)
     stale_exits = leftovers = 0
-    incomplete: list[str] = []  # days whose option prices ended before the trade did
 
     no_options: list[date] = []
     for day in days:
@@ -373,7 +379,6 @@ def simulate(
                     continue
                 bars = history.option(pos.contract.key, day)
                 last_at = f"{max(bars):%H:%M}" if bars else "the open"
-                incomplete.append(f"{day:%a %d %b}: {pos.contract.label} has no prices after {last_at}")
                 intent = Intent("exit", "SELL" if pos.side == "BUY" else "BUY", pos.contract, pos.lots, pos.qty,
                                 f"no prices after {last_at}: closed at the last price", pos.leg,
                                 position_id=pos.id)  # fmt: skip
@@ -394,12 +399,13 @@ def simulate(
         if runner.prior_days:
             prior = [*prior, list(spot)][-runner.prior_days :]
     if incomplete:
-        shown = "; ".join(incomplete[:6]) + (f"; and {len(incomplete) - 6} more" if len(incomplete) > 6 else "")
+        notes = list(incomplete.values())
+        shown = "; ".join(notes[:6]) + (f"; and {len(notes) - 6} more" if len(notes) > 6 else "")
         result.warnings.insert(
             0,
-            f"{len(incomplete)} trade(s) ran into missing option prices and were closed at the last price there was, "
-            f"so those days are not full days and their result is not reliable: {shown}. Re-import the missing "
-            "candles and run again.",
+            f"{len(incomplete)} contract(s) have hours of missing option prices where a trade was opened or closed, so "
+            f"those days are not full days and their result is not reliable: {shown}. Fetch the missing candles "
+            "(backfill --refill-partial) and run again.",
         )
     if leftovers:
         result.warnings.append(
