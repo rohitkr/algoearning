@@ -271,7 +271,7 @@ export async function downloadPdf(res: BacktestResultData, meta: ReportMeta) {
       body.push([
         t.contract,
         t.side,
-        t.qty,
+        `${t.side === "SELL" ? "-" : "+"}${t.qty}`,
         `${money(t.entry_price)}\n${en.time}`,
         `${money(t.exit_price)}\n${ex.date === en.date ? "" : `${ex.date} `}${ex.time}`,
         money(t.gross),

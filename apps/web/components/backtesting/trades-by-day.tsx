@@ -52,6 +52,19 @@ export function groupByDay(trades: readonly Trade[]): DayGroup[] {
   return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key));
 }
 
+/** BUY or SELL as a labelled pill (not red/green text: those colours already mean profit and loss). */
+function SideBadge({ side }: { side: string }) {
+  return (
+    <span
+      className={`inline-block rounded-md border px-2 py-0.5 text-xs font-semibold ${
+        side === "SELL" ? "border-border bg-surface-2 text-foreground" : "border-border text-muted"
+      }`}
+    >
+      {side}
+    </span>
+  );
+}
+
 function When({ iso, withDay }: { iso: string; withDay: boolean }) {
   const d = new Date(iso);
   return (
@@ -142,7 +155,9 @@ export function TradesByDay({
                 <span className="flex flex-col sm:flex-row sm:items-baseline sm:gap-3">
                   <span className="font-medium">{g.title}</span>
                   <span className="text-xs text-muted">
-                    {g.trades.length} trade{g.trades.length === 1 ? "" : "s"}
+                    {g.trades.length} trade{g.trades.length === 1 ? "" : "s"} ·{" "}
+                    {g.trades.filter((t) => t.side === "SELL").length} sell ·{" "}
+                    {g.trades.filter((t) => t.side === "BUY").length} buy
                   </span>
                 </span>
                 <span className="flex items-center gap-3">
@@ -165,7 +180,7 @@ export function TradesByDay({
                   <table className="w-full min-w-[48rem] text-left text-sm tabular-nums">
                     <thead>
                       <tr className="text-xs text-muted">
-                        {["Symbol", "Qty", "Entry", "Exit", "Net P&L", "Charges", "Side", "Exit reason"].map(
+                        {["Symbol", "Side", "Qty", "Entry", "Exit", "Net P&L", "Charges", "Exit reason"].map(
                           (h) => (
                             <th key={h} className="px-4 py-2 font-medium whitespace-nowrap">
                               {h}
@@ -180,7 +195,13 @@ export function TradesByDay({
                         return (
                           <tr key={i}>
                             <td className="px-4 py-2 whitespace-nowrap">{t.contract}</td>
-                            <td className="px-4 py-2">{t.qty}</td>
+                            <td className="px-4 py-2">
+                              <SideBadge side={t.side} />
+                            </td>
+                            <td className="px-4 py-2">
+                              {t.side === "SELL" ? "−" : "+"}
+                              {t.qty}
+                            </td>
                             <td className="px-4 py-2 whitespace-nowrap">
                               Price: {formatNumber(t.entry_price)}
                               <br />
@@ -195,11 +216,6 @@ export function TradesByDay({
                               <Pnl value={t.net} />
                             </td>
                             <td className="px-4 py-2 text-muted">{formatNumber(t.charges)}</td>
-                            <td
-                              className={t.side === "BUY" ? "px-4 py-2 text-profit" : "px-4 py-2 text-loss"}
-                            >
-                              {t.side}
-                            </td>
                             <td className="px-4 py-2 text-xs text-muted">{t.reason}</td>
                           </tr>
                         );

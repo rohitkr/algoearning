@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { Trade } from "./result-view";
@@ -20,8 +20,12 @@ const t = (day: string, contract: string, net: number, exit = `${day}T10:02:00+0
   charges: 0,
   net,
 });
+const sell = (day: string, contract: string, net: number): Trade => ({
+  ...t(day, contract, net),
+  side: "SELL",
+});
 const TRADES = [
-  t("2026-09-15", "NIFTY 23600 CE", -3542.5),
+  sell("2026-09-15", "NIFTY 23600 CE", -3542.5),
   t("2026-09-15", "NIFTY 23400 PE", 9542),
   t("2026-09-16", "NIFTY 23350 CE", 100, "2026-09-17T09:30:00+05:30"),
 ];
@@ -34,6 +38,17 @@ describe("TradesByDay", () => {
       ["2026-09-16", 100, 1],
     ]);
     expect(g[0]?.title).toMatch(/^Tue, 15 Sept? 2026$/);
+  });
+
+  it("tells sells from buys: a labelled side next to the symbol and a signed quantity, and counts them per day", () => {
+    render(<TradesByDay trades={TRADES} total={3} />);
+    expect(screen.getByText("1 sell", { exact: false }).textContent).toContain("2 trades · 1 sell · 1 buy");
+    const row = screen.getByText("NIFTY 23600 CE").closest("tr")!;
+    expect(within(row).getByText("SELL")).toBeTruthy();
+    expect(within(row).getByText("−650")).toBeTruthy();
+    const buyRow = screen.getByText("NIFTY 23400 PE").closest("tr")!;
+    expect(within(buyRow).getByText("BUY")).toBeTruthy();
+    expect(within(buyRow).getByText("+650")).toBeTruthy();
   });
 
   it("shows the days collapsed (the first open) and expands one on click", () => {
