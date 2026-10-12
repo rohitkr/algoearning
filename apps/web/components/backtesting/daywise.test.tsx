@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DaywiseBreakdown, monthBlocks } from "./daywise";
@@ -32,14 +32,24 @@ describe("daywise breakdown", () => {
     ]);
   });
 
-  it("renders a card per month with its total, and a titled square per traded day", () => {
+  it("renders a card per month with its total and a square per traded day", () => {
     render(<DaywiseBreakdown daily={daily} />);
     const apr = screen.getByRole("region", { name: "Apr 2026" });
     expect(within(apr).getByText(/15,002/)).toBeTruthy();
     expect(within(apr).getByLabelText(/Mon, 13 Apr 2026: −4,998.5 \(2 trades\)/)).toBeTruthy();
     expect(within(apr).getByLabelText(/Tue, 14 Apr 2026: \+20,000.5/)).toBeTruthy();
     expect(screen.getByRole("region", { name: "May 2026" })).toBeTruthy();
-    expect(screen.getByRole("img", { name: /one square per day/ })).toBeTruthy();
+    expect(screen.queryByRole("img", { name: /one square per day/ })).toBeNull(); // no year heatmap on top
+  });
+
+  it("shows the day and its result in a tip while the pointer is on a square", () => {
+    render(<DaywiseBreakdown daily={daily} />);
+    const sq = within(screen.getByRole("region", { name: "Apr 2026" })).getByLabelText(/Mon, 13 Apr 2026/);
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.mouseEnter(sq);
+    expect(screen.getByRole("status").textContent).toBe("13 Apr 2026 • -₹4,998.50");
+    fireEvent.mouseLeave(sq);
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("shows nothing for a result with no trades", () => {
