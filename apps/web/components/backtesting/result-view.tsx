@@ -3,6 +3,7 @@ import { Card, CardTitle, Pnl, StatusPill } from "@algoearning/ui";
 import { TriangleAlert } from "lucide-react";
 
 import { DailyPnlBars, EquityCurve } from "@/components/reports/pnl-charts";
+import { TradesByDay } from "@/components/backtesting/trades-by-day";
 import { SignalCard, type SmcSignal } from "@/components/smc/signal-card";
 
 export type Trade = {
@@ -227,50 +228,7 @@ export function BacktestResultView({ res }: { res: BacktestResultData }) {
         </div>
       )}
       {res.day_log && res.day_log.length > 0 && <DayTable rows={res.day_log} />}
-      <Card className="p-0">
-        <div className="px-5 pt-4 pb-2">
-          <CardTitle>
-            Trades{" "}
-            {res.trades_total > res.trades.length && `(first ${res.trades.length} of ${res.trades_total})`}
-          </CardTitle>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[56rem] text-left text-sm tabular-nums">
-            <thead>
-              <tr className="border-b border-border text-xs text-muted">
-                {["Entered", "Contract", "Side", "Qty", "Entry", "Exit", "Reason", "Charges", "Net P&L"].map(
-                  (h) => (
-                    <th key={h} className="px-3 py-2 font-medium whitespace-nowrap">
-                      {h}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {res.trades.slice(0, 300).map((t, i) => (
-                <tr key={i}>
-                  <td className="px-3 py-2 whitespace-nowrap text-muted">
-                    {dt.format(new Date(t.entry_time))}
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{t.contract}</td>
-                  <td className={t.side === "BUY" ? "px-3 py-2 text-profit" : "px-3 py-2 text-loss"}>
-                    {t.side}
-                  </td>
-                  <td className="px-3 py-2">{t.qty}</td>
-                  <td className="px-3 py-2">{formatNumber(t.entry_price)}</td>
-                  <td className="px-3 py-2">{formatNumber(t.exit_price)}</td>
-                  <td className="px-3 py-2 text-xs text-muted">{t.reason}</td>
-                  <td className="px-3 py-2 text-muted">{formatNumber(t.charges)}</td>
-                  <td className="px-3 py-2">
-                    <Pnl value={t.net} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {res.trades.length > 0 && <TradesByDay trades={res.trades.slice(0, 300)} total={res.trades_total} />}
       <p className="text-xs text-muted">
         Fills use each minute&apos;s open (stops and targets fill at their level, or the open if the price
         gapped past them; a stop wins when both were reachable inside a minute), with your slippage and
