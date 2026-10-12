@@ -1,3 +1,5 @@
+"use client";
+
 import { formatNumber } from "@algoearning/shared";
 import { Card, CardTitle, Pnl } from "@algoearning/ui";
 import { useState } from "react";
