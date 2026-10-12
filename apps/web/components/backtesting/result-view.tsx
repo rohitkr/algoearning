@@ -3,6 +3,7 @@ import { Card, CardTitle, Pnl, StatusPill } from "@algoearning/ui";
 import { TriangleAlert } from "lucide-react";
 
 import { DailyPnlBars, EquityCurve } from "@/components/reports/pnl-charts";
+import { type ReportMeta } from "@/lib/backtest-export";
 import { TradesByDay } from "@/components/backtesting/trades-by-day";
 import { SignalCard, type SmcSignal } from "@/components/smc/signal-card";
 
@@ -116,7 +117,7 @@ function DayTable({ rows }: { rows: DayRow[] }) {
 }
 
 /** A backtest's result (ADR 0017): used by a saved backtest's page and by the builder's test before saving. */
-export function BacktestResultView({ res }: { res: BacktestResultData }) {
+export function BacktestResultView({ res, meta }: { res: BacktestResultData; meta?: ReportMeta }) {
   const sig = res.signals;
   const s = res.summary;
   return (
@@ -228,7 +229,13 @@ export function BacktestResultView({ res }: { res: BacktestResultData }) {
         </div>
       )}
       {res.day_log && res.day_log.length > 0 && <DayTable rows={res.day_log} />}
-      {res.trades.length > 0 && <TradesByDay trades={res.trades.slice(0, 300)} total={res.trades_total} />}
+      {res.trades.length > 0 && (
+        <TradesByDay
+          trades={res.trades.slice(0, 300)}
+          total={res.trades_total}
+          report={meta ? { res, meta } : undefined}
+        />
+      )}
       <p className="text-xs text-muted">
         Fills use each minute&apos;s open (stops and targets fill at their level, or the open if the price
         gapped past them; a stop wins when both were reachable inside a minute), with your slippage and

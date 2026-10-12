@@ -2,10 +2,12 @@
 
 import { formatNumber } from "@algoearning/shared";
 import { Card, CardTitle, Pnl } from "@algoearning/ui";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Download, FileText } from "lucide-react";
 import { useState } from "react";
 
-import type { Trade } from "./result-view";
+import { type ReportMeta, downloadCsv, downloadPdf } from "@/lib/backtest-export";
+
+import type { BacktestResultData, Trade } from "./result-view";
 
 const IST = "Asia/Kolkata";
 const dayKey = new Intl.DateTimeFormat("en-CA", { timeZone: IST }); // 2026-09-15
@@ -61,7 +63,17 @@ function When({ iso, withDay }: { iso: string; withDay: boolean }) {
 }
 
 /** Trades one row per day with the day's combined P&L; a click opens the day's individual trades. */
-export function TradesByDay({ trades, total }: { trades: readonly Trade[]; total: number }) {
+export function TradesByDay({
+  trades,
+  total,
+  report,
+}: {
+  trades: readonly Trade[];
+  total: number;
+  /** With it, the card offers the whole result as a CSV and a PDF report. */
+  report?: { res: BacktestResultData; meta: ReportMeta };
+}) {
+  const [busy, setBusy] = useState(false);
   const groups = groupByDay(trades);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set(groups.slice(0, 1).map((g) => g.key)));
   const toggle = (key: string) =>
@@ -78,13 +90,41 @@ export function TradesByDay({ trades, total }: { trades: readonly Trade[]; total
         <CardTitle>
           Trades by day {total > trades.length && `(first ${trades.length} of ${total} trades)`}
         </CardTitle>
-        <button
-          type="button"
-          className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted hover:text-foreground"
-          onClick={() => setOpen(allOpen ? new Set() : new Set(groups.map((g) => g.key)))}
-        >
-          {allOpen ? "Collapse all" : "Expand all"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted hover:text-foreground"
+            onClick={() => setOpen(allOpen ? new Set() : new Set(groups.map((g) => g.key)))}
+          >
+            {allOpen ? "Collapse all" : "Expand all"}
+          </button>
+          {report && (
+            <>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted hover:text-foreground"
+                onClick={() => downloadCsv(report.res, report.meta)}
+              >
+                Download CSV <Download className="size-3.5" aria-hidden />
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted hover:text-foreground disabled:opacity-60"
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await downloadPdf(report.res, report.meta);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy ? "Preparing…" : "Download PDF"} <FileText className="size-3.5" aria-hidden />
+              </button>
+            </>
+          )}
+        </div>
       </div>
       <div className="flex flex-col gap-3 px-3 pb-4 sm:px-5">
         {groups.map((g) => {

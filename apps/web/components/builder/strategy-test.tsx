@@ -169,7 +169,17 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
             Result for {out.range}
             {stale ? " (before your last change)" : ""}.
           </p>
-          <BacktestResultView res={out.res} />
+          <BacktestResultView
+            res={out.res}
+            meta={{
+              title: `${underlying} strategy test`,
+              underlying,
+              from: out.range.split(" to ")[0],
+              to: out.range.split(" to ")[1],
+              multiplier,
+              slippage,
+            }}
+          />
         </div>
       )}
     </Card>

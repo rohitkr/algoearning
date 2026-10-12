@@ -7,4 +7,5 @@ packages:
 
 # Dependency install scripts are opt-in (pnpm 12). None of ours need one: unrs-resolver ships prebuilt binaries.
 allowBuilds:
+  core-js: false
   unrs-resolver: false

@@ -58,7 +58,19 @@ export default async function BacktestPage({ params }: { params: Promise<{ id: s
         </p>
       )}
 
-      {res && <BacktestResultView res={res} />}
+      {res && (
+        <BacktestResultView
+          res={res}
+          meta={{
+            title: b.strategy_name,
+            underlying: b.underlying,
+            from: b.start_date,
+            to: b.end_date,
+            multiplier: b.multiplier,
+            slippage: b.slippage_pct,
+          }}
+        />
+      )}
     </div>
   );
 }
