@@ -291,6 +291,7 @@ def simulate(
     pending_charges: dict[str, float] = {}
     noted: dict[str, int] = {}
     carried: dict[str, float] = {}  # each contract's last known price from earlier days: only for getting out
+    prev_opens: dict[str, float] = {}  # each contract's price at the previous minute's open (for fills at a level)
     stale_exits = leftovers = 0
 
     no_options: list[date] = []
@@ -319,8 +320,10 @@ def simulate(
             quotes = {k: prices.quote(k) for k in keys}
             m = Market(now, u, bar.open, done, opens, live_expiries, lot_size, strike_step, before, quotes)
             # step A: the minute's open
-            for intent in runner.step(m):
-                p = m.price(intent.contract)
+            step_intents = runner.step(m)
+            at_level = _level_prices(runner, step_intents, prev_opens, m.prices)
+            for intent in step_intents:
+                p = at_level.get(intent.contract.key, m.price(intent.contract))
                 if p is None and intent.kind == "exit":
                     # getting out beats waiting for a trade: the contract's last known price (also from earlier days)
                     p = prices.last.get(intent.contract.key) or carried.get(intent.contract.key)
@@ -348,6 +351,7 @@ def simulate(
                 leftovers += 1
                 if len(why) < 4:
                     why[f"{pos.contract.label} was left open and closed at the last price"] = None
+            prev_opens.update(opens)
             for k in keys | {p.contract.key for p in runner.positions if p.exit_time == now}:
                 prices.close(k, now)
             for note in runner.notes:
@@ -442,6 +446,34 @@ def _last_price(history: History, pos: Position, day: date) -> float | None:
     return bars[max(bars)].close if bars else None
 
 
+def _level_prices(
+    runner: Runner, intents: list[Intent], prev: Mapping[str, float], now: Mapping[str, float]
+) -> dict[str, float]:
+    """Exits that close the trade on its combined profit or loss level (target, loss limit, locked profit) fill at that
+    level, as a standing order would, not wherever the market is when the next price arrives (a spike can be far
+    beyond it). Each leg's price is where it was when the trade's P&L crossed the level, taking each leg to have moved
+    in a straight line from `prev` (the last price looked at) to `now`."""
+    leveled = [i for i in intents if i.kind == "exit" and i.level is not None and i.level_pnl is not None]
+    if not leveled:
+        return {}
+    level, p1 = float(leveled[0].level or 0.0), float(leveled[0].level_pnl or 0.0)
+    moves: list[tuple[str, float, float]] = []
+    back = 0.0  # what the P&L was at the earlier prices, relative to now
+    for i in leveled:
+        pos = runner.position(i.position_id)
+        b = now.get(i.contract.key)
+        if pos is None or b is None:
+            return {}
+        a = prev.get(i.contract.key, pos.entry_price)
+        back += pos.sign * pos.qty * (a - b)
+        moves.append((i.contract.key, a, b))
+    p0 = p1 + back
+    if abs(p1 - p0) < 1e-9:
+        return {}
+    f = min(1.0, max(0.0, (level - p0) / (p1 - p0)))
+    return {key: a + f * (b - a) for key, a, b in moves}
+
+
 def _extremes(
     runner: Runner, m: Market, prices: _Prices, now: datetime, fill: Any, adverse: bool, spot: float | None = None
 ) -> None:
@@ -468,12 +500,15 @@ def _extremes(
         # re-entry) may stay consumed
         runner.restore(snap)
         return
+    at_level = _level_prices(runner, intents, m.prices, ext)
     for intent in intents:
         pos = runner.position(intent.position_id)
         opened = m.price(intent.contract)
         extreme = ext.get(intent.contract.key)
         px: float | None = extreme if extreme is not None else opened
-        if intent.reason.startswith("another leg") and opened is not None:
+        if intent.contract.key in at_level:
+            px = at_level[intent.contract.key]  # the trade's own profit / loss level was crossed
+        elif intent.reason.startswith("another leg") and opened is not None:
             px = opened  # the other legs leave when one leg stops: at the minute's open, not at their own extremes
         elif pos is not None and opened is not None and intent.reason.startswith(("stop-loss", "target")):
             if adverse and pos.sl_basis == "premium" and pos.sl is not None:

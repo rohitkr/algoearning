@@ -377,7 +377,7 @@ def _bars(day: date, *rows: tuple[str, tuple[float, float, float, float]]) -> li
 
 
 def test_a_profit_lock_that_fires_inside_a_minute_closes_the_trade() -> None:
-    """The lock's exit is a stop: it is taken at the minute's adverse extreme. It used to be thrown away after the trade
+    """The lock's exit is a stop: it is taken at the locked amount. It used to be thrown away after the trade
     was marked as ended, leaving the leg open for the rest of the range."""
     h = MemoryHistory()
     _days(h, DAY)
@@ -392,7 +392,8 @@ def test_a_profit_lock_that_fires_inside_a_minute_closes_the_trade() -> None:
     })  # fmt: skip
     r = run(config, h)
     (t,) = r.trades
-    assert t.reason == "profit fell to the locked ₹500" and t.exit_price == 105
+    # closed at the locked amount (100 + 500 / 65 = 107.7), not at the minute's low of 105
+    assert t.reason == "profit fell to the locked ₹500" and t.exit_price == 107.7
     assert not any("leftover" in w or "still open" in w for w in r.warnings)
 
 
@@ -458,3 +459,58 @@ def test_a_combined_target_is_not_reached_by_adding_up_each_legs_best_price_of_t
     })  # fmt: skip
     r = run(config, h)
     assert {t.reason for t in r.trades} == {"exit time 15:15"}  # (112-100) * 65 * 2 = 1560 was never really there
+
+
+def _two_bought_legs(risk: dict[str, Any], ce: list[Any], pe: list[Any]) -> Any:
+    put = f"NIFTY:{DAY:%Y-%m-%d}:25000:PE"
+    h = MemoryHistory()
+    _days(h, DAY)
+    h.add_option(KEY, _bars(DAY, *ce))
+    h.add_option(put, _bars(DAY, *pe))
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "09:20"},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [
+            {"id": "L1", "action": "BUY", "option_type": "CE"},
+            {"id": "L2", "action": "BUY", "option_type": "PE"},
+        ],
+        "risk": risk,
+    })  # fmt: skip
+    return run(config, h)
+
+
+def test_the_profit_target_fills_at_the_target_even_when_the_price_jumps_far_past_it() -> None:
+    """Both legs jump at once (a spike): the trade's profit is 13,000 at the next price, but the target was 6,000 and a
+    standing order would have closed it there. The same rule the other platform follows: never more than the target."""
+    flat100 = ("09:20", flat(100)), ("09:59", flat(100)), ("15:15", flat(100))
+    r = _two_bought_legs(
+        {"mtm_target": 6000},
+        [*flat100[:2], ("10:00", flat(300)), flat100[2]],
+        [*flat100[:2], ("10:00", flat(100)), flat100[2]],
+    )
+    assert {t.reason for t in r.trades} == {"strategy profit reached ₹6000"}
+    assert abs(r.gross_pnl - 6000) <= 65 * 0.1  # at the target, to a tick
+    assert all(t.exit_time == ts("10:00") for t in r.trades)
+
+
+def test_the_loss_limit_fills_at_the_limit_when_the_price_gaps_past_it() -> None:
+    flat100 = ("09:20", flat(100)), ("09:59", flat(100)), ("15:15", flat(100))
+    r = _two_bought_legs(
+        {"mtm_stop_loss": 2000},
+        [*flat100[:2], ("10:00", flat(20)), flat100[2]],
+        [*flat100[:2], ("10:00", flat(100)), flat100[2]],
+    )  # the CE falls 80 points (5,200 loss) in one step
+    assert {t.reason for t in r.trades} == {"strategy loss reached ₹2000"}
+    assert abs(r.gross_pnl + 2000) <= 65 * 0.1
+
+
+def test_locked_profit_exits_at_the_locked_amount_not_at_the_lower_price_it_gapped_to() -> None:
+    flat100 = ("09:20", flat(100)), ("09:59", flat(100)), ("15:15", flat(100))
+    r = _two_bought_legs(
+        {"lock_profit": {"at": 1000, "lock": 500}},
+        [*flat100[:2], ("10:00", flat(130)), ("10:01", flat(100)), flat100[2]],
+        [*flat100[:2], ("10:00", flat(100)), ("10:01", flat(100)), flat100[2]],
+    )  # +1,950 at 10:00 (the lock engages at 1,000), then back to 0 at 10:01
+    assert {t.reason for t in r.trades} == {"profit fell to the locked ₹500"}
+    assert abs(r.gross_pnl - 500) <= 65 * 0.1

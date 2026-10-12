@@ -476,7 +476,9 @@ class RulesRunner(Runner):
     def same_day_positions(self) -> list[Position]:
         return self.open_positions() if self.cfg.holding.mode == "intraday" else []
 
-    def _close(self, m: Market, reason: str, event: str | None = None, **detail: Any) -> list[Intent]:
+    def _close(
+        self, m: Market, reason: str, event: str | None = None, level: float | None = None, **detail: Any
+    ) -> list[Intent]:
         due = self.s.get("exit_retry_at")
         if due and m.now < datetime.fromisoformat(due):
             return []  # an exit order was just sent (or refused): wait before sending it again
@@ -484,7 +486,11 @@ class RulesRunner(Runner):
         self._end_cycle(m)
         if event:
             self.note(event, **detail)
-        return self.exit_all(reason, m)
+        out = self.exit_all(reason, m)
+        if level is not None:
+            for i in out:
+                i.level, i.level_pnl = level, detail.get("pnl")
+        return out
 
     def _cycle_pnl(self, m: Market) -> float:
         return round(self.realized - float(self.s.get("cycle_realized") or 0.0) + self.unrealized(m), 2)
@@ -583,9 +589,13 @@ class RulesRunner(Runner):
         # the whole trade
         pnl = self._cycle_pnl(m)
         if risk.mtm_stop_loss and pnl <= -risk.mtm_stop_loss:
-            return out + self._close(m, f"strategy loss reached ₹{risk.mtm_stop_loss:g}", "mtm_stop_loss", pnl=pnl)
+            return out + self._close(
+                m, f"strategy loss reached ₹{risk.mtm_stop_loss:g}", "mtm_stop_loss", level=-risk.mtm_stop_loss, pnl=pnl
+            )
         if risk.mtm_target and pnl >= risk.mtm_target:
-            return out + self._close(m, f"strategy profit reached ₹{risk.mtm_target:g}", "mtm_target", pnl=pnl)
+            return out + self._close(
+                m, f"strategy profit reached ₹{risk.mtm_target:g}", "mtm_target", level=risk.mtm_target, pnl=pnl
+            )
         if self._combined_hit(m):
             cs = risk.combined_stop
             assert cs is not None
@@ -593,7 +603,9 @@ class RulesRunner(Runner):
             return out + self._close(m, f"sold premiums up {cs.value:g}{u}", "combined_stop", pnl=pnl)
         if self._lock_hit(pnl):
             floor = self.s["lock_floor"]
-            return out + self._close(m, f"profit fell to the locked ₹{floor:g}", "profit_lock_exit", pnl=pnl)
+            return out + self._close(
+                m, f"profit fell to the locked ₹{floor:g}", "profit_lock_exit", level=floor, pnl=pnl
+            )
 
         # the channel closed the tip we traded (its SL hit, or its last target)
         if cfg.entry.mode == "tip" and cfg.entry.on_tip_exit == "close" and self.s.get("tip_id") is not None:

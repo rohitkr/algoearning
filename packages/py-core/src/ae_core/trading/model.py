@@ -121,6 +121,11 @@ class Intent:
     leg: str  # the leg (or role, e.g. "short", "wing") it belongs to
     position_id: str = field(default_factory=lambda: str(uuid.uuid4()))  # exit: the position being closed
     group: str | None = None  # entries that belong together (a short and its hedge wing)
+    # an exit that closes the whole trade on a profit or loss level (the target, the loss limit, the locked profit):
+    # the level, and the trade's P&L when it was noticed. Only a backtest reads them (to fill at the level, as a
+    # standing order would); the live engine just sends the order.
+    level: float | None = None
+    level_pnl: float | None = None
 
 
 @dataclass
