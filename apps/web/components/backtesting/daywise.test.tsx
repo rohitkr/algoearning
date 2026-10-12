@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DaywiseBreakdown, monthBlocks } from "./daywise";
+import { DaywiseBreakdown, dayStrengths, monthBlocks } from "./daywise";
 
 afterEach(cleanup);
 
@@ -50,6 +50,34 @@ describe("daywise breakdown", () => {
     expect(screen.getByRole("status").textContent).toBe("13 Apr 2026 • -₹4,998.50");
     fireEvent.mouseLeave(sq);
     expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("colours each day by its size within its month: faintest for the smallest, full for the biggest", () => {
+    const [m] = monthBlocks([
+      { day: "2026-04-01", pnl: 1000, trades: 2, cumulative: 0 },
+      { day: "2026-04-02", pnl: 5000, trades: 2, cumulative: 0 },
+      { day: "2026-04-03", pnl: 3000, trades: 2, cumulative: 0 },
+      { day: "2026-04-06", pnl: -200, trades: 2, cumulative: 0 },
+      { day: "2026-04-07", pnl: -600, trades: 2, cumulative: 0 },
+      { day: "2026-04-08", pnl: -400, trades: 2, cumulative: 0 },
+    ]);
+    const s = dayStrengths(m!);
+    expect([...s.entries()]).toEqual([
+      ["2026-04-01", 30], // smallest profit
+      ["2026-04-02", 100], // biggest profit
+      ["2026-04-03", 65],
+      ["2026-04-06", 30], // smallest loss
+      ["2026-04-07", 100], // worst loss
+      ["2026-04-08", 65],
+    ]);
+  });
+
+  it("shows a lone profit and a lone loss at full colour", () => {
+    const [m] = monthBlocks([
+      { day: "2026-04-01", pnl: 10, trades: 1, cumulative: 0 },
+      { day: "2026-04-02", pnl: -10, trades: 1, cumulative: 0 },
+    ]);
+    expect([...dayStrengths(m!).values()]).toEqual([100, 100]);
   });
 
   it("shows nothing for a result with no trades", () => {

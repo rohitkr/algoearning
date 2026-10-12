@@ -70,9 +70,34 @@ const tipDay = new Intl.DateTimeFormat("en-IN", {
   year: "numeric",
 });
 
-/** A day's square: solid green for a profit, solid red for a loss, quiet grey when nothing traded. */
-const tone = (e: Day | null) =>
-  e == null ? "bg-surface-2" : e.pnl > 0 ? "bg-profit" : e.pnl < 0 ? "bg-loss" : "bg-muted";
+const FAINTEST = 30; // % of the full colour for the month's smallest profit (or loss)
+
+/**
+ * How strongly each traded day is coloured, 30 to 100: within a month, profits and losses are each spread from their
+ * smallest (faint) to their biggest (full colour), so the deepest red is the month's worst day and the deepest green its
+ * best. A month with a single profit (or loss) size shows it at full colour.
+ */
+export function dayStrengths(m: MonthBlock): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const sign of [1, -1]) {
+    const days = m.days.filter((d) => d.entry && Math.sign(d.entry.pnl) === sign);
+    const sizes = days.map((d) => Math.abs(d.entry!.pnl));
+    const lo = Math.min(...sizes);
+    const hi = Math.max(...sizes);
+    for (const d of days) {
+      const t = hi === lo ? 1 : (Math.abs(d.entry!.pnl) - lo) / (hi - lo);
+      out.set(d.date, Math.round(FAINTEST + (100 - FAINTEST) * t));
+    }
+  }
+  return out;
+}
+
+/** A day's square: green for a profit, red for a loss (deeper the bigger, within its month), grey when nothing traded. */
+function squareStyle(e: Day | null, strength: number | undefined): React.CSSProperties | undefined {
+  if (e == null || e.pnl === 0 || strength == null) return undefined;
+  const tone = e.pnl > 0 ? "var(--profit)" : "var(--loss)";
+  return { backgroundColor: `color-mix(in srgb, ${tone} ${strength}%, transparent)` };
+}
 
 /** One calendar per month with the month's net result, like a broker's day-wise breakdown. */
 export function MonthCards({ daily }: { daily: readonly Day[] }) {
@@ -88,6 +113,7 @@ export function MonthCards({ daily }: { daily: readonly Day[] }) {
 
 function MonthCard({ m }: { m: MonthBlock }) {
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
+  const strength = dayStrengths(m);
   const show = (el: HTMLElement, d: Day) =>
     setTip({
       text: `${tipDay.format(at(d.day))} • ${money(d.pnl)}`,
@@ -116,10 +142,11 @@ function MonthCard({ m }: { m: MonthBlock }) {
               onFocus={(e) => show(e.currentTarget, d.entry!)}
               onMouseLeave={() => setTip(null)}
               onBlur={() => setTip(null)}
-              className={`mx-auto size-6 rounded-md outline-offset-2 ${tone(d.entry)}`}
+              className={`mx-auto size-6 rounded-md outline-offset-2 ${d.entry.pnl === 0 ? "bg-muted" : "bg-surface-2"}`}
+              style={squareStyle(d.entry, strength.get(d.date))}
             />
           ) : (
-            <span key={d.date} className={`mx-auto size-6 rounded-md ${tone(null)}`} />
+            <span key={d.date} className="mx-auto size-6 rounded-md bg-surface-2" />
           ),
         )}
         {tip && (
