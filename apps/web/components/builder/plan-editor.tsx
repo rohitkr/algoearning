@@ -1,5 +1,6 @@
 "use client";
 
+import { useRemembered } from "@/lib/use-remembered";
 import type { Instrument, StrategyCatalog, StrategyLeg, TradePlan } from "@algoearning/api-types";
 import { Button, Card, cn } from "@algoearning/ui";
 import { Plus } from "lucide-react";
@@ -180,6 +181,10 @@ export function PlanEditor({
   const byConditions = e.mode === "conditions";
   const byTip = e.mode === "tip";
   const directional = byConditions || byTip;
+  const lastLock = useRemembered(r.lock_profit);
+  const lastCombined = useRemembered(r.combined_stop);
+  const lastUntil = useRemembered(e.until);
+  const lastWhen = useRemembered(ex.when);
   const setEntry = (p: Partial<typeof e>) => onChange({ ...plan, entry: { ...e, ...p } });
   const setHolding = (p: Partial<typeof h>) => onChange({ ...plan, holding: { ...h, ...p } });
   const setRisk = (p: Partial<typeof r>) => onChange({ ...plan, risk: { ...r, ...p } });
@@ -233,7 +238,11 @@ export function PlanEditor({
                   checked={e.until != null}
                   error={errs["entry.until"]}
                   onChange={(on) =>
-                    setEntry({ until: on ? (h.mode === "intraday" ? h.exit : (hours.max ?? e.at)) : null })
+                    setEntry({
+                      until: on
+                        ? (lastUntil ?? (h.mode === "intraday" ? h.exit : (hours.max ?? e.at)))
+                        : null,
+                    })
                   }
                 />
                 {e.until != null && (
@@ -512,7 +521,9 @@ export function PlanEditor({
               error={errs["risk.lock_profit"]}
               onChange={(on) =>
                 setRisk({
-                  lock_profit: on ? { at: 2000, lock: 1000, trail_every: null, trail_by: null } : null,
+                  lock_profit: on
+                    ? (lastLock ?? { at: 2000, lock: 1000, trail_every: null, trail_by: null })
+                    : null,
                 })
               }
             />
@@ -573,7 +584,9 @@ export function PlanEditor({
               label="Combined premium stop (sold legs together)"
               checked={!!r.combined_stop}
               error={errs["risk.combined_stop"]}
-              onChange={(on) => setRisk({ combined_stop: on ? { unit: "percent", value: 30 } : null })}
+              onChange={(on) =>
+                setRisk({ combined_stop: on ? (lastCombined ?? { unit: "percent", value: 30 }) : null })
+              }
             />
             {r.combined_stop && (
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -622,10 +635,10 @@ export function PlanEditor({
               onChange={(on) =>
                 setExit({
                   when: on
-                    ? {
+                    ? (lastWhen ?? {
                         match: "all",
                         conditions: [{ ...blankCondition(), op: "below", right: level("opening_high") }],
-                      }
+                      })
                     : null,
                 })
               }

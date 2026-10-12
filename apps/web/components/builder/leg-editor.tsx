@@ -1,5 +1,6 @@
 "use client";
 
+import { useRemembered } from "@/lib/use-remembered";
 import type {
   Instrument,
   LegReEntry,
@@ -210,6 +211,13 @@ export function LegEditor({
   const strike: LegStrike = leg.strike ?? { mode: "atm", offset: 0, premium: null, points: null };
   const qty = legQuantity(leg, instrument);
   const weekly = instrument?.weekly_expiry ?? true;
+  const last = {
+    stop_loss: useRemembered(leg.stop_loss),
+    target: useRemembered(leg.target),
+    trailing: useRemembered(leg.trailing),
+    reentry_on_sl: useRemembered(leg.reentry_on_sl),
+    reentry_on_target: useRemembered(leg.reentry_on_target),
+  };
   const sl: LegThreshold = { unit: "percent", value: 30, basis: "premium" };
   const trail: LegTrailing = { unit: "points", trigger: 10, step: 5 };
   const re: LegReEntry = { mode: "at_cost", count: 1 };
@@ -304,7 +312,7 @@ export function LegEditor({
         <Optional
           label="Stop-loss"
           on={!!leg.stop_loss}
-          onToggle={(on) => set("stop_loss", on ? sl : null)}
+          onToggle={(on) => set("stop_loss", on ? (last.stop_loss ?? sl) : null)}
           error={errs[`${p}.stop_loss`]}
         >
           {leg.stop_loss && (
@@ -319,7 +327,7 @@ export function LegEditor({
         <Optional
           label="Target"
           on={!!leg.target}
-          onToggle={(on) => set("target", on ? { ...sl, value: 50 } : null)}
+          onToggle={(on) => set("target", on ? (last.target ?? { ...sl, value: 50 }) : null)}
           error={errs[`${p}.target`]}
         >
           {leg.target && (
@@ -334,7 +342,7 @@ export function LegEditor({
         <Optional
           label="Trailing stop-loss"
           on={!!leg.trailing}
-          onToggle={(on) => set("trailing", on ? trail : null)}
+          onToggle={(on) => set("trailing", on ? (last.trailing ?? trail) : null)}
           error={errs[`${p}.trailing`]}
         >
           {leg.trailing && (
@@ -370,7 +378,7 @@ export function LegEditor({
         <Optional
           label="Re-enter after stop-loss"
           on={!!leg.reentry_on_sl}
-          onToggle={(on) => set("reentry_on_sl", on ? re : null)}
+          onToggle={(on) => set("reentry_on_sl", on ? (last.reentry_on_sl ?? re) : null)}
           error={errs[`${p}.reentry_on_sl`]}
         >
           {leg.reentry_on_sl && (
@@ -380,7 +388,7 @@ export function LegEditor({
         <Optional
           label="Re-enter after target"
           on={!!leg.reentry_on_target}
-          onToggle={(on) => set("reentry_on_target", on ? re : null)}
+          onToggle={(on) => set("reentry_on_target", on ? (last.reentry_on_target ?? re) : null)}
           error={errs[`${p}.reentry_on_target`]}
         >
           {leg.reentry_on_target && (

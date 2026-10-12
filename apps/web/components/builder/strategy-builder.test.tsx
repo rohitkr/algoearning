@@ -362,6 +362,25 @@ describe("StrategyBuilder", () => {
     expect((screen.getByRole("button", { name: "Remove plan" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("keeps the numbers of a setting that is switched off and on again", () => {
+    render(<StrategyBuilder catalog={catalog} />);
+    fireEvent.click(screen.getByLabelText("Lock profit (and trail it)"));
+    fireEvent.change(screen.getByLabelText("When profit reaches"), { target: { value: "7000" } });
+    fireEvent.change(screen.getByLabelText("Keep at least"), { target: { value: "6500" } });
+    fireEvent.click(screen.getByLabelText("Lock profit (and trail it)")); // off: the fields go away
+    expect(screen.queryByLabelText("Keep at least")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Lock profit (and trail it)")); // on again: the same numbers
+    expect((screen.getByLabelText("When profit reaches") as HTMLInputElement).value).toBe("7000");
+    expect((screen.getByLabelText("Keep at least") as HTMLInputElement).value).toBe("6500");
+
+    const leg = () => within(legs()[0]!);
+    fireEvent.click(leg().getByLabelText("Stop-loss"));
+    fireEvent.change(leg().getAllByLabelText("Value")[0]!, { target: { value: "45" } });
+    fireEvent.click(leg().getByLabelText("Stop-loss"));
+    fireEvent.click(leg().getByLabelText("Stop-loss"));
+    expect((leg().getAllByLabelText("Value")[0] as HTMLInputElement).value).toBe("45");
+  });
+
   it("shows the proven strategies' parameters instead of legs", () => {
     render(<StrategyBuilder catalog={catalog} />);
     fireEvent.click(screen.getByRole("radio", { name: /2h range breakout/ }));
