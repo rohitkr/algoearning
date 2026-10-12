@@ -458,7 +458,7 @@ def _extremes(
         short = p.side == "SELL"
         ext[p.contract.key] = (b.high if short else b.low) if adverse else (b.low if short else b.high)
     m2 = Market(now, m.underlying, m.spot if spot is None else spot, m.spot_bars, ext, m.expiries, m.lot_size,
-                m.strike_step, m.prior_spot_bars, m.quotes)  # fmt: skip
+                m.strike_step, m.prior_spot_bars, m.quotes, m.tips, intrabar=len(opens) > 1)  # fmt: skip
     taken = _STOPS if adverse else _TARGETS
     snap = runner.snapshot()
     intents = runner.step(m2)
@@ -473,7 +473,9 @@ def _extremes(
         opened = m.price(intent.contract)
         extreme = ext.get(intent.contract.key)
         px: float | None = extreme if extreme is not None else opened
-        if pos is not None and opened is not None and intent.reason.startswith(("stop-loss", "target")):
+        if intent.reason.startswith("another leg") and opened is not None:
+            px = opened  # the other legs leave when one leg stops: at the minute's open, not at their own extremes
+        elif pos is not None and opened is not None and intent.reason.startswith(("stop-loss", "target")):
             if adverse and pos.sl_basis == "premium" and pos.sl is not None:
                 px = max(pos.sl, opened) if pos.side == "SELL" else min(pos.sl, opened)
             elif not adverse and pos.target_basis == "premium" and pos.target is not None:

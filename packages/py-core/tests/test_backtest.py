@@ -433,3 +433,28 @@ def test_an_intraday_trade_does_not_sleep_over_when_the_days_data_ends_early() -
     (t1,) = r.trades
     assert t1.exit_time.date() == mon and t1.exit_price == 90 and t1.reason == "end of the day's data"
     assert any("closed at the last known price" in w for w in r.warnings)
+
+
+def test_a_combined_target_is_not_reached_by_adding_up_each_legs_best_price_of_the_minute() -> None:
+    """A bought CE and PE: in one minute the CE's high and the PE's high cannot both have happened together (one rises
+    as the other falls), yet adding them up looked like a profit and closed the trade in the entry minute. The trade's
+    combined profit is judged on prices that existed together, so here it never reaches the target."""
+    put = f"NIFTY:{DAY:%Y-%m-%d}:25000:PE"
+    h = MemoryHistory()
+    _days(h, DAY)
+    h.add_option(KEY, _bars(DAY, ("09:20", (100, 112, 98, 100)), ("09:21", (100, 100, 100, 100)),
+                            ("15:15", (100, 100, 100, 100))))  # fmt: skip
+    h.add_option(put, _bars(DAY, ("09:20", (100, 112, 98, 100)), ("09:21", (100, 100, 100, 100)),
+                            ("15:15", (100, 100, 100, 100))))  # fmt: skip
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "09:20"},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [
+            {"id": "L1", "action": "BUY", "option_type": "CE"},
+            {"id": "L2", "action": "BUY", "option_type": "PE"},
+        ],
+        "risk": {"mtm_target": 1000},
+    })  # fmt: skip
+    r = run(config, h)
+    assert {t.reason for t in r.trades} == {"exit time 15:15"}  # (112-100) * 65 * 2 = 1560 was never really there

@@ -578,6 +578,8 @@ class RulesRunner(Runner):
         if sl_hit and risk.exit_all_on_leg_sl:
             return out + self._close(m, "another leg hit its stop-loss")
 
+        if m.intrabar:
+            return out  # the whole trade is judged on prices that existed together: the open of a minute
         # the whole trade
         pnl = self._cycle_pnl(m)
         if risk.mtm_stop_loss and pnl <= -risk.mtm_stop_loss:
