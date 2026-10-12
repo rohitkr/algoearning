@@ -14,6 +14,7 @@ from ae_marketdata.backfill import (
     expiries,
     index_runs,
     plan,
+    stored_days,
     to_rows,
     weekdays,
 )
@@ -52,6 +53,18 @@ def test_plan_skips_stored_days_and_groups_consecutive_ones() -> None:
     split = plan("NIFTY", wanted, days, stored={(key, date(2026, 9, 22))})
     assert [(x.first, x.days) for x in split] == [(date(2026, 9, 21), 1), (date(2026, 9, 23), 2)]
     assert Fetch(key, date(2026, 9, 29), 24500, "CE", days[0], days[0], 1).calls == 1
+
+
+def test_a_contract_day_with_a_few_candles_is_stored_unless_partial_days_are_refilled() -> None:
+    full, partial = ("NIFTY:2026-10-13:22650:CE", date(2026, 10, 9)), ("NIFTY:2026-10-13:22400:CE", date(2026, 10, 9))
+    counts = {full: 375, partial: 71}
+    assert stored_days(counts) == {full, partial}  # any candle at all: the old rule, which never completes a day
+    assert stored_days(counts, int(375 * 0.9)) == {full}  # --refill-partial: the 71-candle day is fetched again
+    days = [date(2026, 10, 9)]
+    wanted = {(date(2026, 10, 13), 22400, "CE"): days}
+    assert plan("NIFTY", wanted, days, stored_days(counts)) == []
+    (f,) = plan("NIFTY", wanted, days, stored_days(counts, int(375 * 0.9)))
+    assert (f.key, f.first) == (partial[0], days[0])
 
 
 def test_index_runs_bridge_weekends() -> None:

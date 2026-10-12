@@ -6,6 +6,8 @@ then the option contracts a scalper could have traded, into the same history_can
 Which contracts: for every trading day, the nearest expiry (and, on an expiry day, the next one too), every strike
 within `buffer` strikes of that day's index range, calls and puts. Each contract is fetched only for the runs of
 consecutive days it was in reach, and only for days not stored yet, so a rerun continues where the last one stopped.
+A day with only a few candles counts as stored too; `--refill-partial` fetches those again (only a contract with nearly
+the whole session counts as complete).
 
 Budget: Breeze allows 5,000 REST calls a day, shared with the live feed. Calls are counted in the feed's counter
 (Monitor shows it) and the backfill stops when fewer than `reserve` are left. Run it after market hours.
@@ -26,7 +28,7 @@ from typing import Any, Protocol
 import structlog
 from ae_db.models import HistoryCandle
 from ae_db.session import Database
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 
 from .history import _insert
 from .types import IST
@@ -304,16 +306,24 @@ async def _index_days(db: Database, underlying: str, start: date, end: date) -> 
         return {r[0]: (float(r[1]), float(r[2]), int(r[3])) for r in rows}
 
 
-async def _stored_option_days(db: Database, underlying: str, start: date, end: date) -> set[tuple[str, date]]:
+def stored_days(counts: dict[tuple[str, date], int], min_bars: int = 1) -> set[tuple[str, date]]:
+    """The contract-days that count as stored: with at least `min_bars` candles (1: any candle at all)."""
+    return {kd for kd, n in counts.items() if n >= min_bars}
+
+
+async def _stored_option_days(
+    db: Database, underlying: str, start: date, end: date, min_bars: int = 1
+) -> set[tuple[str, date]]:
     lo = datetime.combine(start, time(0), tzinfo=IST)
     hi = datetime.combine(end + timedelta(days=1), time(0), tzinfo=IST)
+    day = text("(ts AT TIME ZONE 'Asia/Kolkata')::date")
     async with db.system_session() as s:
         rows = await s.execute(
-            select(HistoryCandle.key, text("(ts AT TIME ZONE 'Asia/Kolkata')::date"))
+            select(HistoryCandle.key, day, func.count())
             .where(HistoryCandle.key.like(f"{underlying}:%"), HistoryCandle.ts >= lo, HistoryCandle.ts < hi)
-            .distinct()
+            .group_by(HistoryCandle.key, day)
         )
-        return {(k, d) for k, d in rows}
+        return stored_days({(k, d): int(n) for k, d, n in rows}, min_bars)
 
 
 def weekdays(start: date, end: date) -> list[date]:
@@ -335,6 +345,7 @@ async def backfill(
     buffer: int = 4,
     dry_run: bool = False,
     index_only: bool = False,
+    refill_partial: bool = False,
 ) -> Report:
     """Index bars for missing weekdays, then options per the plan. With dry_run (or no client) nothing is fetched:
     the report says what would be."""
@@ -371,7 +382,9 @@ async def backfill(
         rep.notes.append(f"index history covers {len(trading)} days; options are planned only for those")
     ex = expiries(underlying, start, end, trading)
     wanted = contract_days(underlying, {d: days[d][:2] for d in trading}, ex, strike_step, buffer)
-    stored = await _stored_option_days(db, underlying, start, end)
+    # a contract-day with a few candles (a live feed that only watched it for a while, an interrupted download) counts
+    # as stored unless asked to refill: then it must hold nearly the whole session, as the index days do
+    stored = await _stored_option_days(db, underlying, start, end, int(BARS_PER_DAY * 0.9) if refill_partial else 1)
     fetches = plan(underlying, wanted, trading, stored)
     rep.option_fetches, rep.option_calls = len(fetches), sum(f.calls for f in fetches)
     log.info("backfill plan", underlying=underlying, index_days_fetched=rep.index_days_missing,
