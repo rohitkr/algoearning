@@ -136,6 +136,23 @@
             "title": "Open Positions",
             "type": "integer"
           },
+          "prices_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prices At"
+          },
+          "prices_stale": {
+            "default": false,
+            "title": "Prices Stale",
+            "type": "boolean"
+          },
           "realized_pnl": {
             "title": "Realized Pnl",
             "type": "number"
@@ -2984,6 +3001,10 @@
             "title": "Feed Status",
             "type": "string"
           },
+          "market_open": {
+            "title": "Market Open",
+            "type": "boolean"
+          },
           "quotes": {
             "items": {
               "$ref": "#/components/schemas/Quote"
@@ -2994,7 +3015,8 @@
         },
         "required": [
           "quotes",
-          "feed_status"
+          "feed_status",
+          "market_open"
         ],
         "title": "MarketSnapshot",
         "type": "object"
@@ -5469,6 +5491,23 @@
           "open_positions": {
             "title": "Open Positions",
             "type": "integer"
+          },
+          "prices_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prices At"
+          },
+          "prices_stale": {
+            "default": false,
+            "title": "Prices Stale",
+            "type": "boolean"
           },
           "realized_pnl": {
             "title": "Realized Pnl",

@@ -624,6 +624,7 @@ class Quote(BaseModel):
 class MarketSnapshot(BaseModel):
     quotes: list[Quote]
     feed_status: Literal["live", "simulated", "down"]  # down: no price in the last 2 minutes
+    market_open: bool  # the exchange is trading right now (weekday, within the instruments' trading hours)
 
 
 class FeedInstrument(BaseModel):
@@ -729,6 +730,8 @@ class RunOut(BaseModel):
     stopped_at: datetime | None
     heartbeat_at: datetime | None  # the engine's last step for this run
     engine_stale: bool  # running, but the engine has not stepped it for 30 seconds
+    prices_at: datetime | None = None  # the oldest quote behind the open positions' P&L
+    prices_stale: bool = False  # the market is open but no live prices have arrived for 2 minutes
     stop_reason: str | None
     error: str | None
 

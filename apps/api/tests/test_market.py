@@ -95,7 +95,8 @@ def api(clean_db: str) -> Iterator[TestClient]:
 def test_snapshot_reports_prices_and_whether_the_feed_is_live(api: TestClient) -> None:
     assert api.get("/v1/market/snapshot").status_code == 401
     r = api.get("/v1/market/snapshot", headers=A).json()
-    assert r == {"quotes": [], "feed_status": "down"}
+    assert r["quotes"] == [] and r["feed_status"] == "down"
+    assert isinstance(r["market_open"], bool)  # true only on a weekday within the instruments' trading hours
 
     now = datetime.now(UTC)
 

@@ -1529,6 +1529,13 @@ export interface components {
             multiplier: number;
             /** Open Positions */
             open_positions: number;
+            /** Prices At */
+            prices_at?: string | null;
+            /**
+             * Prices Stale
+             * @default false
+             */
+            prices_stale: boolean;
             /** Realized Pnl */
             realized_pnl: number;
             /** Started At */
@@ -2530,6 +2537,8 @@ export interface components {
              * @enum {string}
              */
             feed_status: "live" | "simulated" | "down";
+            /** Market Open */
+            market_open: boolean;
             /** Quotes */
             quotes: components["schemas"]["Quote"][];
         };
@@ -3459,6 +3468,13 @@ export interface components {
             multiplier: number;
             /** Open Positions */
             open_positions: number;
+            /** Prices At */
+            prices_at?: string | null;
+            /**
+             * Prices Stale
+             * @default false
+             */
+            prices_stale: boolean;
             /** Realized Pnl */
             realized_pnl: number;
             /** Started At */

@@ -39,7 +39,9 @@ export function MarketTicker() {
   }, [getToken]);
 
   if (!snap) return null;
-  if (snap.feed_status === "down") return <StatusPill tone="neutral">Prices offline</StatusPill>;
+  if (snap.feed_status === "down") {
+    return <StatusPill tone="neutral">{snap.market_open ? "Prices offline" : "Market closed"}</StatusPill>;
+  }
   return (
     <div className="flex items-center gap-3 text-xs" aria-label="Index prices">
       {KEYS.map((k) => {

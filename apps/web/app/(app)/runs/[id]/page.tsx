@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 
 import { AutoRefresh } from "@/components/runs/auto-refresh";
 import { StopRunButton } from "@/components/runs/run-actions";
-import { ModePill, RunStatusPill, fmt } from "@/components/runs/run-bits";
+import { ModePill, PricesAsOf, RunStatusPill, StalePricesNotice, fmt } from "@/components/runs/run-bits";
 import { SignalCard, type SmcSignal, isSmcSignal } from "@/components/smc/signal-card";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
@@ -42,6 +42,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
       <Link href="/runs" className="inline-flex w-fit items-center gap-1 text-sm text-muted hover:underline">
         <ArrowLeft className="size-4" aria-hidden /> Running
       </Link>
+      {active && <StalePricesNotice run={run} />}
       <Card className="flex flex-wrap items-center gap-4">
         <div className="min-w-48 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -67,6 +68,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           <div>
             <p className="text-xs text-muted">Open</p>
             <Pnl value={run.unrealized_pnl} className="font-semibold" />
+            {active && <PricesAsOf run={run} />}
           </div>
           <div>
             <p className="text-xs text-muted">Total</p>

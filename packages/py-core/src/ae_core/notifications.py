@@ -37,6 +37,13 @@ EVENTS: dict[str, EventType] = {
             "engine_down", "The engine stopped responding", "Running strategies are not being watched", True, True
         ),
         EventType(
+            "prices_stale",
+            "Live prices stopped",
+            "Open positions have no live prices while the market is open, so stops are not watched",
+            True,
+            True,
+        ),
+        EventType(
             "ip_changed", "The server's IP address changed", "Update the IP in your Zerodha Kite app", True, True
         ),
     )
@@ -54,6 +61,7 @@ FROM_ENGINE: dict[str, tuple[str, str]] = {
     "run_stopped": ("run_stopped", "Strategy stopped"),
     "position_closed_outside": ("position_mismatch", "Position closed outside AlgoEarning"),
     "position_mismatch": ("position_mismatch", "Positions differ from your broker"),
+    "prices_stale": ("prices_stale", "Live prices stopped"),
 }
 
 

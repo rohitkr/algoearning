@@ -84,6 +84,8 @@ class Inst:
     strike_step: int
     expiries: list[date]
     freeze_qty: int = 1800
+    session_open: str = "09:15"  # trading hours (IST), from the instruments table
+    session_close: str = "15:40"
 
 
 def _symbol(p: Position) -> str:
@@ -141,6 +143,7 @@ class Engine:
         self.accounts: dict[uuid.UUID | None, LiveAccount] = {}  # None: the dry-run account (no broker)
         self.account_token: dict[uuid.UUID, bytes | None] = {}
         self.prices: dict[str, float] = {}  # latest feed prices, for live limit pricing between steps
+        self.tick_ts: dict[str, datetime] = {}  # when each of those prices was last quoted
         self.recover: set[uuid.UUID] = set()  # live runs whose in-flight orders must be looked up after a restart
         self.reconciled: dict[uuid.UUID, datetime] = {}
         self.mismatch: dict[tuple[uuid.UUID, str], int] = defaultdict(int)
@@ -159,6 +162,8 @@ class Engine:
                     r.strike_step,
                     sorted(map(date.fromisoformat, r.expiries)),
                     r.freeze_qty,
+                    r.session_open,
+                    r.session_close,
                 )
                 for r in (await s.execute(select(Instrument))).scalars()
             }
@@ -260,6 +265,7 @@ class Engine:
             prices = {k: t.ltp for k, t in ticks.items()}
             quotes = {k: Quote(t.bid, t.ask, t.volume, t.oi) for k, t in ticks.items()}
             self.prices.update(prices)
+            self.tick_ts.update({k: t.ts for k, t in ticks.items()})
             for m in markets.values():
                 m.prices, m.quotes = prices, quotes
 
@@ -395,7 +401,7 @@ class Engine:
             r.status, r.stopped_at = RunStatus.STOPPED, now
             self._event(s, r, "run_stopped", reason=r.stop_reason or "stopped")
             self.runners.pop(r.id, None)
-        r.state = {**rn.state(), "_underlying": m.underlying}
+        r.state = {**rn.state(), "_underlying": m.underlying, **self._freshness(s, r, rn, inst, now)}
         r.realized_pnl = Decimal(str(rn.realized))
         r.unrealized_pnl = Decimal(str(rn.unrealized(m)))
         r.heartbeat_at = now
@@ -510,7 +516,7 @@ class Engine:
             self._event(s, r, "run_stopped", reason=r.stop_reason or "stopped")
             self.runners.pop(r.id, None)
         r.state = {**rn.state(), "_underlying": m.underlying, "_inflight": [_intent_dict(i) for i in inflight],
-                   "_retry": retry}  # fmt: skip
+                   "_retry": retry, **self._freshness(s, r, rn, inst, now)}  # fmt: skip
         r.realized_pnl = Decimal(str(rn.realized))
         r.unrealized_pnl = Decimal(str(rn.unrealized(m)))
         r.heartbeat_at = now
@@ -645,6 +651,30 @@ class Engine:
                 for r in runs[:1] if not owners[sym] else [owners[sym][0][0]]:
                     self._event(s, r, "position_mismatch", level="WARNING", symbol=sym, expected=want, at_zerodha=have,
                                 note="not changed automatically: check Zerodha")  # fmt: skip
+
+    @staticmethod
+    def in_session(inst: Inst, now: datetime) -> bool:
+        """Is the exchange open for this instrument right now (weekday, within its trading hours, IST)?"""
+        local = now.astimezone(IST)
+        return local.weekday() < 5 and inst.session_open <= f"{local:%H:%M}" <= inst.session_close
+
+    def _freshness(self, s: AsyncSession, r: StrategyRun, rn: Runner, inst: Inst, now: datetime) -> dict[str, Any]:
+        """How old the prices behind a run's open positions are. `_prices_at` is the oldest quote among the held
+        contracts (what the P&L on screen is as of). While the exchange is open, no quote at all for STALE means the
+        feed has stopped: stop-losses and limits are not being judged on live prices, so say so (once per episode)."""
+        held = {p.contract.key for p in rn.open_positions()}
+        quoted = [self.tick_ts[k] for k in held if k in self.tick_ts]
+        oldest = min(quoted) if held and len(quoted) == len(held) else None
+        newest = max(quoted) if quoted else None
+        stale = bool(held) and self.in_session(inst, now) and (newest is None or now - newest > STALE)
+        if stale and not r.state.get("_prices_stale"):
+            since = f"{newest.astimezone(IST):%H:%M}" if newest else "the start"
+            self._event(s, r, "prices_stale", level="WARNING",
+                        message=f"No live prices since {since}: stop-losses and limits are not being watched. "
+                                "Check the price feed.")  # fmt: skip
+        elif r.state.get("_prices_stale") and not stale:
+            self._event(s, r, "prices_back", message="Live prices are back")
+        return {"_prices_at": oldest.isoformat() if oldest else None, "_prices_stale": stale}
 
     async def _mark(self, s: AsyncSession, rn: Runner, m: Market) -> None:
         open_trades = {p.id: p for p in rn.open_positions()}

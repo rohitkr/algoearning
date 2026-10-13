@@ -86,6 +86,8 @@ def run_out(r: StrategyRun, open_positions: int = 0) -> RunOut:
         heartbeat_at=r.heartbeat_at,
         engine_stale=r.status == RunStatus.RUNNING
         and (r.heartbeat_at is None or datetime.now(UTC) - r.heartbeat_at > timedelta(seconds=30)),
+        prices_at=datetime.fromisoformat(str(r.state["_prices_at"])) if r.state.get("_prices_at") else None,
+        prices_stale=bool(r.state.get("_prices_stale")) and r.status == RunStatus.RUNNING,
         stop_reason=r.stop_reason,
         error=r.error,
     )

@@ -107,9 +107,15 @@ async def snapshot(
     status: Literal["live", "simulated", "down"] = (
         "down" if not fresh else "simulated" if health.get("simulated") else "live"
     )
+    async with db.system_session() as s:
+        cols = select(Instrument.session_open, Instrument.session_close)
+        hours = (await s.execute(cols.where(Instrument.code.in_(keys)))).all() or (await s.execute(cols)).all()
+    local = datetime.now(IST)
+    open_now = local.weekday() < 5 and any(a <= f"{local:%H:%M}" <= b for a, b in hours)
     return MarketSnapshot(
         quotes=[Quote(key=k, ltp=t.ltp, prev_close=t.prev_close, ts=t.ts) for k, t in last.items()],
         feed_status=status,
+        market_open=open_now,
     )
 
 
