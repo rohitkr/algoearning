@@ -79,3 +79,10 @@ async def test_a_known_holiday_is_closed_not_missing(db: Database) -> None:
     await remember_holidays(db, "NIFTY", [TUE])
     cov = await coverage(db, "NIFTY", MON, WED, 50)
     assert {d.day: d.status for d in cov.days}[TUE] == "closed" and cov.plan.index_days_missing == 0
+
+
+def test_calendar_holidays_come_from_the_toml_file() -> None:
+    from ae_marketdata.backfill import calendar_holidays
+
+    h = calendar_holidays()
+    assert date(2026, 10, 20) in h and date(2026, 12, 25) in h and date(2026, 10, 21) not in h

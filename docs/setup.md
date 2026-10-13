@@ -161,7 +161,8 @@ market holidays and the data-sync job history. Only `latest-history` exists if y
 that after creating users some other way, it replaces just `history_candles`.
 
 Anything newer than the last backup is not in it. Open Monitor > Data sync to see which days are missing and
-download them (needs the day's Breeze or Kite login in Monitor > Market data).
+download them (needs the day's Breeze or Kite login in Monitor > Market data). Market holidays come from the repo
+(`packages/py-marketdata/src/ae_marketdata/holidays.toml`), so they need no restore.
 
 ### 6. Run it (development: API + frontend)
 

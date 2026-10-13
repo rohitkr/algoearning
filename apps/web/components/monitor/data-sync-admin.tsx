@@ -41,8 +41,11 @@ export const isActive = (j: Pick<SyncJobOut, "status">) => j.status === "pending
 
 /** What the numbers in a day's tooltip say. */
 export function dayLabel(d: SyncDay): string {
+  if (d.status === "closed") {
+    const weekend = [0, 6].includes(at(d.day).getUTCDay());
+    return `${dayTitle.format(at(d.day))}: ${weekend ? "weekend, market closed" : "market closed (holiday)"}`;
+  }
   const head = `${dayTitle.format(at(d.day))}: ${STATUS_TEXT[d.status]}`;
-  if (d.status === "closed") return head;
   const parts = [`index ${d.index_bars} of 375 candles`];
   if (d.options_expected)
     parts.push(

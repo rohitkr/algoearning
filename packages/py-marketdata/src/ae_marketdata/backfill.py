@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import asyncio
 import math
+import tomllib
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 from typing import Any, Protocol
 
 import structlog
@@ -357,6 +359,12 @@ async def tail_days(db: Database, underlying: str, start: date, end: date) -> se
         return {(k, d) for k, d in rows}
 
 
+def calendar_holidays(calendar: str = "NSE") -> set[date]:
+    """The exchange's trading holidays from holidays.toml (edit that file to add a year). All indices follow it."""
+    with (Path(__file__).parent / "holidays.toml").open("rb") as f:
+        return {date.fromisoformat(d) for d in tomllib.load(f)[calendar]["holidays"]}
+
+
 def _holiday_key(underlying: str) -> str:
     return f"holidays:{underlying}"[:60]
 
@@ -369,7 +377,7 @@ async def known_holidays(db: Database, underlying: str) -> set[date]:
             await s.execute(select(PlatformSetting.value).where(PlatformSetting.key == _holiday_key(underlying)))
         ).scalar_one_or_none()
     days: list[str] = list(row or [])
-    return {date.fromisoformat(d) for d in days}
+    return {date.fromisoformat(d) for d in days} | calendar_holidays()
 
 
 async def remember_holidays(db: Database, underlying: str, days: Iterable[date]) -> None:

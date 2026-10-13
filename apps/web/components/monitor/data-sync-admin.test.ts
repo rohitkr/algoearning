@@ -25,7 +25,8 @@ describe("data sync helpers", () => {
   });
 
   it("describes a day plainly", () => {
-    expect(dayLabel(day({ status: "closed" }))).toContain("Aug");
+    expect(dayLabel(day({ status: "closed", day: "2026-08-04" }))).toContain("holiday");
+    expect(dayLabel(day({ status: "closed", day: "2026-08-02" }))).toContain("weekend");
     const t = dayLabel(
       day({
         status: "partial",

@@ -178,6 +178,11 @@ everything missing up to today from Breeze (or Kite, which cannot fetch expired 
 estimate of the time left, and Stop. One download runs at a time. Log in to the provider first in Monitor > Market
 data. Run `backup.py push history` afterwards.
 
+Market holidays are read from `packages/py-marketdata/src/ae_marketdata/holidays.toml` (the NSE calendar; weekends
+need no entry). Those weekdays show as "market closed (holiday)" in the calendar and are never downloaded or counted
+as missing. **Each year, append the next year's dates to that file** and commit it. A weekday with no index candles
+at all is also detected as a holiday by the download.
+
 ### Background processes (run by hand)
 
 ```bash
