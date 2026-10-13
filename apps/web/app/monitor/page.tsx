@@ -58,7 +58,7 @@ export default async function MonitorOverview() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
         <Card className="p-0">
           <div className="flex items-center justify-between px-5 pt-4 pb-2">
             <CardTitle>Newest users</CardTitle>

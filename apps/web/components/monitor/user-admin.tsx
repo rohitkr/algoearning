@@ -113,7 +113,7 @@ export function PlanAndLimits({ detail, plans }: { detail: AdminUserDetail; plan
   >;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
       <Card className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-2">
           <CardTitle>Plan and usage</CardTitle>

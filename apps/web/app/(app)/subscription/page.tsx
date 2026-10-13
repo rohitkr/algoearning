@@ -51,7 +51,7 @@ export default async function SubscriptionPage() {
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <h1 className="text-2xl font-semibold">Subscription</h1>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
         <Card>
           <CardTitle>Current plan</CardTitle>
           <div className="mt-2 flex items-center gap-3">
@@ -82,7 +82,7 @@ export default async function SubscriptionPage() {
         <h2 id="plans-heading" className="text-lg font-semibold">
           Plans
         </h2>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3">
           {plans.data.map((p) => {
             const current = p.code === e.plan_code;
             return (

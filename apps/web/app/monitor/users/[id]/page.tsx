@@ -99,7 +99,7 @@ export default async function MonitorUser({ params }: { params: Promise<{ id: st
         )}
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
         <Card className="p-0">
           <div className="px-5 pt-4 pb-2">
             <CardTitle>Broker accounts</CardTitle>

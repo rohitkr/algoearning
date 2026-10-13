@@ -165,7 +165,7 @@ export default async function ReportsPage({
       </div>
 
       {days.ok && days.data.length > 0 ? (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
           <Card>
             <CardTitle>Daily P&amp;L</CardTitle>
             <div className="mt-3">
