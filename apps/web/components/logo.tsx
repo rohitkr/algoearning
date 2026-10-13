@@ -12,7 +12,7 @@ export function Logo({ href = "/dashboard" }: { href?: string }) {
       <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
         <TrendingUp className="size-4" aria-hidden />
       </span>
-      AlgoEarning
+      <span className="max-[420px]:sr-only">AlgoEarning</span>
     </Link>
   );
 }

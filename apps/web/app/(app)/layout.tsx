@@ -25,7 +25,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <Sidebar isAdmin={isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
         <StickyHeader
-          className="flex h-14 items-center justify-end gap-2 border-b border-border bg-surface px-4"
+          className="flex h-14 items-center justify-end gap-1.5 border-b border-border bg-surface px-3 sm:gap-2 sm:px-4"
           fixedClassName="left-0 md:left-[var(--sidebar-w,15rem)]"
         >
           <span className="mr-auto md:hidden">
@@ -50,10 +50,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           {liveRuns > 0 && (
             <Link
               href="/runs"
-              className="hidden items-center gap-2 rounded-lg bg-loss px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 [html[data-header-stuck]_&]:inline-flex"
+              aria-label={`LIVE: ${liveRuns} strateg${liveRuns === 1 ? "y is" : "ies are"} placing real orders`}
+              className="hidden items-center gap-2 shrink-0 rounded-lg bg-loss px-2.5 py-1.5 text-sm font-semibold whitespace-nowrap text-white sm:px-3 hover:opacity-90 [html[data-header-stuck]_&]:inline-flex"
             >
               <span className="size-2 animate-pulse rounded-full bg-white" aria-hidden />
-              LIVE: {liveRuns} strateg{liveRuns === 1 ? "y" : "ies"} placing real orders
+              LIVE
+              <span className="hidden sm:inline">
+                : {liveRuns} strateg{liveRuns === 1 ? "y" : "ies"} placing real orders
+              </span>
+              <span className="sm:hidden">{liveRuns}</span>
             </Link>
           )}
           <span id="header-actions" className="contents" />

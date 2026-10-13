@@ -278,7 +278,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
       {scrolled &&
         slot &&
         createPortal(
-          <Button size="sm" onClick={save} disabled={saving} className="animate-header-in mr-1">
+          <Button size="sm" onClick={save} disabled={saving} className="animate-header-in mr-1 shrink-0">
             <Save className="size-4" aria-hidden /> {saving ? "Saving…" : "Save"}
           </Button>,
           slot,
