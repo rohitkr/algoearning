@@ -73,7 +73,7 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
     <aside
       style={{ width: shown }}
       className={cn(
-        "sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-border bg-surface py-4 md:flex",
+        "sticky top-0 z-50 hidden h-dvh shrink-0 flex-col border-r border-border bg-surface py-4 md:flex",
         collapsed ? "px-2" : "px-3",
         !dragging && "transition-[width] duration-200",
       )}
