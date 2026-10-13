@@ -237,20 +237,18 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
     }
   }
 
-  // the title row's Save scrolls away on a long form: the header that slides back in gets a Save button
-  const titleRow = useRef<HTMLDivElement>(null);
+  // while the fixed header is showing, Save lives there instead of in the title row
   const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const sync = () => setScrolled(document.documentElement.hasAttribute("data-header-stuck"));
+    sync();
+    window.addEventListener("header-stuck", sync);
+    return () => window.removeEventListener("header-stuck", sync);
+  }, []);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the header lives in the layout: found after mount
     setSlot(document.getElementById("header-actions"));
-  }, []);
-  useEffect(() => {
-    const el = titleRow.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([e]) => setScrolled(!!e && !e.isIntersecting));
-    io.observe(el);
-    return () => io.disconnect();
   }, []);
 
   const allErrors = Object.entries(errs);
@@ -258,7 +256,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
-      <div ref={titleRow} className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button asChild variant="ghost" size="icon" aria-label="Back to strategies">
           <Link href="/strategies">
             <ArrowLeft className="size-4" aria-hidden />
@@ -272,7 +270,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
           </p>
         </div>
         {strategy?.status === "archived" && <StatusPill>Archived</StatusPill>}
-        <Button onClick={save} disabled={saving}>
+        <Button onClick={save} disabled={saving} className={cn(scrolled && slot && "invisible")}>
           <Save className="size-4" aria-hidden /> {saving ? "Saving…" : "Save"}
         </Button>
       </div>

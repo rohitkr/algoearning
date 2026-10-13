@@ -15,6 +15,12 @@ export function StickyHeader({ children }: { children: ReactNode }) {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+  useEffect(() => {
+    // pages (the strategy builder) move their main action into the header while it is fixed
+    document.documentElement.toggleAttribute("data-header-stuck", stuck);
+    window.dispatchEvent(new Event("header-stuck"));
+    return () => document.documentElement.removeAttribute("data-header-stuck");
+  }, [stuck]);
   return (
     <div className="h-14">
       <header
