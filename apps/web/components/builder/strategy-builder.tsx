@@ -15,6 +15,7 @@ import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
 import {
@@ -236,9 +237,14 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
     }
   }
 
-  // the title row's Save scrolls away on a long form: a bar slides down from the top with Save in it
+  // the title row's Save scrolls away on a long form: the header that slides back in gets a Save button
   const titleRow = useRef<HTMLDivElement>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the header lives in the layout: found after mount
+    setSlot(document.getElementById("header-actions"));
+  }, []);
   useEffect(() => {
     const el = titleRow.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
@@ -252,23 +258,6 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
-      <div className="sticky top-0 z-30 -mb-4 h-0">
-        <div
-          aria-hidden={!scrolled}
-          inert={!scrolled}
-          className={cn(
-            "flex items-center gap-3 rounded-b-xl border border-t-0 border-border bg-surface px-4 py-2 shadow-lg transition-transform duration-300",
-            scrolled ? "translate-y-0" : "pointer-events-none -translate-y-[130%]",
-          )}
-        >
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold">
-            {name || (strategy ? "Edit strategy" : "New strategy")}
-          </span>
-          <Button size="sm" onClick={save} disabled={saving} tabIndex={scrolled ? 0 : -1}>
-            <Save className="size-4" aria-hidden /> {saving ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      </div>
       <div ref={titleRow} className="flex flex-wrap items-center gap-3">
         <Button asChild variant="ghost" size="icon" aria-label="Back to strategies">
           <Link href="/strategies">
@@ -287,6 +276,15 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
           <Save className="size-4" aria-hidden /> {saving ? "Saving…" : "Save"}
         </Button>
       </div>
+
+      {scrolled &&
+        slot &&
+        createPortal(
+          <Button size="sm" onClick={save} disabled={saving} className="animate-header-in mr-1">
+            <Save className="size-4" aria-hidden /> {saving ? "Saving…" : "Save"}
+          </Button>,
+          slot,
+        )}
 
       {note && (
         <p role="status" className={cn("text-sm", note.tone === "success" ? "text-profit" : "text-loss")}>

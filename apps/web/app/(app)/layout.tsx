@@ -10,6 +10,7 @@ import { Logo } from "@/components/logo";
 import { MarketTicker } from "@/components/market-ticker";
 import { MobileNav } from "@/components/mobile-nav";
 import { Sidebar } from "@/components/sidebar";
+import { StickyHeader } from "@/components/sticky-header";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 
@@ -20,10 +21,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const isAdmin = me.ok && me.data.role === "admin";
   const liveRuns = runs.ok ? runs.data.filter((r) => r.mode === "live" && !r.dry_run).length : 0;
   return (
-    <div className="flex min-h-dvh">
+    <div className="flex min-h-dvh items-start">
       <Sidebar isAdmin={isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-end gap-2 border-b border-border bg-surface px-4">
+        <StickyHeader>
           <span className="mr-auto md:hidden">
             <Logo />
           </span>
@@ -43,8 +44,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               <Bell className="size-[18px]" aria-hidden />
             </Link>
           </Tooltip>
+          <span id="header-actions" className="contents" />
           <UserButton />
-        </header>
+        </StickyHeader>
         <MobileNav isAdmin={isAdmin} />
         {liveRuns > 0 && (
           <Link

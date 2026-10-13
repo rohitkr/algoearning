@@ -1,2 +1,23 @@
 @import "tailwindcss";
 @import "@algoearning/ui/styles.css";
+
+@keyframes header-in {
+  from {
+    transform: translateY(-100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-header-in {
+  animation: header-in 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-header-in {
+    animation: none;
+  }
+}
