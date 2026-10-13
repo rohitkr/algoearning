@@ -88,10 +88,11 @@ async def history_coverage(_: CurrentUser, db: DbDep, request: Request) -> list[
     if cached is None:
         return await _refresh_coverage(app, db)
     stamp, out = cached
+    coverage: list[HistoryCoverage] = out
     if time.monotonic() - stamp > COVERAGE_TTL_S and not app.state.coverage_lock.locked():
         task = asyncio.create_task(_refresh_coverage(app, db))
         app.state.coverage_task = task  # keep a reference so it is not collected mid-run
-    return out
+    return coverage
 
 
 @router.post("/v1/backtests/preview", response_model=BacktestPreviewOut)

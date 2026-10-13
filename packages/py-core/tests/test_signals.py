@@ -148,7 +148,10 @@ def test_real_messages() -> None:
 @pytest.mark.skipif(not GOLDEN.expanduser().exists(), reason="the reference message store is not on this machine")
 def test_all_500_studied_messages() -> None:
     with sqlite3.connect(GOLDEN.expanduser()) as c:
-        rows = c.execute("SELECT msg_id, date, text, reply_to, has_media FROM messages").fetchall()
+        # the 500 studied messages (7 Sep - 8 Oct 06:55 UTC); the store keeps growing after that
+        rows = c.execute(
+            "SELECT msg_id, date, text, reply_to, has_media FROM messages WHERE date <= '2026-10-08T06:55:15+00:00'"
+        ).fetchall()
     msgs = [Message(i, datetime.fromisoformat(d), t, r, bool(h)) for i, d, t, r, h in rows]
     sigs, reads = assemble(msgs)
     assert len(msgs) == 500 and len(sigs) == 43 and all(s.complete for s in sigs)

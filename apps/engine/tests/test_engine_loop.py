@@ -117,7 +117,8 @@ async def test_paper_run_enters_stops_out_and_records_everything(env: Any) -> No
     await eng.tick()
     run = await run_row(db, rid)
     assert float(run.realized_pnl) == round((99.95 - 131.05) * 130, 2)
-    assert await events(db, rid) == ["run_started", "entry", "exit"]
+    # it waits (logged once) while the contract's price is requested, then enters and stops out
+    assert await events(db, rid) == ["run_started", "waiting_to_enter", "entry", "exit"]
     async with db.system_session() as s:
         t = (await s.execute(select(Trade).where(Trade.run_id == rid))).scalar_one()
         assert t.status == "closed" and t.exit_reason == "stop-loss"
@@ -325,3 +326,24 @@ async def test_a_telegram_tip_starts_a_paper_trade(env: Any) -> None:
         (t,) = (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars()
         assert (t.side.value, t.option_type, float(t.strike)) == ("SELL", "PE", 25000)
     assert "tip_received" in await events(db, rid)
+
+
+async def test_a_strategy_the_engine_cannot_read_does_not_block_other_runs(env: Any) -> None:
+    db, hub, ids = env
+    good = await add_run(db, ids)
+    async with db.system_session() as s:
+        future = {"kind": "from_the_future"}
+        bad = StrategyRun(user_id=ids["user"], strategy_id=ids["strategy"], mode="paper", config_snapshot=future,
+                          strategy_name="New", kind="from_the_future")  # fmt: skip
+        s.add(bad)
+        await s.flush()
+        bad_id = bad.id
+    clock = [at("09:19")]
+    eng = Engine(db, hub, now=lambda: clock[0])
+    await prices(hub, clock[0], 25010, None)
+    await eng.tick()
+    await eng.tick()  # told once, not every tick
+    assert (await run_row(db, good)).status == RunStatus.RUNNING
+    b = await run_row(db, bad_id)
+    assert b.error is not None and "restart the engine" in b.error
+    assert await events(db, bad_id) == ["cannot_read_strategy"]

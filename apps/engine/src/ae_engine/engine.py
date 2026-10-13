@@ -136,6 +136,7 @@ class Engine:
         self.runners: dict[uuid.UUID, Runner] = {}
         # live
         self.box, self.live_cfg = box, live or LiveConfig()
+        self.unreadable: set[uuid.UUID] = set()  # runs whose strategy this engine could not read (told once)
         self.book, self._book_given = book or ContractBook(), book is not None
         self.kite_transport, self.sleep = kite_transport, sleep
         self.accounts: dict[uuid.UUID | None, LiveAccount] = {}  # None: the dry-run account (no broker)
@@ -241,7 +242,13 @@ class Engine:
                 kill_switch=bool(rs and rs.kill_switch),
             )
             ent = await load_entitlements(s, user_id, self.grace)
-            runners = {r.id: self._runner(r) for r in runs}
+            runners: dict[uuid.UUID, Runner] = {}
+            for r in list(runs):
+                try:
+                    runners[r.id] = self._runner(r)
+                except Exception as exc:  # one strategy this engine cannot read must not stop the user's others
+                    runs.remove(r)
+                    self._unreadable(s, r, exc)
             markets = await self._markets({self._underlying(r) for r in runs}, insts, now)
             for r in runs:
                 m = markets.get(self._underlying(r))
@@ -343,6 +350,19 @@ class Engine:
 
     def _underlying(self, r: StrategyRun) -> str:
         return str(r.config_snapshot.get("underlying", "NIFTY"))
+
+    def _unreadable(self, s: AsyncSession, r: StrategyRun, exc: Exception) -> None:
+        """Tell the user once (on the run and its log) that this engine cannot read the run's strategy."""
+        if r.id in self.unreadable:
+            return
+        self.unreadable.add(r.id)
+        why = f"{type(exc).__name__}: {str(exc).splitlines()[0][:160]}"
+        log.error("cannot read a run's strategy: skipped, other runs carry on", run_id=str(r.id), error=why)
+        r.error = (
+            "The trading engine cannot read this strategy (its code is older than the app's): "
+            "restart the engine (scripts/home-host.sh restart engine). " + why
+        )[:500]
+        self._event(s, r, "cannot_read_strategy", level="ERROR", error=why)
 
     def _runner(self, r: StrategyRun) -> Runner:
         rn = self.runners.get(r.id)

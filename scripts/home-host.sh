@@ -255,11 +255,28 @@ cmd_restart() {
   done
 }
 
+# the code the trading engine runs: newer commits here than the engine's start = it runs old code
+ENGINE_CODE=(apps/engine packages/py-core packages/py-db packages/py-brokers packages/py-marketdata)
+engine_stale() { # true (and prints since when) when the running engine started before its latest code change
+  local pid started changed
+  pid=$(pid_of engine) && [ -n "$pid" ] || return 1
+  started=$(date -j -f "%a %b %d %T %Y" "$(ps -o lstart= -p "$pid" | xargs)" +%s 2>/dev/null) || return 1
+  changed=$(git log -1 --format=%ct -- "${ENGINE_CODE[@]}" 2>/dev/null) || return 1
+  [ -n "$changed" ] && [ "$changed" -gt "$started" ] || return 1
+  echo "$(date -r "$started" '+%a %d %b %H:%M')"
+}
+
 cmd_deploy() {
   cmd_build
   step "Restarting ${APP_SERVICES[*]}"
   cmd_restart "${APP_SERVICES[@]}"
-  warn "the engine was not restarted (it steps running strategies). For engine changes, outside market hours:"
+  local since
+  if since=$(engine_stale); then
+    echo "  ${red}✗ the engine runs OLDER code (started $since) than this deploy: it may not run new strategies.${reset}"
+    echo "    Restart it now if no live strategy is in a trade, else after market hours:"
+  else
+    warn "the engine was not restarted (it steps running strategies). For engine changes, outside market hours:"
+  fi
   echo "      scripts/home-host.sh restart engine"
 }
 
@@ -275,6 +292,10 @@ cmd_status() {
       printf "    %-9s %s\n" "$s" "${red}not running${reset}: scripts/home-host.sh logs $s"
     fi
   done
+  local since
+  if since=$(engine_stale); then
+    warn "the engine runs older code (started $since): scripts/home-host.sh restart engine (outside market hours)"
+  fi
   step "Health"
   check() { # label url
     local code

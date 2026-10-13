@@ -41,4 +41,3 @@ Now: the probe runs on a snapshot and restores it when it decided something that
 strategy-wide stops count as stops); a refused exit reopens the trade and is sent again after 30 s (live and
 backtest); and as a last net the backtest closes anything left open after its trade ended, and never lets an intraday
 trade sleep over, at the last known price, saying so in the warnings.
-

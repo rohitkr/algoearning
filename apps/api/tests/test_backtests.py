@@ -112,7 +112,7 @@ def test_preview_tests_an_unsaved_strategy_without_storing_anything(api: TestCli
     set_backtesting(clean_db, True)
     try:
         r = api.post("/v1/backtests/preview", json={"config": {**CFG, "legs": []}, **BODY}, headers=A)
-        assert r.status_code == 409 and r.json()["error"]["details"]["reason"] == "invalid"
+        assert r.status_code == 422  # no legs: refused when the request is read, before any replay
         r = api.post("/v1/backtests/preview", json=body, headers=A)
         assert r.status_code == 200
         out = r.json()
