@@ -49,6 +49,7 @@ TABLES = (
     "notification_settings",
     "notifications",
     "backtest_runs",
+    "data_sync_jobs",
     "platform_settings",
     "users",
 )

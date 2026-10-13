@@ -20,13 +20,13 @@ from __future__ import annotations
 
 import asyncio
 import math
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Any, Protocol
 
 import structlog
-from ae_db.models import HistoryCandle
+from ae_db.models import HistoryCandle, PlatformSetting
 from ae_db.session import Database
 from sqlalchemy import func, select, text
 
@@ -41,6 +41,10 @@ SESSION = (time(9, 15), time(15, 29))
 # the closing auction session (CAS): options trade 15:30-15:40 from 3 Aug 2026; the index does not move then
 CAS = (time(15, 30), time(15, 39))
 CAS_FROM = date(2026, 8, 3)
+
+# what a running download reports (a dict the UI shows) and how it is asked to stop
+Progress = Callable[[dict[str, Any]], Awaitable[None]]
+ShouldStop = Callable[[], Awaitable[bool]]
 
 
 # -- expiry calendars -------------------------------------------------------------------------------------------
@@ -309,14 +313,8 @@ async def _index_days(db: Database, underlying: str, start: date, end: date) -> 
         return {r[0]: (float(r[1]), float(r[2]), int(r[3])) for r in rows}
 
 
-def stored_days(counts: dict[tuple[str, date], int], min_bars: int = 1) -> set[tuple[str, date]]:
-    """The contract-days that count as stored: with at least `min_bars` candles (1: any candle at all)."""
-    return {kd for kd, n in counts.items() if n >= min_bars}
-
-
-async def _stored_option_days(
-    db: Database, underlying: str, start: date, end: date, min_bars: int = 1
-) -> set[tuple[str, date]]:
+async def option_counts(db: Database, underlying: str, start: date, end: date) -> dict[tuple[str, date], int]:
+    """Candles stored per (contract key, day)."""
     lo = datetime.combine(start, time(0), tzinfo=IST)
     hi = datetime.combine(end + timedelta(days=1), time(0), tzinfo=IST)
     day = text("(ts AT TIME ZONE 'Asia/Kolkata')::date")
@@ -326,10 +324,21 @@ async def _stored_option_days(
             .where(HistoryCandle.key.like(f"{underlying}:%"), HistoryCandle.ts >= lo, HistoryCandle.ts < hi)
             .group_by(HistoryCandle.key, day)
         )
-        return stored_days({(k, d): int(n) for k, d, n in rows}, min_bars)
+        return {(k, d): int(n) for k, d, n in rows}
 
 
-async def _tail_days(db: Database, underlying: str, start: date, end: date) -> set[tuple[str, date]]:
+def stored_days(counts: dict[tuple[str, date], int], min_bars: int = 1) -> set[tuple[str, date]]:
+    """The contract-days that count as stored: with at least `min_bars` candles (1: any candle at all)."""
+    return {kd for kd, n in counts.items() if n >= min_bars}
+
+
+async def _stored_option_days(
+    db: Database, underlying: str, start: date, end: date, min_bars: int = 1
+) -> set[tuple[str, date]]:
+    return stored_days(await option_counts(db, underlying, start, end), min_bars)
+
+
+async def tail_days(db: Database, underlying: str, start: date, end: date) -> set[tuple[str, date]]:
     """Contract-days that already have a candle from 15:30 on (the closing auction session)."""
     lo = datetime.combine(start, time(0), tzinfo=IST)
     hi = datetime.combine(end + timedelta(days=1), time(0), tzinfo=IST)
@@ -346,6 +355,35 @@ async def _tail_days(db: Database, underlying: str, start: date, end: date) -> s
             .distinct()
         )
         return {(k, d) for k, d in rows}
+
+
+def _holiday_key(underlying: str) -> str:
+    return f"holidays:{underlying}"[:60]
+
+
+async def known_holidays(db: Database, underlying: str) -> set[date]:
+    """Weekdays this job found to have no index candles at all although their neighbours had some: market holidays.
+    Remembered so that they are not asked for again and not reported as missing."""
+    async with db.system_session() as s:
+        row = (
+            await s.execute(select(PlatformSetting.value).where(PlatformSetting.key == _holiday_key(underlying)))
+        ).scalar_one_or_none()
+    days: list[str] = list(row or [])
+    return {date.fromisoformat(d) for d in days}
+
+
+async def remember_holidays(db: Database, underlying: str, days: Iterable[date]) -> None:
+    new = {d.isoformat() for d in days}
+    if not new:
+        return
+    async with db.system_session() as s:
+        row = (
+            await s.execute(select(PlatformSetting).where(PlatformSetting.key == _holiday_key(underlying)))
+        ).scalar_one_or_none()
+        if row is None:
+            s.add(PlatformSetting(key=_holiday_key(underlying), value=sorted(new)))
+        else:
+            row.value = sorted(set(row.value or []) | new)
 
 
 def weekdays(start: date, end: date) -> list[date]:
@@ -368,12 +406,15 @@ async def backfill(
     dry_run: bool = False,
     index_only: bool = False,
     refill_partial: bool = False,
+    progress: Progress | None = None,
+    should_stop: ShouldStop | None = None,
 ) -> Report:
     """Index bars for missing weekdays, then options per the plan. With dry_run (or no client) nothing is fetched:
-    the report says what would be."""
+    the report says what would be. `progress` is told how far it is; `should_stop` is asked between requests."""
     rep = Report(underlying)
     days = await _index_days(db, underlying, start, end)
-    missing = [d for d in weekdays(start, end) if days.get(d, (0, 0, 0))[2] < BARS_PER_DAY * 0.9]
+    holidays = await known_holidays(db, underlying)
+    missing = [d for d in weekdays(start, end) if d not in holidays and days.get(d, (0, 0, 0))[2] < BARS_PER_DAY * 0.9]
     runs = index_runs(missing)
     rep.index_days_missing = len(missing)
     rep.index_calls = sum(math.ceil(n * BARS_PER_DAY / ROWS_PER_CALL) for _, _, n in runs)
@@ -386,10 +427,19 @@ async def backfill(
             "product_type": "cash",
         }
         try:
-            for a, b, _ in runs:
+            for i, (a, b, _) in enumerate(runs, start=1):
+                if should_stop is not None and await should_stop():
+                    rep.stopped, rep.calls_made = "stopped by you", client.calls
+                    return rep
                 raw = await client.candles(params, datetime.combine(a, SESSION[0]), datetime.combine(b, SESSION[1]))
                 rep.rows += await _insert_all(db, to_rows(underlying, raw))
+                got = {r["ts"].date() for r in to_rows(underlying, raw)}
+                if got:  # some days of this run came back and others did not: those were closed
+                    await remember_holidays(db, underlying, [d for d in missing if a <= d <= b and d not in got])
                 log.info("backfill index", underlying=underlying, days=f"{a}..{b}", calls=client.calls)
+                if progress is not None:
+                    await progress({"phase": "index", "done": i, "total": len(runs), "calls": client.calls,
+                                    "rows": rep.rows})  # fmt: skip
         except BudgetExhausted as exc:
             rep.stopped, rep.calls_made = str(exc), client.calls
             return rep
@@ -413,8 +463,13 @@ async def backfill(
              option_fetches=rep.option_fetches, option_calls=rep.option_calls)  # fmt: skip
     if not live or client is None:
         return rep
+    if progress is not None:
+        await progress({"phase": "options", "done": 0, "total": len(fetches), "calls": client.calls, "rows": rep.rows})
     try:
         for n, f in enumerate(fetches, start=1):
+            if should_stop is not None and await should_stop():
+                rep.stopped = "stopped by you"
+                break
             params = {
                 "interval": "1minute",
                 "stock_code": feed_code,
@@ -430,6 +485,9 @@ async def backfill(
             rep.rows += await _insert_all(db, to_rows(f.key, raw))
             if n % 10 == 0 or n == len(fetches):
                 log.info("backfill progress", underlying=underlying, done=n, of=len(fetches), calls=client.calls)
+            if progress is not None and (n % 5 == 0 or n == len(fetches)):
+                await progress({"phase": "options", "done": n, "total": len(fetches), "calls": client.calls,
+                                "rows": rep.rows})  # fmt: skip
     except BudgetExhausted as exc:
         rep.stopped = str(exc)
     rep.calls_made = client.calls
@@ -448,6 +506,8 @@ async def backfill_tail(
     client: HistoryClient | None,
     buffer: int = 4,
     dry_run: bool = False,
+    progress: Progress | None = None,
+    should_stop: ShouldStop | None = None,
 ) -> Report:
     """The closing auction session (15:30-15:39) of every wanted option contract-day from `CAS_FROM` that has no
     candle after 15:30 yet: one small call per contract-day. The index has no candles then (it does not move), so
@@ -461,7 +521,7 @@ async def backfill_tail(
         return rep
     ex = expiries(underlying, start, end, trading)
     wanted = contract_days(underlying, {d: days[d][:2] for d in trading}, ex, strike_step, buffer)
-    have = await _tail_days(db, underlying, start, end)
+    have = await tail_days(db, underlying, start, end)
     fetches = [
         Fetch(f"{underlying}:{e:%Y-%m-%d}:{k}:{r}", e, k, r, d, d, 1)
         for (e, k, r), ds in sorted(wanted.items())
@@ -473,8 +533,13 @@ async def backfill_tail(
     if dry_run or client is None:
         return rep
     empty = 0
+    if progress is not None:
+        await progress({"phase": "closing", "done": 0, "total": len(fetches), "calls": client.calls, "rows": 0})
     try:
         for n, f in enumerate(fetches, start=1):
+            if should_stop is not None and await should_stop():
+                rep.stopped = "stopped by you"
+                break
             params = {
                 "interval": "1minute",
                 "stock_code": feed_code,
@@ -490,6 +555,9 @@ async def backfill_tail(
             rep.rows += await _insert_all(db, got)
             if n % 50 == 0 or n == len(fetches):
                 log.info("closing-session progress", underlying=underlying, done=n, of=len(fetches), calls=client.calls)
+            if progress is not None and (n % 5 == 0 or n == len(fetches)):
+                await progress({"phase": "closing", "done": n, "total": len(fetches), "calls": client.calls,
+                                "rows": rep.rows, "empty": empty})  # fmt: skip
     except BudgetExhausted as exc:
         rep.stopped = str(exc)
     rep.calls_made = client.calls

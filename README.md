@@ -134,26 +134,31 @@ Keys: an index is its code (`NIFTY`), an option is `UNDERLYING:EXPIRY:STRIKE:RIG
 
 ### Backups and a new computer
 
-Manual backups of the database to Cloudflare R2, restoring them, and setting up another computer from a fresh
-clone step by step: [docs/setup.md](docs/setup.md).
+Two things are not in git, and both are backed up by hand (nothing runs on a schedule). Take both after changing
+config, and the database backup after any big history download. Setting up another computer from nothing, without
+the old one: [docs/setup.md](docs/setup.md).
+
+| What                                            | Where it goes | Take a backup                                                                  |
+| ----------------------------------------------- | ------------- | ------------------------------------------------------------------------------ |
+| Env files (`.env`…) and the tunnel login        | Google Drive  | `scripts/config-backup.sh push` (`pnpm config:push`)                           |
+| The whole database, or only the historical data | Cloudflare R2 | `backup.py push full` / `push history` (`pnpm db:backup`, `db:backup:history`) |
+
+**Database to Cloudflare R2.** One-time: create a private R2 bucket `algoearning-backups` and an Object Read & Write
+API token, then put `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` in `.env`. A full dump
+covers every table (new tables included automatically).
 
 ```bash
 uv run --env-file .env --with boto3 python scripts/backup.py push full          # or: push history
 uv run --env-file .env --with boto3 python scripts/backup.py list
 uv run --env-file .env --with boto3 python scripts/backup.py pull latest-full   # into .data/backups/
-uv run --env-file .env python scripts/backup.py restore .data/backups/full-<date>.dump
+uv run --env-file .env python scripts/backup.py restore .data/backups/full-<date>.dump   # stop the services first
 ```
 
-### Backing up the config files (.env and the tunnel login)
-
-These files are never in git, so back them up yourself after changing any of them: `.env`, `.env.production`,
-`apps/web/.env.local`, `apps/web/.env.production.local` and the `~/.cloudflared/` folder. The command copies them as
-they are into Google Drive, `My Drive/AlgoEarning/config/` (same paths as in the repo, `~/.cloudflared` as
-`cloudflared/`), where you can open them directly. Drive keeps older versions of each file (right-click > Manage
-versions).
-
-One-time setup: `brew install --cask google-drive`, open Google Drive and sign in. The script finds the Drive folder
-by itself.
+**Env files to Google Drive.** These files are never in git: `.env`, `.env.production`, `apps/web/.env.local`,
+`apps/web/.env.production.local` and the `~/.cloudflared/` folder. The command copies them as they are into Google
+Drive, `My Drive/AlgoEarning/config/` (same paths as in the repo, `~/.cloudflared` as `cloudflared/`). Drive keeps
+older versions of each file (right-click > Manage versions). One-time: `brew install --cask google-drive`, open it
+and sign in.
 
 ```bash
 scripts/config-backup.sh push      # after any change: copy the files into Google Drive
@@ -162,7 +167,16 @@ scripts/config-backup.sh restore   # copy them back, e.g. on a new computer; a d
 ```
 
 `APP_ENCRYPTION_KEY` in `.env` matters most: without it the broker logins in the database backups cannot be read,
-and unlike the other keys it cannot be re-created.
+and unlike the other keys it cannot be re-created. The R2 keys are in the same `.env`, so a restored `.env` is what
+lets you pull the database.
+
+### Filling in missing history (Monitor > Data sync)
+
+Instead of the `run_backfill` commands above, open Monitor > Data sync (admin only): a calendar shows every day as
+complete, partial, missing or closed, the plan says how many calls a download needs, and **Download** fetches
+everything missing up to today from Breeze (or Kite, which cannot fetch expired contracts) with live progress, an
+estimate of the time left, and Stop. One download runs at a time. Log in to the provider first in Monitor > Market
+data. Run `backup.py push history` afterwards.
 
 ### Background processes (run by hand)
 

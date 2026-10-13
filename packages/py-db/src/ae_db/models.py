@@ -443,6 +443,29 @@ class BacktestRun(UUIDPk, Timestamps, Base):
     __table_args__ = (Index("ix_backtest_runs_user_created", "user_id", "created_at"),)
 
 
+class DataSyncJob(UUIDPk, Timestamps, Base):
+    """A history download an admin asked for from Monitor > Data sync; the worker runs it and keeps the progress here.
+    System only: no user has any privilege on it."""
+
+    __tablename__ = "data_sync_jobs"
+    underlying: Mapped[str] = mapped_column(String(20))
+    mode: Mapped[str] = mapped_column(String(20))  # fill (missing and partial days) | closing (15:30-15:39 session)
+    provider: Mapped[str] = mapped_column(String(10), default="auto")  # auto | breeze | kite
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    # pending | running | done | stopped (budget or cancelled, can be run again) | failed
+    status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending")
+    progress: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    error: Mapped[str | None] = mapped_column(Text)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (Index("ix_data_sync_jobs_created", "created_at"),)
+
+
 class NotificationSettings(UUIDPk, Timestamps, Base):
     """How and about what a user wants to be told. events None = the defaults (ae_core.notifications)."""
 

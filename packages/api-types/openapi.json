@@ -1805,6 +1805,92 @@
         "title": "ConfigIssue",
         "type": "object"
       },
+      "DataSyncCoverage": {
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/SyncDay"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "default_provider": {
+            "enum": [
+              "breeze",
+              "kite",
+              "none"
+            ],
+            "title": "Default Provider",
+            "type": "string"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "first_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Day"
+          },
+          "last_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Day"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SyncPlan"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "trading_days": {
+            "title": "Trading Days",
+            "type": "integer"
+          },
+          "underlying": {
+            "title": "Underlying",
+            "type": "string"
+          },
+          "underlyings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Underlyings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "underlying",
+          "underlyings",
+          "start",
+          "end",
+          "first_day",
+          "last_day",
+          "trading_days",
+          "days",
+          "plan",
+          "default_provider"
+        ],
+        "title": "DataSyncCoverage",
+        "type": "object"
+      },
       "DeployIn": {
         "additionalProperties": false,
         "properties": {
@@ -2214,6 +2300,19 @@
           "days"
         ],
         "title": "GrantIn",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
         "type": "object"
       },
       "Health": {
@@ -7400,6 +7499,300 @@
         "title": "Strike",
         "type": "object"
       },
+      "SyncDay": {
+        "properties": {
+          "closing_missing": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closing Missing"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "index_bars": {
+            "title": "Index Bars",
+            "type": "integer"
+          },
+          "options_complete": {
+            "title": "Options Complete",
+            "type": "integer"
+          },
+          "options_expected": {
+            "title": "Options Expected",
+            "type": "integer"
+          },
+          "options_missing": {
+            "title": "Options Missing",
+            "type": "integer"
+          },
+          "options_partial": {
+            "title": "Options Partial",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "partial",
+              "missing",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "status",
+          "index_bars",
+          "options_expected",
+          "options_complete",
+          "options_partial",
+          "options_missing",
+          "closing_missing"
+        ],
+        "title": "SyncDay",
+        "type": "object"
+      },
+      "SyncJobIn": {
+        "additionalProperties": false,
+        "properties": {
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "mode": {
+            "enum": [
+              "fill",
+              "closing"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "provider": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "breeze",
+              "kite"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "underlying": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "required": [
+          "underlying",
+          "mode"
+        ],
+        "title": "SyncJobIn",
+        "type": "object"
+      },
+      "SyncJobOut": {
+        "properties": {
+          "cancel_requested": {
+            "title": "Cancel Requested",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "heartbeat_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heartbeat At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "progress": {
+            "additionalProperties": true,
+            "title": "Progress",
+            "type": "object"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "done",
+              "stopped",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "underlying": {
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "underlying",
+          "mode",
+          "provider",
+          "start_date",
+          "end_date",
+          "status",
+          "progress",
+          "result",
+          "error",
+          "cancel_requested",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "heartbeat_at"
+        ],
+        "title": "SyncJobOut",
+        "type": "object"
+      },
+      "SyncPlan": {
+        "description": "What a download would fetch, and what it costs in provider calls.",
+        "properties": {
+          "closing_calls": {
+            "title": "Closing Calls",
+            "type": "integer"
+          },
+          "closing_fetches": {
+            "title": "Closing Fetches",
+            "type": "integer"
+          },
+          "index_calls": {
+            "title": "Index Calls",
+            "type": "integer"
+          },
+          "index_days_missing": {
+            "title": "Index Days Missing",
+            "type": "integer"
+          },
+          "option_calls": {
+            "title": "Option Calls",
+            "type": "integer"
+          },
+          "option_fetches": {
+            "title": "Option Fetches",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "index_days_missing",
+          "index_calls",
+          "option_fetches",
+          "option_calls",
+          "closing_fetches",
+          "closing_calls"
+        ],
+        "title": "SyncPlan",
+        "type": "object"
+      },
       "TelegramChatOut": {
         "properties": {
           "id": {
@@ -8263,6 +8656,46 @@
         "title": "ValidateOut",
         "type": "object"
       },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
       "VerifyIn": {
         "additionalProperties": false,
         "properties": {
@@ -8584,6 +9017,209 @@
         "summary": "Audit Log",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/v1/admin/data-sync/coverage": {
+      "get": {
+        "description": "Per day: the index candles and the option contracts stored against the ones a download would want.",
+        "operationId": "data_sync_coverage_v1_admin_data_sync_coverage_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "underlying",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Underlying"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          },
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSyncCoverage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Data Sync Coverage",
+        "tags": [
+          "data-sync"
+        ]
+      }
+    },
+    "/v1/admin/data-sync/jobs": {
+      "get": {
+        "operationId": "data_sync_jobs_v1_admin_data_sync_jobs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SyncJobOut"
+                  },
+                  "title": "Response Data Sync Jobs V1 Admin Data Sync Jobs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Data Sync Jobs",
+        "tags": [
+          "data-sync"
+        ]
+      },
+      "post": {
+        "description": "Queue a download. One at a time: the provider's call budget is shared with the live price feed.",
+        "operationId": "start_data_sync_v1_admin_data_sync_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncJobIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncJobOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Data Sync",
+        "tags": [
+          "data-sync"
+        ]
+      }
+    },
+    "/v1/admin/data-sync/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_data_sync_v1_admin_data_sync_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncJobOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Data Sync",
+        "tags": [
+          "data-sync"
         ]
       }
     },

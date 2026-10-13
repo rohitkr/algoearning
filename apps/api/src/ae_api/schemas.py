@@ -660,6 +660,69 @@ class MarketDataAdmin(BaseModel):
     instruments: list[FeedInstrument]
 
 
+# -- Monitor > Data sync -------------------------------------------------------------------------------------------
+class SyncDay(BaseModel):
+    day: date
+    status: Literal["ok", "partial", "missing", "closed"]  # closed: a weekend or a market holiday
+    index_bars: int
+    options_expected: int  # the contracts the download plan wants for this day
+    options_complete: int
+    options_partial: int
+    options_missing: int
+    closing_missing: int | None  # contracts with no 15:30+ candle (null before the closing session began)
+
+
+class SyncPlan(BaseModel):
+    """What a download would fetch, and what it costs in provider calls."""
+
+    index_days_missing: int
+    index_calls: int
+    option_fetches: int
+    option_calls: int
+    closing_fetches: int
+    closing_calls: int
+
+
+class DataSyncCoverage(BaseModel):
+    underlying: str
+    underlyings: list[str]
+    start: date
+    end: date
+    first_day: date | None
+    last_day: date | None
+    trading_days: int
+    days: list[SyncDay]
+    plan: SyncPlan
+    default_provider: Literal["breeze", "kite", "none"]  # what "auto" means for downloads
+
+
+class SyncJobIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    underlying: str = Field(min_length=1, max_length=20)
+    mode: Literal["fill", "closing"]
+    provider: Literal["auto", "breeze", "kite"] = "auto"
+    start_date: date | None = None  # default: the first day with data
+    end_date: date | None = None  # default: today
+
+
+class SyncJobOut(BaseModel):
+    id: uuid.UUID
+    underlying: str
+    mode: str
+    provider: str
+    start_date: date
+    end_date: date
+    status: Literal["pending", "running", "done", "stopped", "failed"]
+    progress: dict[str, Any]  # phase, done, total, calls, rows
+    result: dict[str, Any] | None
+    error: str | None
+    cancel_requested: bool
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    heartbeat_at: datetime | None
+
+
 class BreezeSessionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_token: str = Field(min_length=4, max_length=2000)  # apisession from ICICI's redirect, or that whole URL

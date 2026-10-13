@@ -55,6 +55,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/data-sync/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Data Sync Coverage
+         * @description Per day: the index candles and the option contracts stored against the ones a download would want.
+         */
+        get: operations["data_sync_coverage_v1_admin_data_sync_coverage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/data-sync/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Data Sync Jobs */
+        get: operations["data_sync_jobs_v1_admin_data_sync_jobs_get"];
+        put?: never;
+        /**
+         * Start Data Sync
+         * @description Queue a download. One at a time: the provider's call budget is shared with the live price feed.
+         */
+        post: operations["start_data_sync_v1_admin_data_sync_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/data-sync/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Data Sync */
+        post: operations["cancel_data_sync_v1_admin_data_sync_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/engine": {
         parameters: {
             query?: never;
@@ -2138,6 +2196,37 @@ export interface components {
             /** Type */
             type: string;
         };
+        /** DataSyncCoverage */
+        DataSyncCoverage: {
+            /** Days */
+            days: components["schemas"]["SyncDay"][];
+            /**
+             * Default Provider
+             * @enum {string}
+             */
+            default_provider: "breeze" | "kite" | "none";
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** First Day */
+            first_day: string | null;
+            /** Last Day */
+            last_day: string | null;
+            plan: components["schemas"]["SyncPlan"];
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /** Trading Days */
+            trading_days: number;
+            /** Underlying */
+            underlying: string;
+            /** Underlyings */
+            underlyings: string[];
+        };
         /** DeployIn */
         DeployIn: {
             /** Broker Account Id */
@@ -2270,6 +2359,11 @@ export interface components {
             days: number;
             /** Plan Code */
             plan_code: string;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
         };
         /** Health */
         Health: {
@@ -4224,6 +4318,121 @@ export interface components {
             /** Premium */
             premium?: number | null;
         };
+        /** SyncDay */
+        SyncDay: {
+            /** Closing Missing */
+            closing_missing: number | null;
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Index Bars */
+            index_bars: number;
+            /** Options Complete */
+            options_complete: number;
+            /** Options Expected */
+            options_expected: number;
+            /** Options Missing */
+            options_missing: number;
+            /** Options Partial */
+            options_partial: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "partial" | "missing" | "closed";
+        };
+        /** SyncJobIn */
+        SyncJobIn: {
+            /** End Date */
+            end_date?: string | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "fill" | "closing";
+            /**
+             * Provider
+             * @default auto
+             * @enum {string}
+             */
+            provider: "auto" | "breeze" | "kite";
+            /** Start Date */
+            start_date?: string | null;
+            /** Underlying */
+            underlying: string;
+        };
+        /** SyncJobOut */
+        SyncJobOut: {
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Heartbeat At */
+            heartbeat_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Mode */
+            mode: string;
+            /** Progress */
+            progress: {
+                [key: string]: unknown;
+            };
+            /** Provider */
+            provider: string;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** Started At */
+            started_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "done" | "stopped" | "failed";
+            /** Underlying */
+            underlying: string;
+        };
+        /**
+         * SyncPlan
+         * @description What a download would fetch, and what it costs in provider calls.
+         */
+        SyncPlan: {
+            /** Closing Calls */
+            closing_calls: number;
+            /** Closing Fetches */
+            closing_fetches: number;
+            /** Index Calls */
+            index_calls: number;
+            /** Index Days Missing */
+            index_days_missing: number;
+            /** Option Calls */
+            option_calls: number;
+            /** Option Fetches */
+            option_fetches: number;
+        };
         /** TelegramChatOut */
         TelegramChatOut: {
             /** Id */
@@ -4540,6 +4749,19 @@ export interface components {
             /** Warnings */
             warnings: components["schemas"]["ConfigIssue"][];
         };
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+        };
         /** VerifyIn */
         VerifyIn: {
             /** Order Id */
@@ -4741,6 +4963,124 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    data_sync_coverage_v1_admin_data_sync_coverage_get: {
+        parameters: {
+            query?: {
+                underlying?: string | null;
+                start?: string | null;
+                end?: string | null;
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataSyncCoverage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    data_sync_jobs_v1_admin_data_sync_jobs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncJobOut"][];
+                };
+            };
+        };
+    };
+    start_data_sync_v1_admin_data_sync_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncJobIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_data_sync_v1_admin_data_sync_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
