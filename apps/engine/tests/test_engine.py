@@ -78,3 +78,17 @@ def test_no_warning_after_the_close_but_the_time_of_the_last_price_is_kept() -> 
     out = eng._freshness(s, r, rn, inst, now)
     assert out["_prices_stale"] is False and not added
     assert "15:38" in out["_prices_at"]  # the P&L is as of the oldest quote
+
+
+def test_the_index_price_from_1529_stays_valid_in_the_closing_session() -> None:
+    from datetime import datetime
+
+    from ae_core.trading.model import IST
+    from ae_engine.engine import closing_price
+
+    def at(h: int, m: int, d: int = 12) -> datetime:
+        return datetime(2026, 10, d, h, m, 30, tzinfo=IST)
+
+    assert closing_price(at(15, 29), at(15, 36)) and closing_price(at(15, 29), at(15, 39))
+    assert not closing_price(at(15, 20), at(15, 36))  # an index that stopped earlier is stale
+    assert not closing_price(at(15, 29), at(15, 45)) and not closing_price(at(15, 29, 9), at(15, 36))

@@ -30,6 +30,20 @@ from .trading.model import IST, Intent, Market, Position, Quote
 from .trading.runners import Runner, make_runner
 
 TICK = 0.05
+INDEX_LAST = time(15, 29)  # the index's last minute: it is not calculated in the closing session
+CAS_LAST, CAS_FROM = time(15, 39), date(2026, 8, 3)  # options trade until 15:39 from 3 Aug 2026
+
+
+def session_bars(bars: Sequence[Candle], day: date) -> list[Candle]:
+    """The index's minutes to replay: only 09:15-15:29 (archived after-hours ticks are not market data), then, from
+    the closing auction session's start, 15:30-15:39 at the index's closing price, so strategies that enter or exit
+    in the closing session are replayed on the options' prices."""
+    out = [b for b in bars if time(9, 15) <= b.ts.astimezone(IST).time() <= INDEX_LAST]
+    if out and day >= CAS_FROM and out[-1].ts.astimezone(IST).time() == INDEX_LAST:
+        last = out[-1]
+        for i in range(1, 11):
+            out.append(Candle(last.ts + timedelta(minutes=i), last.close, last.close, last.close, last.close))
+    return out
 
 
 @dataclass(frozen=True)
@@ -304,7 +318,7 @@ def simulate(
 
     no_options: list[date] = []
     for day in days:
-        spot = history.spot(u, day)
+        spot = session_bars(history.spot(u, day), day)
         if not spot:
             result.days_without_data += 1
             continue

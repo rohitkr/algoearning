@@ -136,3 +136,17 @@ def test_closing_session_rows_are_kept_only_when_asked_for() -> None:
     assert [r["ts"].strftime("%H:%M") for r in to_rows("K", raw)] == ["15:29"]  # the main session, as before
     assert [r["ts"].strftime("%H:%M") for r in to_rows("K", raw, CAS)] == ["15:30", "15:39"]
     assert CAS == (time(15, 30), time(15, 39))
+
+
+def test_archive_keeps_market_minutes_only() -> None:
+    from datetime import datetime
+
+    from ae_marketdata.history import in_session
+    from ae_marketdata.types import IST
+
+    def at(h: int, m: int) -> datetime:
+        return datetime(2026, 10, 12, h, m, tzinfo=IST)
+
+    idx, opt = "NIFTY", "NIFTY:2026-10-13:22700:CE"
+    assert in_session(idx, at(15, 29)) and not in_session(idx, at(15, 35)) and not in_session(idx, at(19, 30))
+    assert in_session(opt, at(15, 39)) and not in_session(opt, at(15, 40)) and not in_session(opt, at(9, 14))

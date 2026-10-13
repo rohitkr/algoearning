@@ -17,7 +17,7 @@ import uuid
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -59,6 +59,15 @@ from .paper import PaperExchange
 log = structlog.get_logger("ae_engine")
 ACTIVE = (RunStatus.PENDING, RunStatus.RUNNING, RunStatus.STOPPING)
 STALE = timedelta(minutes=2)
+
+
+def closing_price(tick_ts: datetime, now: datetime) -> bool:
+    """In the closing auction session (15:30-15:40) the index is not calculated, so its price from 15:29 on is its
+    current price, however old it gets; options keep trading."""
+    t, n = tick_ts.astimezone(IST), now.astimezone(IST)
+    return t.date() == n.date() and t.time() >= time(15, 29) and time(15, 30) <= n.time() <= time(15, 40)
+
+
 HALT_KEY = "trading_halted"
 RETRY_EXIT = timedelta(seconds=5)
 RECONCILE_EVERY = timedelta(seconds=60)
@@ -225,7 +234,7 @@ class Engine:
             if i is None:
                 continue
             t = last.get(u)
-            spot = t.ltp if t is not None and now - t.ts < STALE else None
+            spot = t.ltp if t is not None and (now - t.ts < STALE or closing_price(t.ts, now)) else None
             out[u] = Market(now, u, spot, await self.hub.bars(u, now.date()), {}, i.expiries, i.lot_size, i.strike_step)
         return out
 

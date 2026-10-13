@@ -221,11 +221,19 @@ async def import_duckdb(db: Database, path: str | Path) -> dict[str, int]:
     return out
 
 
+def in_session(key: str, ts: datetime) -> bool:
+    """A real market minute: 09:15-15:29 for an index, until 15:39 for options (the closing session, from 3 Aug
+    2026). The feed keeps receiving ticks after the close; those minutes are not history."""
+    t = ts.astimezone(IST).time()
+    last = time(15, 39) if ":" in key and ts.astimezone(IST).date() >= date(2026, 8, 3) else time(15, 29)
+    return time(9, 15) <= t <= last
+
+
 async def archive_day(db: Database, hub: Hub, keys: Iterable[str], day: date) -> int:
     """Copy a day's completed bars from Redis into history (upsert-free: existing minutes are kept)."""
     n = 0
     for key in keys:
-        bars: list[Bar] = await hub.bars(key, day)
+        bars: list[Bar] = [b for b in await hub.bars(key, day) if in_session(key, b.ts)]
         n += await _insert(
             db,
             [

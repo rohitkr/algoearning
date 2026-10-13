@@ -538,15 +538,45 @@ def test_an_exit_on_a_price_that_is_hours_old_makes_the_day_not_a_full_day() -> 
 
 
 def test_an_entry_time_after_the_days_last_stored_minute_is_reported_not_silently_skipped() -> None:
-    """The stored history ends at 15:29, so an entry at 15:35 can never happen: the day log and a warning say so."""
+    """The index's history ends at 15:29 (15:39 with the closing session), so an entry at 15:45 can never happen: the
+    day log and a warning say so."""
     h = history({"09:20": flat(100), "15:15": flat(90)})
     config = parse({
         "kind": "rules",
-        "entry": {"at": "15:35"},
+        "entry": {"at": "15:45"},
         "holding": {"mode": "next_day", "exit": "09:30"},
         "legs": [{"id": "L1", "action": "BUY", "option_type": "CE"}],
     })  # fmt: skip
     r = run(config, h)
     assert r.trades == []
-    assert "the entry time (15:35) is after this day's last stored minute (15:29)" in r.day_log[0]["why"][0]
+    assert "the entry time (15:45) is after this day's last stored minute (15:39)" in r.day_log[0]["why"][0]
     assert any("could not trade because the entry time is after the last stored minute" in w for w in r.warnings)
+
+
+def test_session_bars_drop_after_hours_ticks_and_add_the_closing_session() -> None:
+    """The index stops at 15:29; options trade 15:30-15:39 from 3 Aug 2026, so the index's close is held for those
+    minutes. Ticks archived after the close (e.g. 19:30) are not market data."""
+    from ae_core.backtest import session_bars
+
+    def bars(d: date) -> list[Candle]:
+        at = [time(9, 14), time(9, 15), time(15, 29), time(19, 30)]
+        return [Candle(datetime.combine(d, t, tzinfo=IST), 100, 101, 99, 100.5) for t in at]
+
+    new = session_bars(bars(date(2026, 10, 12)), date(2026, 10, 12))
+    times = [b.ts.astimezone(IST).time() for b in new]
+    assert times[:2] == [time(9, 15), time(15, 29)] and times[-1] == time(15, 39) and len(new) == 12
+    assert {(b.open, b.close) for b in new[2:]} == {(100.5, 100.5)}
+    old = session_bars(bars(date(2026, 7, 31)), date(2026, 7, 31))
+    assert [b.ts.astimezone(IST).time() for b in old] == [time(9, 15), time(15, 29)]
+
+
+def test_an_entry_in_the_closing_session_trades_on_the_options_prices() -> None:
+    """15:35 is in the closing auction session (options only, from 3 Aug 2026): the index's 15:29 close stands in."""
+    h = history({"15:35": flat(80), "15:38": flat(70)})
+    config = parse({
+        "kind": "time_based",
+        "timing": {"entry": "15:35", "exit": "15:38", "days": ["TUE"]},
+        "legs": [{"id": "L1", "action": "SELL", "option_type": "CE", "lots": 1}],
+    })  # fmt: skip
+    (t,) = run(config, h).trades
+    assert (t.entry_price, t.exit_price, t.reason) == (80, 70, "exit time 15:38")
