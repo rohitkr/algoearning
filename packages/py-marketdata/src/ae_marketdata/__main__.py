@@ -24,6 +24,7 @@ from ae_db.session import Database
 from redis.asyncio import Redis
 from sqlalchemy import select
 
+from . import single
 from .backfill import BreezeHistory, to_rows
 from .hub import Hub
 from .kite_feed import KiteCode, KiteHistory, KiteSource, TokenBook
@@ -128,9 +129,14 @@ async def _main() -> int:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
+    me = single.owner_value()
+    await single.take_over(redis, me)  # one feed at a time: a leftover older feed is stopped
+    keeper = asyncio.create_task(single.keep(redis, me, stop))
     try:
         await Feed(hub, source, always, before_sync=load, fetch=fetch_index).run(stop)
     finally:
+        keeper.cancel()
+        await single.release(redis, me)
         await redis.aclose()
         await db.dispose()
     return 0

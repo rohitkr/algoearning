@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from datetime import date as _date  # for classes with a field called `date`
 from typing import Any, Generic, Literal, TypeVar
 
 from ae_core.strategy import StrategyConfig, StrategyKind, default_config
@@ -377,7 +378,7 @@ class TipTradeOut(BaseModel):
     channel_status: Literal["OPEN", "T1", "T2", "T3", "SL_HIT"]  # what the channel itself reported
     entry: Literal["IN_ZONE", "CHASED", "NOT_PLACED", "NO_DATA"]
     note: str
-    expiry: date | None  # inferred: the tip never names one
+    expiry: _date | None  # inferred: the tip never names one
     price_at_signal: float | None
     above_zone: float | None  # premium points over the top of the range
     buffer: float | None

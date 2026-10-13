@@ -13,7 +13,7 @@ import asyncio
 import json
 import uuid
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 import structlog
 from ae_core.secrets import SecretBox, mask_phone
@@ -507,8 +507,8 @@ async def replay_tips(
     trades = [
         TipTradeOut(
             signal_id=r.tip.id, date=r.tip.date, tip=f"{r.tip.action} {r.tip.index} {r.tip.strike} {r.tip.option_type}",
-            direction=by_id[r.tip.id].direction, entry_low=r.tip.entry_low, entry_high=r.tip.entry_high,
-            stop_loss=r.tip.stop_loss, targets=list(r.tip.targets), channel_status=by_id[r.tip.id].status,
+            direction=cast(Any, by_id[r.tip.id].direction), entry_low=r.tip.entry_low, entry_high=r.tip.entry_high,
+            stop_loss=r.tip.stop_loss, targets=list(r.tip.targets), channel_status=cast(Any, by_id[r.tip.id].status),
             entry=r.entry, note=r.note, expiry=r.expiry, price_at_signal=r.price_at_signal,
             above_zone=r.above_zone, buffer=r.buffer, entry_time=r.entry_time, entry_price=r.entry_price,
             qty=r.qty, exits=[TipFillOut(time=f.time, price=f.price, qty=f.qty, reason=f.reason) for f in r.exits],
@@ -534,7 +534,7 @@ async def replay_tips(
     if not tips:
         warnings.insert(0, "No tips are stored for this period yet: the reader loads the chat from 9 July on start.")
     return TipReplayOut(
-        start=start, end=end, lots=lots, lot_sizes=insts, buffers=params.buffer, slippage_pct=slippage_pct,
+        start=start, end=end, lots=lots, lot_sizes=insts, buffers=dict(params.buffer), slippage_pct=slippage_pct,
         breakevens=dict(params.breakeven), trails=dict(params.trail),
         summary=result.summary(), daily=result.daily(), trades=trades, warnings=warnings,
     )  # fmt: skip

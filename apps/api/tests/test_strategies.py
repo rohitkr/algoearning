@@ -83,7 +83,8 @@ def test_catalog(api: TestClient) -> None:
     c = r.json()
     assert {i["code"] for i in c["instruments"]} == {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"}
     assert [p["id"] for p in c["presets"]][:2] == ["blank", "short_straddle"]
-    assert {p["config"]["kind"] for p in c["presets"]} == {"rules", "range_breakout", "zero_dte", "smc_scalp"}
+    # rule presets are served as day plans (the builder's format since the day-plans change)
+    assert {p["config"]["kind"] for p in c["presets"]} == {"plans", "range_breakout", "zero_dte", "smc_scalp"}
     assert c["limits"]["max_legs"] == 6 and c["limits"]["max_lots_per_order"] == 10  # free plan
     assert api.get("/v1/strategies/catalog").status_code == 401
     for p in c["presets"][:3]:  # presets save as-is

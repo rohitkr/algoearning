@@ -105,4 +105,3 @@ at target 1, one third at target 2, everything left at target 3; once the option
 points (adjustable; 0 = stay at cost), only ever moving up. A stop change applies from the next minute (the order
 inside a minute is unknown). Every tip also reports whether the market moved our way before it was stopped (highest
 price in the minutes before the exit, in points), when the stop reached cost and how often it trailed up.
-

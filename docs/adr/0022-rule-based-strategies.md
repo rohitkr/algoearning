@@ -41,4 +41,3 @@ points from the index, ATM offset ...). A weekday without an entry uses `legs`; 
 position held overnight finds its leg by id); a weekday with its own legs must be one of the entry days. In the builder each weekday is the same legs editor as the default legs (add a leg, buy or sell, CE or PE, any
 strike rule, stop-loss ...), so any shape can be built leg by leg; there are no shape templates. A weekday can start
 from a copy of the default legs or of another weekday, and one weekday's legs can be copied to all the others.
-
