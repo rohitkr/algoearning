@@ -199,7 +199,7 @@ export function PlanEditor({
       {/* 1 · ENTRY */}
       <Card className="flex flex-col gap-4">
         <Step n={1} title="Entry" hint="When a trade starts." />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-4">
           <SelectField
             label="Enter"
             value={e.mode}
@@ -230,7 +230,7 @@ export function PlanEditor({
             error={errs["entry.at"]}
             onChange={(v) => setEntry({ at: v })}
           />
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col justify-end gap-2">
             <Check
               label="No new trade after"
               checked={e.until != null}
