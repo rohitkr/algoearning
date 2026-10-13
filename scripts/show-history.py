@@ -1,3 +1,4 @@
+#!/usr/bin/env -S uv run --env-file .env python
 """Look at the stored 1-minute history (table history_candles) used by backtests.
 
     uv run --env-file .env python scripts/show-history.py                      # what is stored, per underlying
