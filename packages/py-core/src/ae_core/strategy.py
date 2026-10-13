@@ -767,7 +767,7 @@ def _check_rules(c: RulesConfig, inst: Instrument) -> list[Issue]:
             issues.append(
                 Issue(
                     ("entry", "until"),
-                    f"'No new trade after' ({e.until}) is before the entry time ({e.at}): move it later or switch it off",
+                    f"'No new trade after' ({e.until}) is before the entry time ({e.at}): move it later or untick it",
                 )
             )
     if len(set(e.days)) != len(e.days):
