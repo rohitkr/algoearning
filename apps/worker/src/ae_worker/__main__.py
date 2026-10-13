@@ -141,7 +141,12 @@ async def run_backfill(db: Database, args: argparse.Namespace) -> int:
         hub = Hub(redis)
         sdk = _breeze_sdk(key)
         await hub.count_api_call(1)  # generate_session is a REST call
-        await asyncio.to_thread(sdk.generate_session, api_secret=secret, session_token=token)
+        try:
+            await asyncio.to_thread(sdk.generate_session, api_secret=secret, session_token=token)
+        except Exception as e:  # the SDK raises plain Exception
+            log.error("Breeze rejected the stored session (expired, or replaced by a newer login): log in again "
+                      "from Monitor > Market data", error=str(e))  # fmt: skip
+            return 2
         client = BreezeHistory(sdk, hub.count_api_call, hub.api_calls_today, reserve=args.reserve)
     try:
         if args.closing_session:
