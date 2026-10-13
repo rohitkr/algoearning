@@ -326,7 +326,7 @@ function SourceCard({
             <Unplug className="size-4" aria-hidden /> Disconnect
           </Button>
         )}
-        <Button size="sm" variant="ghost" disabled={busy} onClick={remove}>
+        <Button size="sm" variant="critical" disabled={busy} onClick={remove}>
           <Trash2 className="size-4" aria-hidden /> Delete
         </Button>
       </div>

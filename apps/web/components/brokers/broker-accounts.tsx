@@ -169,7 +169,7 @@ export function BrokerAccounts({ accounts, catalog }: { accounts: BrokerAccount[
               )}
               <Button
                 size="icon"
-                variant="ghost"
+                variant="critical"
                 onClick={() => remove(a)}
                 disabled={busy === a.id}
                 aria-label={`Remove ${a.client_id}`}

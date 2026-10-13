@@ -134,7 +134,7 @@ export function StrategyRow({ strategy: s }: { strategy: Strategy }) {
           )}
           <Button
             size="icon"
-            variant="ghost"
+            variant="critical"
             disabled={busy}
             onClick={remove}
             aria-label={`Delete ${s.name}`}

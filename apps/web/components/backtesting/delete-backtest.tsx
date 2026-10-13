@@ -14,7 +14,7 @@ export function DeleteBacktest({ id }: { id: string }) {
   return (
     <Button
       size="icon"
-      variant="ghost"
+      variant="critical"
       aria-label="Delete this backtest"
       onClick={async () => {
         const ok = await confirm({

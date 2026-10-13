@@ -14,6 +14,7 @@ export const buttonVariants = cva(
         secondary: "border border-border bg-surface text-foreground hover:bg-surface-2",
         ghost: "text-foreground hover:bg-surface-2",
         danger: "bg-loss text-white hover:opacity-90",
+        critical: "text-loss hover:bg-loss/10",
       },
       size: {
         sm: "h-8 px-3 text-sm",

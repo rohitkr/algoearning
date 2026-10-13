@@ -15,7 +15,7 @@ import type { ReactNode } from "react";
 
 import { EXPIRY_LABEL, legQuantity } from "@/lib/strategy";
 
-import { Check, NumberField, Segmented, SelectField } from "./fields";
+import { Check, FlipToggle, NumberField, Segmented, SelectField } from "./fields";
 
 type Errs = Record<string, string>;
 
@@ -229,22 +229,21 @@ export function LegEditor({
         <span className="mr-1 text-sm font-semibold" aria-hidden>
           Leg {index + 1}
         </span>
-        <Segmented
+        <FlipToggle
           label={`Leg ${index + 1} action`}
           value={leg.action}
           options={[
-            { value: "BUY", label: "BUY" },
-            { value: "SELL", label: "SELL" },
+            { value: "BUY", label: "BUY", tone: "bg-profit" },
+            { value: "SELL", label: "SELL", tone: "bg-loss" },
           ]}
-          tones={{ BUY: "bg-profit text-white", SELL: "bg-loss text-white" }}
           onChange={(v) => set("action", v)}
         />
-        <Segmented
+        <FlipToggle
           label={`Leg ${index + 1} option type`}
           value={leg.option_type}
           options={[
-            { value: "CE", label: "CE" },
-            { value: "PE", label: "PE" },
+            { value: "CE", label: "CE", tone: "bg-primary" },
+            { value: "PE", label: "PE", tone: "bg-violet-600" },
           ]}
           onChange={(v) => set("option_type", v)}
         />
@@ -268,7 +267,7 @@ export function LegEditor({
           )}
           <Button
             size="icon"
-            variant="ghost"
+            variant="critical"
             onClick={onRemove}
             disabled={!canRemove}
             aria-label={`Remove leg ${index + 1}`}

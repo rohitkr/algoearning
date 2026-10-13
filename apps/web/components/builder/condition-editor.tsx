@@ -241,7 +241,7 @@ export function ConditionGroupEditor({
             {group.conditions.length > 1 && (
               <Button
                 size="sm"
-                variant="ghost"
+                variant="critical"
                 className="mt-2"
                 onClick={() => onChange({ ...group, conditions: group.conditions.filter((_, j) => j !== i) })}
               >

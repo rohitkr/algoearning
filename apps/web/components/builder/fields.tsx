@@ -232,3 +232,34 @@ export function Check({
     </div>
   );
 }
+
+/** Two choices in one button: each click flips to the other, and the colour says which one is on. */
+export function FlipToggle<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: [{ value: T; label: string; tone: string }, { value: T; label: string; tone: string }];
+  onChange: (v: T) => void;
+}) {
+  const [a, b] = options;
+  const on = value === a.value ? a : b;
+  const next = on === a ? b : a;
+  return (
+    <button
+      type="button"
+      aria-label={`${label}: ${on.label}. Click for ${next.label}`}
+      title={`Click for ${next.label}`}
+      onClick={() => onChange(next.value)}
+      className={cn(
+        "h-9 min-w-16 cursor-pointer rounded-lg px-3 text-xs font-semibold text-white transition-colors hover:opacity-90",
+        on.tone,
+      )}
+    >
+      {on.label}
+    </button>
+  );
+}

@@ -181,7 +181,7 @@ export function PlansEditor({
             </Button>
             <Button
               size="sm"
-              variant="ghost"
+              variant="critical"
               onClick={removePlan}
               disabled={plans.length <= 1}
               aria-label="Remove plan"

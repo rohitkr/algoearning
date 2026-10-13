@@ -4,7 +4,7 @@ import { defaultRange, loadSettings, saveSettings, type TestSettings } from "@/l
 import type { BacktestPreview, HistoryCoverage, StrategyConfig } from "@algoearning/api-types";
 import { Button, Card, CardTitle, StatusPill } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -140,8 +140,12 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
         />
         <div className="flex items-end">
           <Button onClick={run} disabled={busy || blocked || !from || !to || from > to}>
-            <FlaskConical className="size-4" aria-hidden />{" "}
-            {busy ? "Testing…" : out ? "Test again" : "Test now"}
+            {busy ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+            ) : (
+              <FlaskConical className="size-4" aria-hidden />
+            )}{" "}
+            {busy ? "Testing..." : out ? "Test again" : "Test now"}
           </Button>
         </div>
       </div>

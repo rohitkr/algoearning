@@ -60,7 +60,7 @@ describe("StrategyBuilder", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Add leg/ }));
     expect(legs()).toHaveLength(3);
-    fireEvent.click(within(legs()[2]!).getByRole("radio", { name: "BUY" }));
+    fireEvent.click(within(legs()[2]!).getByRole("button", { name: /action: SELL/ }));
     fireEvent.change(within(legs()[2]!).getByLabelText("Strike"), { target: { value: "4" } });
     expect(screen.getByText(/Leg 3: Buy 1 lot \(65 qty\) NIFTY OTM 4 CE/)).toBeTruthy();
 

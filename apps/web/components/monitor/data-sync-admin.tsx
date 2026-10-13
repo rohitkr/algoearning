@@ -6,7 +6,8 @@ import { Button, Card, CardTitle, StatusPill, cn } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { inputClass } from "@/components/builder/fields";
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
@@ -212,6 +213,7 @@ export function DataSyncPanel({
 }) {
   const { getToken } = useAuth();
   const router = useRouter();
+  const [checking, startCheck] = useTransition();
   const [jobs, setJobs] = useState(initialJobs);
   const [provider, setProvider] = useState<"auto" | "breeze" | "kite">("auto");
   const [from, setFrom] = useState(c.start);
@@ -290,7 +292,7 @@ export function DataSyncPanel({
 
   function go(params: Record<string, string>) {
     const q = new URLSearchParams({ underlying: c.underlying, start: from, end: to, ...params });
-    router.push(`/monitor/data-sync?${q}`);
+    startCheck(() => router.push(`/monitor/data-sync?${q}`));
   }
 
   const trading = c.days.filter((d) => d.status !== "closed");
@@ -347,8 +349,19 @@ export function DataSyncPanel({
             onChange={(e) => setTo(e.target.value)}
           />
         </label>
-        <Button variant="secondary" size="sm" onClick={() => go({ refresh: "1" })}>
-          Check stored data
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={checking}
+          aria-busy={checking}
+          onClick={() => go({ refresh: "1" })}
+        >
+          {checking ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <RefreshCw className="size-4" aria-hidden />
+          )}
+          {checking ? "Checking…" : "Check stored data"}
         </Button>
       </div>
 

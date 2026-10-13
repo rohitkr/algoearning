@@ -236,12 +236,40 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
     }
   }
 
+  // the title row's Save scrolls away on a long form: a bar slides down from the top with Save in it
+  const titleRow = useRef<HTMLDivElement>(null);
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const el = titleRow.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setScrolled(!!e && !e.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   const allErrors = Object.entries(errs);
   const allWarnings = Object.entries(warns);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="sticky top-0 z-30 -mb-4 h-0">
+        <div
+          aria-hidden={!scrolled}
+          inert={!scrolled}
+          className={cn(
+            "flex items-center gap-3 rounded-b-xl border border-t-0 border-border bg-surface px-4 py-2 shadow-lg transition-transform duration-300",
+            scrolled ? "translate-y-0" : "pointer-events-none -translate-y-[130%]",
+          )}
+        >
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+            {name || (strategy ? "Edit strategy" : "New strategy")}
+          </span>
+          <Button size="sm" onClick={save} disabled={saving} tabIndex={scrolled ? 0 : -1}>
+            <Save className="size-4" aria-hidden /> {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </div>
+      <div ref={titleRow} className="flex flex-wrap items-center gap-3">
         <Button asChild variant="ghost" size="icon" aria-label="Back to strategies">
           <Link href="/strategies">
             <ArrowLeft className="size-4" aria-hidden />
