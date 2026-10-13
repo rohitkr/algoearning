@@ -6,6 +6,7 @@
     uv run --with duckdb python -m ae_worker import-history ~/git/algo-trading-claude/data/market_data.duckdb
     python -m ae_worker backfill NIFTY --from 2025-01-01 [--to 2026-09-30] [--dry-run] [--index-only]  # ADR 0018
         [--refill-partial]  # also fetch again the option days that hold only part of a session
+        [--closing-session]  # only the options' 15:30-15:39 closing session (from 3 Aug 2026)
     python -m ae_worker smc-report NIFTY,BANKNIFTY,SENSEX --from 2025-01-01 --out smc.json  # the 3 x 3 SMC backtests
 
 Jobs (times IST): refresh-instruments at 08:00 (Zerodha publishes the day's list before that). A plain asyncio
@@ -27,7 +28,7 @@ import structlog
 from ae_core.secrets import SecretBox, load_master_key
 from ae_db.models import Instrument
 from ae_db.session import Database
-from ae_marketdata.backfill import BreezeHistory, HistoryClient, backfill
+from ae_marketdata.backfill import BreezeHistory, HistoryClient, backfill, backfill_tail
 from ae_marketdata.history import archive_today, import_duckdb
 from ae_marketdata.hub import Hub
 from ae_marketdata.instruments import IST, refresh_instruments
@@ -143,9 +144,13 @@ async def run_backfill(db: Database, args: argparse.Namespace) -> int:
         await asyncio.to_thread(sdk.generate_session, api_secret=secret, session_token=token)
         client = BreezeHistory(sdk, hub.count_api_call, hub.api_calls_today, reserve=args.reserve)
     try:
-        rep = await backfill(db, code, start, end, feed_code=feed, spot_exchange=spot_ex, deriv_exchange=deriv_ex,
-                             strike_step=step, client=client, buffer=args.buffer, dry_run=args.dry_run,
-                             index_only=args.index_only, refill_partial=args.refill_partial)  # fmt: skip
+        if args.closing_session:
+            rep = await backfill_tail(db, code, start, end, feed_code=feed, deriv_exchange=deriv_ex, strike_step=step,
+                                      client=client, buffer=args.buffer, dry_run=args.dry_run)  # fmt: skip
+        else:
+            rep = await backfill(db, code, start, end, feed_code=feed, spot_exchange=spot_ex, deriv_exchange=deriv_ex,
+                                 strike_step=step, client=client, buffer=args.buffer, dry_run=args.dry_run,
+                                 index_only=args.index_only, refill_partial=args.refill_partial)  # fmt: skip
     finally:
         if redis is not None:
             await redis.aclose()
@@ -244,6 +249,11 @@ def main(argv: list[str] | None = None) -> int:
         "--refill-partial",
         action="store_true",
         help="backfill: fetch again the option days that hold only part of a session",
+    )
+    ap.add_argument(
+        "--closing-session",
+        action="store_true",
+        help="backfill: only the options' 15:30-15:39 closing auction session, from 3 Aug 2026",
     )
     ap.add_argument("--index-only", action="store_true", help="backfill: the index's candles only, no options")
     ap.add_argument("--out", help="smc-report: write the JSON report to this file")

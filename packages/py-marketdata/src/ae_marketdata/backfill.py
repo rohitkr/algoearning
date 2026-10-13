@@ -38,6 +38,9 @@ ROWS_PER_CALL = 1000
 BARS_PER_DAY = 375
 DAILY_LIMIT = 5000
 SESSION = (time(9, 15), time(15, 29))
+# the closing auction session (CAS): options trade 15:30-15:40 from 3 Aug 2026; the index does not move then
+CAS = (time(15, 30), time(15, 39))
+CAS_FROM = date(2026, 8, 3)
 
 
 # -- expiry calendars -------------------------------------------------------------------------------------------
@@ -249,15 +252,15 @@ async def _maybe(v: Any) -> Any:
     return await v if asyncio.iscoroutine(v) else v
 
 
-def to_rows(key: str, raw: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Breeze rows -> history_candles rows (session minutes only)."""
+def to_rows(key: str, raw: Iterable[dict[str, Any]], window: tuple[time, time] = SESSION) -> list[dict[str, Any]]:
+    """Breeze rows -> history_candles rows (the window's minutes only: the main session by default)."""
     out = []
     for r in raw:
         ts = _parse(r.get("datetime"))
         if ts is None:
             continue
         ts = ts.replace(tzinfo=IST) if ts.tzinfo is None else ts.astimezone(IST)
-        if not (SESSION[0] <= ts.time() <= SESSION[1]):
+        if not (window[0] <= ts.time() <= window[1]):
             continue
         try:
             o, h, lo, c = (float(r[k]) for k in ("open", "high", "low", "close"))
@@ -324,6 +327,25 @@ async def _stored_option_days(
             .group_by(HistoryCandle.key, day)
         )
         return stored_days({(k, d): int(n) for k, d, n in rows}, min_bars)
+
+
+async def _tail_days(db: Database, underlying: str, start: date, end: date) -> set[tuple[str, date]]:
+    """Contract-days that already have a candle from 15:30 on (the closing auction session)."""
+    lo = datetime.combine(start, time(0), tzinfo=IST)
+    hi = datetime.combine(end + timedelta(days=1), time(0), tzinfo=IST)
+    day = text("(ts AT TIME ZONE 'Asia/Kolkata')::date")
+    async with db.system_session() as s:
+        rows = await s.execute(
+            select(HistoryCandle.key, day)
+            .where(
+                HistoryCandle.key.like(f"{underlying}:%"),
+                HistoryCandle.ts >= lo,
+                HistoryCandle.ts < hi,
+                text("(ts AT TIME ZONE 'Asia/Kolkata')::time >= time '15:30'"),
+            )
+            .distinct()
+        )
+        return {(k, d) for k, d in rows}
 
 
 def weekdays(start: date, end: date) -> list[date]:
@@ -408,6 +430,63 @@ async def backfill(
             rep.rows += await _insert_all(db, to_rows(f.key, raw))
             if n % 10 == 0 or n == len(fetches):
                 log.info("backfill progress", underlying=underlying, done=n, of=len(fetches), calls=client.calls)
+    except BudgetExhausted as exc:
+        rep.stopped = str(exc)
+    rep.calls_made = client.calls
+    return rep
+
+
+async def backfill_tail(
+    db: Database,
+    underlying: str,
+    start: date,
+    end: date,
+    *,
+    feed_code: str,
+    deriv_exchange: str,
+    strike_step: int,
+    client: HistoryClient | None,
+    buffer: int = 4,
+    dry_run: bool = False,
+) -> Report:
+    """The closing auction session (15:30-15:39) of every wanted option contract-day from `CAS_FROM` that has no
+    candle after 15:30 yet: one small call per contract-day. The index has no candles then (it does not move), so
+    only options are fetched. Re-running fetches again the contract-days that had no trade in that window."""
+    rep = Report(underlying)
+    start = max(start, CAS_FROM)
+    days = await _index_days(db, underlying, start, end)
+    trading = sorted(d for d, (_, _, n) in days.items() if n >= 60)
+    if not trading:
+        rep.notes.append("no index history in the range: run the normal backfill first")
+        return rep
+    ex = expiries(underlying, start, end, trading)
+    wanted = contract_days(underlying, {d: days[d][:2] for d in trading}, ex, strike_step, buffer)
+    have = await _tail_days(db, underlying, start, end)
+    fetches = [
+        Fetch(f"{underlying}:{e:%Y-%m-%d}:{k}:{r}", e, k, r, d, d, 1)
+        for (e, k, r), ds in sorted(wanted.items())
+        for d in ds
+        if (f"{underlying}:{e:%Y-%m-%d}:{k}:{r}", d) not in have
+    ]
+    rep.option_fetches, rep.option_calls = len(fetches), len(fetches)
+    rep.notes.append(f"{len(trading)} trading days from {trading[0]}, closing session only (15:30-15:39)")
+    if dry_run or client is None:
+        return rep
+    try:
+        for n, f in enumerate(fetches, start=1):
+            params = {
+                "interval": "1minute",
+                "stock_code": feed_code,
+                "exchange_code": deriv_exchange,
+                "product_type": "options",
+                "expiry_date": f"{f.expiry:%Y-%m-%d}T07:00:00.000Z",
+                "right": "call" if f.right == "CE" else "put",
+                "strike_price": str(f.strike),
+            }
+            raw = await client.candles(params, datetime.combine(f.first, CAS[0]), datetime.combine(f.first, CAS[1]))
+            rep.rows += await _insert_all(db, to_rows(f.key, raw, CAS))
+            if n % 50 == 0 or n == len(fetches):
+                log.info("closing-session progress", underlying=underlying, done=n, of=len(fetches), calls=client.calls)
     except BudgetExhausted as exc:
         rep.stopped = str(exc)
     rep.calls_made = client.calls

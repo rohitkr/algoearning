@@ -120,3 +120,19 @@ async def test_the_budget_keeps_a_reserve_for_the_feed() -> None:
     c = BreezeHistory(FakeSdk(10), lambda n: None, lambda: 4600, reserve=500, sleep=_nosleep)
     with pytest.raises(BudgetExhausted):
         await c.candles({}, datetime(2026, 9, 1, 9, 15), datetime(2026, 9, 1, 15, 29))
+
+
+def test_closing_session_rows_are_kept_only_when_asked_for() -> None:
+    from datetime import time
+
+    from ae_marketdata.backfill import CAS
+
+    raw = [
+        {"datetime": "2026-08-04T15:29:00", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 5},
+        {"datetime": "2026-08-04T15:30:00", "open": 2, "high": 3, "low": 2, "close": 3, "volume": 9},
+        {"datetime": "2026-08-04T15:39:00", "open": 3, "high": 3, "low": 3, "close": 3, "volume": 1},
+        {"datetime": "2026-08-04T15:40:00", "open": 9, "high": 9, "low": 9, "close": 9, "volume": 1},
+    ]
+    assert [r["ts"].strftime("%H:%M") for r in to_rows("K", raw)] == ["15:29"]  # the main session, as before
+    assert [r["ts"].strftime("%H:%M") for r in to_rows("K", raw, CAS)] == ["15:30", "15:39"]
+    assert CAS == (time(15, 30), time(15, 39))
