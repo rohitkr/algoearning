@@ -433,6 +433,11 @@ async def backfill(
     except BudgetExhausted as exc:
         rep.stopped = str(exc)
     rep.calls_made = client.calls
+    if empty:
+        rep.notes.append(
+            f"{empty} of {n} contract-days came back with no 15:30-15:39 candles. Kite has no data for contracts "
+            "that have expired (it makes no call for them); for the others the provider holds nothing in that window."
+        )
     return rep
 
 
@@ -472,6 +477,7 @@ async def backfill_tail(
     rep.notes.append(f"{len(trading)} trading days from {trading[0]}, closing session only (15:30-15:39)")
     if dry_run or client is None:
         return rep
+    empty = 0
     try:
         for n, f in enumerate(fetches, start=1):
             params = {
@@ -484,10 +490,17 @@ async def backfill_tail(
                 "strike_price": str(f.strike),
             }
             raw = await client.candles(params, datetime.combine(f.first, CAS[0]), datetime.combine(f.first, CAS[1]))
-            rep.rows += await _insert_all(db, to_rows(f.key, raw, CAS))
+            got = to_rows(f.key, raw, CAS)
+            empty += not got
+            rep.rows += await _insert_all(db, got)
             if n % 50 == 0 or n == len(fetches):
                 log.info("closing-session progress", underlying=underlying, done=n, of=len(fetches), calls=client.calls)
     except BudgetExhausted as exc:
         rep.stopped = str(exc)
     rep.calls_made = client.calls
+    if empty:
+        rep.notes.append(
+            f"{empty} of {n} contract-days came back with no 15:30-15:39 candles. Kite has no data for contracts "
+            "that have expired (it makes no call for them); for the others the provider holds nothing in that window."
+        )
     return rep
