@@ -84,6 +84,11 @@ class Runner:
         for the backtest: such a position would block every later entry). Only the rules runner can have them."""
         return []
 
+    def late_entries(self, last: datetime) -> list[str]:
+        """Entry times (HH:MM) that fall after `last`, a day's last stored minute, for a trade that was due today and
+        never started: a backtest has no prices to enter on then."""
+        return []
+
     def same_day_positions(self) -> list[Position]:
         """Open positions that must be out by the end of the day (intraday holding)."""
         return []
@@ -472,6 +477,12 @@ class RulesRunner(Runner):
         if self.s.get("phase") == "in":
             return []
         return [p for p in self.open_positions() if p.id not in self.exiting]
+
+    def late_entries(self, last: datetime) -> list[str]:
+        e = self.cfg.entry
+        if self.s.get("phase", "waiting") != "waiting" or last.strftime("%a").upper()[:3] not in e.days:
+            return []
+        return [e.at] if e.at > f"{last:%H:%M}" else []
 
     def same_day_positions(self) -> list[Position]:
         return self.open_positions() if self.cfg.holding.mode == "intraday" else []
@@ -867,6 +878,9 @@ class PlansRunner(Runner):
 
     def idle_positions(self) -> list[Position]:
         return [p for sub in self.subs.values() for p in sub.idle_positions()]
+
+    def late_entries(self, last: datetime) -> list[str]:
+        return sorted({t for sub in self.subs.values() for t in sub.late_entries(last)})
 
     def same_day_positions(self) -> list[Position]:
         return [p for sub in self.subs.values() for p in sub.same_day_positions()]

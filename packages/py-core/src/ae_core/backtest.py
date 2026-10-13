@@ -295,6 +295,7 @@ def simulate(
             )
 
     pending_charges: dict[str, float] = {}
+    late_days: list[str] = []  # days whose data ended before the entry time
     incomplete: dict[tuple[date, str], str] = {}  # days whose option prices have a hole where a fill happened
     noted: dict[str, int] = {}
     carried: dict[str, float] = {}  # each contract's last known price from earlier days: only for getting out
@@ -392,12 +393,27 @@ def simulate(
         for pos in runner.idle_positions():
             if len(why) < 4:
                 why[f"{pos.contract.label} still open at the close"] = None
+        late = runner.late_entries(spot[-1].ts)
+        if late:
+            late_note = (
+                f"the entry time ({', '.join(late)}) is after this day's last stored minute ({spot[-1].ts:%H:%M}): "
+                "the history has no prices to enter on"
+            )
+            why = {late_note: None, **why}
+            late_days.append(f"{day:%d %b}")
         result.day_log.append({
             "day": day.isoformat(), "weekday": f"{day:%a}", "options": has_options,
             "why": list(why) if has_options else ["no option prices stored for this day"],
         })  # fmt: skip
         if runner.prior_days:
             prior = [*prior, list(spot)][-runner.prior_days :]
+    if late_days:
+        shown = ", ".join(late_days[:8]) + (f" and {len(late_days) - 8} more" if len(late_days) > 8 else "")
+        result.warnings.insert(
+            0,
+            f"{len(late_days)} day(s) could not trade because the entry time is after the last stored minute of the "
+            f"day (the stored history ends at 15:29 on most days): {shown}.",
+        )
     if incomplete:
         notes = list(incomplete.values())
         shown = "; ".join(notes[:6]) + (f"; and {len(notes) - 6} more" if len(notes) > 6 else "")

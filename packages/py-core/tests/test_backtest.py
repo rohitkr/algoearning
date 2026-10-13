@@ -535,3 +535,18 @@ def test_an_exit_on_a_price_that_is_hours_old_makes_the_day_not_a_full_day() -> 
     (t,) = r.trades
     assert t.exit_price == 130
     assert any("not full days" in w and "no prices after 12:08" in w and "" in w for w in r.warnings)
+
+
+def test_an_entry_time_after_the_days_last_stored_minute_is_reported_not_silently_skipped() -> None:
+    """The stored history ends at 15:29, so an entry at 15:35 can never happen: the day log and a warning say so."""
+    h = history({"09:20": flat(100), "15:15": flat(90)})
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "15:35"},
+        "holding": {"mode": "next_day", "exit": "09:30"},
+        "legs": [{"id": "L1", "action": "BUY", "option_type": "CE"}],
+    })  # fmt: skip
+    r = run(config, h)
+    assert r.trades == []
+    assert "the entry time (15:35) is after this day's last stored minute (15:29)" in r.day_log[0]["why"][0]
+    assert any("could not trade because the entry time is after the last stored minute" in w for w in r.warnings)
