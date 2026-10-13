@@ -495,7 +495,7 @@ async def backfill_tail(
     rep.calls_made = client.calls
     if empty:
         rep.notes.append(
-            f"{empty} of {n} contract-days came back with no 15:30-15:39 candles. Kite has no data for contracts "
-            "that have expired (it makes no call for them); for the others the provider holds nothing in that window."
+            f"{empty} of {n} contract-days came back with no 15:30-15:39 candles: the provider holds nothing for them "
+            "in that window (no trade, or with Kite an expired contract)."
         )
     return rep
