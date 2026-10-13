@@ -24,7 +24,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-dvh items-start">
       <Sidebar isAdmin={isAdmin} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <StickyHeader>
+        <StickyHeader
+          className="flex h-14 items-center justify-end gap-2 border-b border-border bg-surface px-4"
+          fixedClassName="left-0 md:left-[var(--sidebar-w,15rem)]"
+        >
           <span className="mr-auto md:hidden">
             <Logo />
           </span>

@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { Logo } from "@/components/logo";
+import { StickyHeader } from "@/components/sticky-header";
 import { MonitorNav } from "@/components/monitor/monitor-nav";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
@@ -21,7 +22,7 @@ export default async function MonitorLayout({ children }: { children: ReactNode 
   if (!me.ok || me.data.role !== "admin") notFound();
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="border-b border-border bg-surface">
+      <StickyHeader className="border-b border-border bg-surface">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
           <Logo />
           <StatusPill tone="warning">Monitor</StatusPill>
@@ -38,7 +39,7 @@ export default async function MonitorLayout({ children }: { children: ReactNode 
         <div className="mx-auto max-w-7xl px-4 pb-2">
           <MonitorNav />
         </div>
-      </header>
+      </StickyHeader>
       <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-8">{children}</main>
     </div>
   );
