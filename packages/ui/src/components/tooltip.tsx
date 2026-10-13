@@ -9,13 +9,16 @@ export function Tooltip({
   label,
   children,
   side = "bottom",
+  delay = 250,
 }: {
   label: ReactNode;
   children: ReactNode;
   side?: "top" | "right" | "bottom" | "left";
+  /** Milliseconds before it appears. */
+  delay?: number;
 }) {
   return (
-    <TooltipPrimitive.Provider delayDuration={250} skipDelayDuration={300}>
+    <TooltipPrimitive.Provider delayDuration={delay} skipDelayDuration={300}>
       <TooltipPrimitive.Root>
         <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
         <TooltipPrimitive.Portal>

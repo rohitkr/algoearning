@@ -1,7 +1,7 @@
 "use client";
 
-import { cn } from "@algoearning/ui";
-import { PanelLeftClose, PanelLeftOpen, TrendingUp } from "lucide-react";
+import { Tooltip, cn } from "@algoearning/ui";
+import { ChevronLeft, ChevronRight, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -91,14 +91,27 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
           <Logo />
         )}
       </div>
+      <Tooltip label={collapsed ? "Expand the menu" : "Collapse the menu"} side="right" delay={60}>
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? "Expand the menu" : "Collapse the menu"}
+          className="absolute top-6 -right-3 z-10 grid size-6 cursor-pointer place-items-center rounded-full border border-border bg-surface text-muted shadow-sm transition-colors hover:text-foreground"
+        >
+          {collapsed ? (
+            <ChevronRight className="size-3.5" aria-hidden />
+          ) : (
+            <ChevronLeft className="size-3.5" aria-hidden />
+          )}
+        </button>
+      </Tooltip>
       <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
         {(isAdmin ? [...NAV, ADMIN_NAV] : NAV).map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
-          return (
+          const link = (
             <Link
               key={href}
               href={href}
-              title={collapsed ? label : undefined}
               aria-label={collapsed ? label : undefined}
               aria-current={active ? "page" : undefined}
               className={cn(
@@ -113,29 +126,16 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
               {!collapsed && <span className="truncate">{label}</span>}
             </Link>
           );
+          return collapsed ? (
+            <Tooltip key={href} label={label} side="right" delay={60}>
+              {link}
+            </Tooltip>
+          ) : (
+            link
+          );
         })}
       </nav>
-      <div className="mt-2 flex flex-col gap-2 border-t border-border pt-3">
-        {!collapsed && <UserCard />}
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          aria-label={collapsed ? "Expand the menu" : "Collapse the menu"}
-          title={collapsed ? "Expand the menu" : "Collapse the menu"}
-          className={cn(
-            "flex cursor-pointer items-center rounded-lg py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground",
-            collapsed ? "justify-center" : "gap-3 px-3",
-          )}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="size-4" aria-hidden />
-          ) : (
-            <>
-              <PanelLeftClose className="size-4" aria-hidden /> Collapse
-            </>
-          )}
-        </button>
-      </div>
+      <div className="mt-2 border-t border-border pt-3">{!collapsed && <UserCard />}</div>
       {!collapsed && (
         <div
           role="separator"
@@ -143,7 +143,7 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
           aria-label="Resize the menu"
           onPointerDown={drag}
           onDoubleClick={() => setWidth(DEFAULT)}
-          className="absolute inset-y-0 -right-1 w-2 cursor-col-resize hover:bg-primary/30"
+          className="absolute inset-y-0 -right-1 z-0 w-2 cursor-col-resize hover:bg-primary/30"
         />
       )}
     </aside>
