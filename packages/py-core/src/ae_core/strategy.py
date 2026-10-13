@@ -764,7 +764,12 @@ def _check_rules(c: RulesConfig, inst: Instrument) -> list[Issue]:
     if e.until is not None:
         issues += _hours(inst, e.until, ("entry", "until"))
         if e.until < e.at:
-            issues.append(Issue(("entry", "until"), f"must not be before the entry time ({e.at})"))
+            issues.append(
+                Issue(
+                    ("entry", "until"),
+                    f"'No new trade after' ({e.until}) is before the entry time ({e.at}): move it later or switch it off",
+                )
+            )
     if len(set(e.days)) != len(e.days):
         issues.append(Issue(("entry", "days"), "lists a day twice"))
     if e.dte is not None and len(set(e.dte)) != len(e.dte):

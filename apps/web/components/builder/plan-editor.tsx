@@ -230,34 +230,30 @@ export function PlanEditor({
             error={errs["entry.at"]}
             onChange={(v) => setEntry({ at: v })}
           />
+          <div className="flex flex-col gap-2">
+            <Check
+              label="No new trade after"
+              checked={e.until != null}
+              error={errs["entry.until"]}
+              onChange={(on) =>
+                setEntry({
+                  until: on ? (lastUntil ?? (h.mode === "intraday" ? h.exit : (hours.max ?? e.at))) : null,
+                })
+              }
+            />
+            {e.until != null && (
+              <TimeField label="" value={e.until} {...hours} onChange={(v) => setEntry({ until: v })} />
+            )}
+          </div>
           {directional && (
-            <>
-              <div className="flex flex-col gap-2">
-                <Check
-                  label="No new trade after"
-                  checked={e.until != null}
-                  error={errs["entry.until"]}
-                  onChange={(on) =>
-                    setEntry({
-                      until: on
-                        ? (lastUntil ?? (h.mode === "intraday" ? h.exit : (hours.max ?? e.at)))
-                        : null,
-                    })
-                  }
-                />
-                {e.until != null && (
-                  <TimeField label="" value={e.until} {...hours} onChange={(v) => setEntry({ until: v })} />
-                )}
-              </div>
-              <NumberField
-                label="Trades a day (at most)"
-                value={e.max_per_day}
-                min={1}
-                max={10}
-                error={errs["entry.max_per_day"]}
-                onChange={(v) => setEntry({ max_per_day: v ?? Number.NaN })}
-              />
-            </>
+            <NumberField
+              label="Trades a day (at most)"
+              value={e.max_per_day}
+              min={1}
+              max={10}
+              error={errs["entry.max_per_day"]}
+              onChange={(v) => setEntry({ max_per_day: v ?? Number.NaN })}
+            />
           )}
         </div>
         {h.mode !== "intraday" && (
