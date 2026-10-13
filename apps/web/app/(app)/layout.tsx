@@ -47,6 +47,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               <Bell className="size-[18px]" aria-hidden />
             </Link>
           </Tooltip>
+          {liveRuns > 0 && (
+            <Link
+              href="/runs"
+              className="hidden items-center gap-2 rounded-lg bg-loss px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 [html[data-header-stuck]_&]:inline-flex"
+            >
+              <span className="size-2 animate-pulse rounded-full bg-white" aria-hidden />
+              LIVE: {liveRuns} strateg{liveRuns === 1 ? "y" : "ies"} placing real orders
+            </Link>
+          )}
           <span id="header-actions" className="contents" />
           <UserButton />
         </StickyHeader>
