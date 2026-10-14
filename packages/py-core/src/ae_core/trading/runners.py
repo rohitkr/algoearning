@@ -205,7 +205,8 @@ class RulesRunner(Runner):
         self.drop_closed_before(today)
         self.s["day"] = today.isoformat()
         self.s.pop("waiting_reason", None)
-        if self.s.get("phase") == "in" and (self.open_positions() or self.s.get("pending")):
+        if self.open_positions() or self.s.get("pending") or self.s.get("awaiting"):
+            self.s["phase"] = "in"
             return  # a held trade carries on
         self.s.update(phase="waiting", reentries={}, pending=[], cursor={})
 
@@ -233,6 +234,9 @@ class RulesRunner(Runner):
         return keys
 
     def on_entry(self, pos: Position, intent: Intent, m: Market) -> None:
+        self._arrived(intent.position_id)
+        if self.s.get("phase") != "in":
+            self.s["phase"] = "in"  # a fill that came after the trade was thought over: manage it
         leg = self._leg(pos.leg)
         if leg is None:
             return
@@ -462,12 +466,20 @@ class RulesRunner(Runner):
             else f"Telegram tip {tip_id} ({'bullish' if direction == 'up' else 'bearish'})" if e.mode == "tip"
             else f"entry at {e.at}"
         )  # fmt: skip
-        return _buy_first([self._enter(m, c, leg.action, leg.lots, leg.id, why_in) for leg, c in contracts])
+        intents = _buy_first([self._enter(m, c, leg.action, leg.lots, leg.id, why_in) for leg, c in contracts])
+        self.s["awaiting"] = [i.position_id for i in intents]
+        return intents
 
     # -- in a trade -------------------------------------------------------------------------------------------------
+    def _arrived(self, pid: str) -> None:
+        if pid in self.s.get("awaiting", []):
+            self.s["awaiting"] = [p for p in self.s["awaiting"] if p != pid]
+
     def on_reject(self, intent: Intent, reason: str) -> None:
         """An exit that was refused (no price, risk check, broker) must not leave a trade that is over on paper but
         still holds positions: nothing would ever retry it. The trade stays open and the exit is decided again."""
+        if intent.kind == "entry":
+            self._arrived(intent.position_id)
         if intent.kind == "exit" and self.s.get("phase") != "in":
             pos = self.position(intent.position_id)
             if pos is not None and pos.open:
@@ -556,6 +568,10 @@ class RulesRunner(Runner):
 
     def _step(self, m: Market) -> list[Intent]:
         phase = self.s["phase"]
+        if phase != "in" and "final" in self.s and any(p.id not in self.exiting for p in self.open_positions()):
+            # open legs while the trade counts as over (older state): manage them again, exit time included
+            self.s["phase"] = phase = "in"
+            self.note("trade_resumed", reason="open positions found while the trade was marked over")
         if phase == "waiting":
             return self._try_enter(m)
         if phase != "in":
@@ -649,10 +665,18 @@ class RulesRunner(Runner):
             if ready and px is not None and again is not None:
                 why = "re-entry after " + ("stop-loss" if r["kind"] == "sl" else "target")
                 out.append(self._enter(m, c, again.action, again.lots, again.id, why))
+                self.s.setdefault("awaiting", []).append(out[-1].position_id)
                 continue
             keep.append(r)
         self.s["pending"] = keep
-        if not self.open_positions() and not keep and not any(i.kind == "entry" for i in out) and not self.exiting:
+        # a live order fills a few seconds later: while entries are on their way the trade is not over
+        if (
+            not self.open_positions()
+            and not keep
+            and not any(i.kind == "entry" for i in out)
+            and not self.exiting
+            and not self.s.get("awaiting")
+        ):
             self._end_cycle(m)
         return out
 

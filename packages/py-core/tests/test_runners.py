@@ -645,3 +645,31 @@ def test_previous_day_levels_and_state_conditions() -> None:
     assert sim.at("09:35") == []  # 25000 is below yesterday's high
     sim.bars = minute_bars(DAY, "09:15", [25000.0] * 20 + [25200.0] * 5)
     assert len(sim.at("09:40")) == 1
+
+
+def test_a_live_entry_that_fills_steps_later_is_still_managed_and_exits_next_day() -> None:
+    """Live orders fill a few seconds after the step that sent them; the steps in between must not end the trade
+    (14 Oct 2026: an overnight trade counted as over before its fills arrived and missed its 13:30 exit)."""
+    r = rr()
+    sim = Sim(r, day=THU)
+    sim.prices = {c(25000, "CE", WEEK2): 100.0}
+    m = sim.market("15:00")
+    (entry,) = r.step(m)  # sent, not filled yet
+    assert r.step(sim.market("15:00")) == [] and r.s["phase"] == "in"
+    r.fill(entry, 100.0, m.now, m)
+    assert r.s["awaiting"] == [] and len(r.open_positions()) == 1
+    sim.day = FRI
+    (ex,) = sim.at("09:30")
+    assert ex.reason == "exit time 09:30"
+
+
+def test_open_legs_of_a_trade_marked_over_are_managed_again() -> None:
+    sim = Sim(rr(), day=THU)
+    sim.prices = {c(25000, "CE", WEEK2): 100.0}
+    sim.at("15:00")
+    sim.day = FRI
+    assert sim.at("09:15") == []
+    sim.r.s["phase"] = "waiting"  # what the bug above left behind
+    (ex,) = sim.at("09:31")
+    assert ex.reason == "exit time 09:30"
+    assert any(n["event"] == "trade_resumed" for n in sim.r.notes)
