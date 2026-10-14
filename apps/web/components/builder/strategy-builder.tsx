@@ -292,15 +292,6 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
     setSlot(document.getElementById("header-actions"));
   }, []);
 
-  async function saveAndLeave() {
-    const where = leaving;
-    if (!where) return;
-    if (await save(where === "back" ? undefined : where)) {
-      setLeaving(null);
-      if (where === "back") setTimeout(() => go(where), 0);
-    } else setLeaving(null); // the page shows what to fix
-  }
-
   function discardAndLeave() {
     const where = leaving;
     if (!where) return;
@@ -351,13 +342,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
           slot,
         )}
 
-      <UnsavedDialog
-        open={leaving !== null}
-        saving={saving}
-        onSave={() => void saveAndLeave()}
-        onDiscard={discardAndLeave}
-        onCancel={() => setLeaving(null)}
-      />
+      <UnsavedDialog open={leaving !== null} onDiscard={discardAndLeave} onCancel={() => setLeaving(null)} />
 
       {note && (
         <p role="status" className={cn("text-sm", note.tone === "success" ? "text-profit" : "text-loss")}>

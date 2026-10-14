@@ -3,17 +3,13 @@
 import { Button } from "@algoearning/ui";
 import { useEffect, useRef } from "react";
 
-/** "You have unsaved changes": Save, Discard or keep editing. Native <dialog>: focus trap, Escape = keep editing. */
+/** "You have unsaved changes": Discard them or cancel and keep editing. Native <dialog>: focus trap, Escape = keep editing. */
 export function UnsavedDialog({
   open,
-  saving,
-  onSave,
   onDiscard,
   onCancel,
 }: {
   open: boolean;
-  saving: boolean;
-  onSave: () => void;
   onDiscard: () => void;
   onCancel: () => void;
 }) {
@@ -42,18 +38,16 @@ export function UnsavedDialog({
               Unsaved changes
             </h2>
             <p className="mt-1.5 text-sm text-muted">
-              You changed this strategy and have not saved it. Save it before leaving, or discard the changes.
+              You changed this strategy and have not saved it. Leave and lose the changes, or cancel and keep
+              editing.
             </p>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" onClick={onCancel} disabled={saving}>
+            <Button variant="ghost" onClick={onCancel}>
               Cancel
             </Button>
-            <Button variant="critical" onClick={onDiscard} disabled={saving}>
+            <Button variant="critical" onClick={onDiscard}>
               Discard
-            </Button>
-            <Button onClick={onSave} disabled={saving}>
-              {saving ? "Saving…" : "Save"}
             </Button>
           </div>
         </div>
