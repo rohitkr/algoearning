@@ -205,6 +205,10 @@ class RulesRunner(Runner):
         self.drop_closed_before(today)
         self.s["day"] = today.isoformat()
         self.s.pop("waiting_reason", None)
+        if not self.open_positions():
+            self.s[
+                "awaiting"
+            ] = []  # an order sent before today that has not filled by now never will: do not wait on it
         if self.open_positions() or self.s.get("pending") or self.s.get("awaiting"):
             self.s["phase"] = "in"
             return  # a held trade carries on

@@ -673,3 +673,12 @@ def test_open_legs_of_a_trade_marked_over_are_managed_again() -> None:
     (ex,) = sim.at("09:31")
     assert ex.reason == "exit time 09:30"
     assert any(n["event"] == "trade_resumed" for n in sim.r.notes)
+
+
+def test_an_entry_never_filled_does_not_hold_the_trade_open_into_the_next_day() -> None:
+    sim = Sim(rr(), day=THU)
+    sim.at("14:00")
+    sim.r.s.update(phase="in", awaiting=["lost-order"], final="2026-10-08T15:30:00+05:30")  # sent, never answered
+    sim.day = FRI
+    sim.at("09:15")
+    assert sim.r.s["awaiting"] == [] and sim.r.s["phase"] == "waiting"
