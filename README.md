@@ -2,7 +2,7 @@
 
 Algo trading SaaS for Indian markets: build and deploy options strategies on your own broker account.
 
-New here? Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits together and
+New here? Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits together, [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md) for how trading, prices and stop-losses work (with interview questions), and
 [CONTRIBUTING.md](CONTRIBUTING.md) for setup, commands, tests and the branch workflow.
 
 ## Repository layout
