@@ -17,6 +17,7 @@ from .backfill import (
     CAS_FROM,
     ROWS_PER_CALL,
     _index_days,
+    checked_days,
     contract_days,
     expiries,
     index_runs,
@@ -99,19 +100,24 @@ async def coverage(
     counts: dict[tuple[str, date], int] = {}
     wanted: dict[tuple[date, int, str], list[date]] = {}
     tail: set[tuple[str, date]] = set()
+    checked: set[tuple[str, date]] = set()
     if have:
         ex = expiries(underlying, start, end, have)
         wanted = contract_days(underlying, {d: index[d][:2] for d in have}, ex, strike_step, buffer)
         counts = await option_counts(db, underlying, start, end)
-        tail = await tail_days(db, underlying, max(start, CAS_FROM), end)
-        fetches = plan(underlying, wanted, have, stored_days(counts, FULL))
+        checked = await checked_days(db, underlying)
+        tail = await tail_days(db, underlying, max(start, CAS_FROM), end) | await checked_days(
+            db, underlying, tail=True
+        )
+        fetches = plan(underlying, wanted, have, stored_days(counts, FULL) | checked)
         out.plan.option_fetches, out.plan.option_calls = len(fetches), sum(f.calls for f in fetches)
 
     per_day: dict[date, list[tuple[str, int]]] = {}
     for (e, k, r), ds in wanted.items():
         key = f"{underlying}:{e:%Y-%m-%d}:{k}:{r}"
         for d in ds:
-            per_day.setdefault(d, []).append((key, counts.get((key, d), 0)))
+            # a contract-day already asked for holds all the provider has, however few candles that is
+            per_day.setdefault(d, []).append((key, FULL if (key, d) in checked else counts.get((key, d), 0)))
     closing = 0
     for d in sorted(set(weekdays(start, end)) | set(index)):
         items = per_day.get(d, [])

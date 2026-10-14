@@ -157,7 +157,8 @@ async def run_backfill(db: Database, args: argparse.Namespace) -> int:
         else:
             rep = await backfill(db, code, start, end, feed_code=feed, spot_exchange=spot_ex, deriv_exchange=deriv_ex,
                                  strike_step=step, client=client, buffer=args.buffer, dry_run=args.dry_run,
-                                 index_only=args.index_only, refill_partial=args.refill_partial)  # fmt: skip
+                                 index_only=args.index_only, refill_partial=args.refill_partial,
+                                 recheck=args.refill_partial)  # fmt: skip
     finally:
         if redis is not None:
             await redis.aclose()

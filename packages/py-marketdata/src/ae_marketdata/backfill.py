@@ -362,6 +362,42 @@ async def tail_days(db: Database, underlying: str, start: date, end: date) -> se
         return {(k, d) for k, d in rows}
 
 
+def _checked_key(underlying: str, tail: bool) -> str:
+    return f"checked{'_tail' if tail else ''}:{underlying}"
+
+
+async def checked_days(db: Database, underlying: str, tail: bool = False) -> set[tuple[str, date]]:
+    """Contract-days a download already asked the provider for. What came back (even nothing, or a few candles: an
+    option that hardly traded) is all the provider holds, so they are not asked for again and count as complete."""
+    async with db.system_session() as s:
+        row = (
+            await s.execute(select(PlatformSetting.value).where(PlatformSetting.key == _checked_key(underlying, tail)))
+        ).scalar_one_or_none()
+    return {(k, date.fromisoformat(d)) for k, ds in dict(row or {}).items() for d in ds}
+
+
+async def remember_checked(
+    db: Database, underlying: str, items: Iterable[tuple[str, date]], tail: bool = False
+) -> None:
+    new: dict[str, set[str]] = {}
+    for key, d in items:
+        new.setdefault(key, set()).add(d.isoformat())
+    if not new:
+        return
+    async with db.system_session() as s:
+        row = (
+            await s.execute(select(PlatformSetting).where(PlatformSetting.key == _checked_key(underlying, tail)))
+        ).scalar_one_or_none()
+        merged: dict[str, set[str]] = {k: set(v) for k, v in dict(row.value if row else {}).items()}
+        for k, ds in new.items():
+            merged.setdefault(k, set()).update(ds)
+        value = {k: sorted(v) for k, v in merged.items()}
+        if row is None:
+            s.add(PlatformSetting(key=_checked_key(underlying, tail), value=value))
+        else:
+            row.value = value
+
+
 def calendar_holidays(calendar: str = "NSE") -> set[date]:
     """The exchange's trading holidays from holidays.toml (edit that file to add a year). All indices follow it."""
     with (Path(__file__).parent / "holidays.toml").open("rb") as f:
@@ -417,6 +453,7 @@ async def backfill(
     dry_run: bool = False,
     index_only: bool = False,
     refill_partial: bool = False,
+    recheck: bool = False,
     progress: Progress | None = None,
     should_stop: ShouldStop | None = None,
 ) -> Report:
@@ -468,6 +505,8 @@ async def backfill(
     # a contract-day with a few candles (a live feed that only watched it for a while, an interrupted download) counts
     # as stored unless asked to refill: then it must hold nearly the whole session, as the index days do
     stored = await _stored_option_days(db, underlying, start, end, int(BARS_PER_DAY * 0.9) if refill_partial else 1)
+    if not recheck:
+        stored |= await checked_days(db, underlying)  # asked before: the provider holds nothing more for them
     fetches = plan(underlying, wanted, trading, stored)
     rep.option_fetches, rep.option_calls = len(fetches), sum(f.calls for f in fetches)
     log.info("backfill plan", underlying=underlying, index_days_fetched=rep.index_days_missing,
@@ -494,6 +533,7 @@ async def backfill(
                 params, datetime.combine(f.first, SESSION[0]), datetime.combine(f.last, SESSION[1])
             )
             rep.rows += await _insert_all(db, to_rows(f.key, raw))
+            await remember_checked(db, underlying, [(f.key, d) for d in trading if f.first <= d <= f.last])
             if n % 10 == 0 or n == len(fetches):
                 log.info("backfill progress", underlying=underlying, done=n, of=len(fetches), calls=client.calls)
             if progress is not None and (n % 5 == 0 or n == len(fetches)):
@@ -517,6 +557,7 @@ async def backfill_tail(
     client: HistoryClient | None,
     buffer: int = 4,
     dry_run: bool = False,
+    recheck: bool = False,
     progress: Progress | None = None,
     should_stop: ShouldStop | None = None,
 ) -> Report:
@@ -533,6 +574,8 @@ async def backfill_tail(
     ex = expiries(underlying, start, end, trading)
     wanted = contract_days(underlying, {d: days[d][:2] for d in trading}, ex, strike_step, buffer)
     have = await tail_days(db, underlying, start, end)
+    if not recheck:
+        have |= await checked_days(db, underlying, tail=True)
     fetches = [
         Fetch(f"{underlying}:{e:%Y-%m-%d}:{k}:{r}", e, k, r, d, d, 1)
         for (e, k, r), ds in sorted(wanted.items())
@@ -564,6 +607,7 @@ async def backfill_tail(
             got = to_rows(f.key, raw, CAS)
             empty += not got
             rep.rows += await _insert_all(db, got)
+            await remember_checked(db, underlying, [(f.key, f.first)], tail=True)
             if n % 50 == 0 or n == len(fetches):
                 log.info("closing-session progress", underlying=underlying, done=n, of=len(fetches), calls=client.calls)
             if progress is not None and (n % 5 == 0 or n == len(fetches)):

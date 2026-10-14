@@ -94,3 +94,22 @@ def test_an_expiry_on_a_calendar_holiday_moves_back_even_beyond_the_stored_days(
     stored = [date(2026, 10, 13), date(2026, 10, 14)]  # nothing stored after today
     ex = expiries("NIFTY", date(2026, 10, 13), date(2026, 10, 14), stored)
     assert date(2026, 10, 19) in ex and date(2026, 10, 20) not in ex  # Tue 20 Oct is a holiday: Monday 19th
+
+
+async def test_a_contract_day_already_asked_for_counts_as_complete_however_few_candles(db: Database) -> None:
+    from ae_marketdata.backfill import checked_days, remember_checked
+
+    await seed_index(db, [MON, TUE, WED])
+    keys = wanted_keys(TUE)
+    for key in keys:
+        await seed_contract(db, key, TUE, 375)
+    await seed_contract(db, wanted_keys(MON)[0], MON, 40)  # an option that hardly traded: all the provider holds
+    before = await coverage(db, "NIFTY", MON, SAT, 50)
+    assert {d.day: d.status for d in before.days}[MON] == "missing"
+    await remember_checked(db, "NIFTY", [(wanted_keys(MON)[0], MON)])
+    await remember_checked(db, "NIFTY", [(wanted_keys(MON)[0], MON)])  # again: no duplicates
+    assert await checked_days(db, "NIFTY") == {(wanted_keys(MON)[0], MON)}
+    after = await coverage(db, "NIFTY", MON, SAT, 50)
+    by_b, by_a = ({d.day: d for d in c.days} for c in (before, after))
+    assert by_a[MON].options_partial == 0 and by_a[MON].options_complete == by_b[MON].options_complete + 1
+    assert after.plan.option_fetches == before.plan.option_fetches - 1
