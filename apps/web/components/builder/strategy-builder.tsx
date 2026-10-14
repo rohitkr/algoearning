@@ -11,10 +11,11 @@ import type {
 } from "@algoearning/api-types";
 import { Button, Card, CardTitle, StatusPill, Switch, cn } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, CopyPlus, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SaveAsDialog } from "./save-as-dialog";
 import { UnsavedDialog } from "./unsaved-dialog";
 import { createPortal } from "react-dom";
 
@@ -300,6 +301,31 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
     setTimeout(() => go(where), 0);
   }
 
+  const [askName, setAskName] = useState(false);
+  const [asBusy, setAsBusy] = useState(false);
+  const [asError, setAsError] = useState<string | null>(null);
+
+  /** Save as: what is on screen becomes a new strategy (a draft); the one being edited is left as it was saved. */
+  async function saveAsNew(newName: string) {
+    setAsBusy(true);
+    setAsError(null);
+    try {
+      const created = await apiRequest<Strategy>(
+        "POST",
+        "/v1/strategies",
+        { name: newName, description: description.trim() || null, config },
+        getToken,
+      );
+      setBaseline(snapshot()); // the guard comes off: this page's edits now live in the new strategy
+      setAskName(false);
+      router.push(`/builder/${created.id}?saved=1`);
+    } catch (e) {
+      setAsError(e instanceof ApiRequestError ? e.message : (e as Error).message);
+    } finally {
+      setAsBusy(false);
+    }
+  }
+
   const allErrors = Object.entries(errs);
   const allWarnings = Object.entries(warns);
 
@@ -319,6 +345,11 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
           </p>
         </div>
         {strategy?.status === "archived" && <StatusPill>Archived</StatusPill>}
+        {strategy && (
+          <Button variant="secondary" onClick={() => setAskName(true)} disabled={saving}>
+            <CopyPlus className="size-4" aria-hidden /> Save as…
+          </Button>
+        )}
         <Button
           onClick={() => void save()}
           disabled={saving || !dirty}
@@ -342,6 +373,14 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
           slot,
         )}
 
+      <SaveAsDialog
+        open={askName}
+        initialName={`${name.trim() || strategy?.name || "Strategy"} (copy)`}
+        busy={asBusy}
+        error={asError}
+        onSave={(n) => void saveAsNew(n)}
+        onCancel={() => setAskName(false)}
+      />
       <UnsavedDialog open={leaving !== null} onDiscard={discardAndLeave} onCancel={() => setLeaving(null)} />
 
       {note && (

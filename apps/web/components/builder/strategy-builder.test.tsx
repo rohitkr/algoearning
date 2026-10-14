@@ -45,6 +45,33 @@ afterEach(() => {
 const legs = () => screen.queryAllByRole("group").filter((g) => g.tagName === "FIELDSET");
 const flush = () => act(async () => void (await vi.advanceTimersByTimeAsync(500)));
 
+describe("StrategyBuilder save as", () => {
+  it("saves an edited strategy as a new one and leaves the original alone", async () => {
+    const strategy = {
+      id: "s1",
+      name: "Week",
+      description: null,
+      config: catalog.presets[0]!.config,
+      status: "ready",
+      version: 3,
+    };
+    render(<StrategyBuilder catalog={catalog} strategy={strategy as never} />);
+    expect(screen.queryByRole("button", { name: /Save as/ })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Week v2" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save as/ }));
+    const box = screen.getAllByLabelText("Name").at(0) as HTMLInputElement;
+    expect(box.value).toBe("Week v2 (copy)");
+    fireEvent.change(box, { target: { value: "Week breakout" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save as new", hidden: true }));
+    await flush();
+    const posts = calls.filter((c) => c.method === "POST" && c.path === "/v1/strategies");
+    expect(posts).toHaveLength(1);
+    expect((posts[0]!.body as { name: string }).name).toBe("Week breakout");
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false); // the original is not touched
+    expect(push).toHaveBeenCalledWith("/builder/11111111-1111-1111-1111-111111111111?saved=1");
+  });
+});
+
 describe("StrategyBuilder unsaved changes", () => {
   it("keeps Save off until something changes, then asks before leaving by a link", async () => {
     render(
