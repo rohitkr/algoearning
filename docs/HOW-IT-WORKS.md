@@ -56,6 +56,93 @@ Take "sell an ATM straddle at 15:20, hold overnight, exit at 13:30 next day, sto
 
 ---
 
+## 2b. Flow diagrams
+
+These render on GitHub and in most Markdown viewers (Mermaid).
+
+**The whole system**
+
+```mermaid
+flowchart LR
+  U[User browser] -->|HTTPS| CF[Cloudflare Tunnel]
+  CF --> WEB[web: Next.js]
+  CF --> API[api: FastAPI]
+  WEB --> API
+  API --> PG[(Postgres + row-level security)]
+  API --> RD[(Redis)]
+  FEED[feed: market data] -->|websocket| PROV[Breeze or Kite data]
+  FEED -->|ticks and 1-min bars| RD
+  ENG[engine: steps every run each second] -->|reads prices| RD
+  ENG -->|runs, trades, orders, events| PG
+  ENG -->|orders| KITE[Zerodha Kite orders]
+  WRK[worker: backtests, archive, notifications] --> PG
+  WRK -->|history API| PROV
+  RZP[Razorpay] -->|webhook| API
+  CLERK[Clerk] -.->|sign-in token| API
+```
+
+**One trade, over time**
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant A as API
+  participant E as Engine
+  participant R as Runner (pure rules)
+  participant K as Zerodha
+  U->>A: deploy strategy (paper / live)
+  A->>E: run saved in Postgres (config snapshot)
+  loop every second
+    E->>R: step(Market: prices, bars, expiries)
+    R-->>E: intents (entry / exit)
+    E->>E: risk check (entries only)
+    E->>K: place orders (marketable limit, re-price, retry)
+    K-->>E: fills (seconds later)
+    E->>R: fill() or reject()
+    E->>E: save runner state + trades + events
+  end
+  Note over R: exit time, stop-loss, target,<br/>trailing, whole-trade limits
+  E->>K: exit orders when a rule fires
+```
+
+**What the runner checks each step (stop-loss monitoring)**
+
+```mermaid
+flowchart TD
+  S[step with latest prices] --> T{exit time reached?}
+  T -- yes --> X[close all legs]
+  T -- no --> L[for each open leg]
+  L --> SL{price crossed its stop-loss?<br/>trailing moves the stop first}
+  SL -- yes --> EX[exit that leg, maybe re-enter]
+  SL -- no --> TG{target reached?}
+  TG -- yes --> EX
+  TG -- no --> W{whole-trade limits:<br/>MTM stop / target,<br/>combined premium stop,<br/>profit lock}
+  W -- hit --> X
+  W -- no --> C{condition or<br/>opposite signal?}
+  C -- yes --> X
+  C -- no --> N[wait for the next step]
+  X --> O[exit intents to the order path]
+  EX --> O
+```
+
+**Prices: from provider to the engine**
+
+```mermaid
+flowchart LR
+  P[Breeze / Kite websocket] --> F[feed process]
+  F -->|latest tick per key| RL[(Redis md:last)]
+  F -->|completed 1-min bars| RB[(Redis md:bars)]
+  ENG[engine] -->|asks for contracts it holds or wants| RS[(Redis md:subs)]
+  RS --> F
+  RL --> ENG
+  RB --> ENG
+  RB -->|16:05 archive| H[(Postgres history_candles)]
+  H --> BT[backtests]
+  H --> DS[Monitor: Data sync]
+```
+
+---
+
 ## 3. How the important parts work
 
 ### 3.1 Where do the prices come from, and how are they watched?
