@@ -14,7 +14,8 @@ import { useAuth } from "@clerk/nextjs";
 import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { UnsavedDialog } from "./unsaved-dialog";
 import { createPortal } from "react-dom";
 
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
@@ -145,7 +146,11 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
     null,
   );
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  // what is saved (or, for a new strategy, what the page started with): anything different is unsaved
+  const snapshot = () => JSON.stringify({ name, description, config, ready });
+  const [baseline, setBaseline] = useState(snapshot);
+  const dirty = snapshot() !== baseline;
+  const [leaving, setLeaving] = useState<string | null>(null); // where the user was going when we stopped them
   const seq = useRef(0);
 
   const inst = catalog.instruments.find((i) => i.code === config.underlying);
@@ -168,19 +173,50 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
     return () => clearTimeout(t);
   }, [config, getToken]);
 
-  // Warn before leaving with unsaved changes.
+  // Unsaved changes: stop the tab closing, in-app links and the browser's back button, and ask what to do.
   useEffect(() => {
     if (!dirty) return;
-    const h = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
+    const unload = (e: BeforeUnloadEvent) => e.preventDefault();
+    const click = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || a.target)
+        return;
+      const url = new URL(a.href, location.href);
+      if (url.origin !== location.origin || url.pathname + url.search === location.pathname + location.search)
+        return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaving(url.pathname + url.search + url.hash);
+    };
+    const pop = () => {
+      history.pushState(null, "", location.href); // stay here until they decide
+      setLeaving("back");
+    };
+    history.pushState(null, "", location.href);
+    window.addEventListener("beforeunload", unload);
+    document.addEventListener("click", click, true);
+    window.addEventListener("popstate", pop);
+    return () => {
+      window.removeEventListener("beforeunload", unload);
+      document.removeEventListener("click", click, true);
+      window.removeEventListener("popstate", pop);
+    };
   }, [dirty]);
+
+  const go = useCallback(
+    (where: string) => {
+      // the guard is removed as the state changes, then we leave
+      if (where === "back")
+        history.go(-2); // the extra entry we pushed, and the page itself
+      else router.push(where);
+    },
+    [router],
+  );
 
   function update(c: StrategyConfig) {
     setConfig(c);
     setSaveErrors({});
     setNote(null);
-    setDirty(true);
   }
 
   function pickPreset(id: string) {
@@ -191,11 +227,13 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
     if (!name || presets.some((x) => x.name === name)) setName(p.id === "blank" ? "" : p.name);
   }
 
-  async function save() {
+  /** Saves; true when it worked. `then`: where to go afterwards (a new strategy otherwise opens its own page). */
+  async function save(then?: string): Promise<boolean> {
     if (!name.trim()) {
       setNote({ tone: "danger", text: "Give the strategy a name." });
-      return;
+      return false;
     }
+    const at = snapshot();
     setSaving(true);
     setNote(null);
     setSaveErrors({});
@@ -208,14 +246,15 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
           { ...body, status: ready ? "ready" : strategy.status === "archived" ? "archived" : "draft" },
           getToken,
         );
-        setDirty(false);
+        setBaseline(at);
         setNote({ tone: "success", text: "Saved." });
-        router.refresh();
+        if (then) router.push(then);
+        else router.refresh();
       } else {
         const created = await apiRequest<Strategy>("POST", "/v1/strategies", body, getToken);
         if (ready) await apiRequest("PATCH", `/v1/strategies/${created.id}`, { status: "ready" }, getToken);
-        setDirty(false);
-        router.push(`/builder/${created.id}?saved=1`);
+        setBaseline(at);
+        router.push(then ?? `/builder/${created.id}?saved=1`);
       }
     } catch (e) {
       const api = e instanceof ApiRequestError ? e : null;
@@ -232,9 +271,11 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
           : (api?.message ?? (e as Error).message),
         upgrade: api?.body?.code === "plan_limit",
       });
+      return false;
     } finally {
       setSaving(false);
     }
+    return true;
   }
 
   // while the fixed header is showing, Save lives there instead of in the title row
@@ -250,6 +291,23 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the header lives in the layout: found after mount
     setSlot(document.getElementById("header-actions"));
   }, []);
+
+  async function saveAndLeave() {
+    const where = leaving;
+    if (!where) return;
+    if (await save(where === "back" ? undefined : where)) {
+      setLeaving(null);
+      if (where === "back") setTimeout(() => go(where), 0);
+    } else setLeaving(null); // the page shows what to fix
+  }
+
+  function discardAndLeave() {
+    const where = leaving;
+    if (!where) return;
+    setBaseline(snapshot()); // nothing is unsaved any more: the guard comes off
+    setLeaving(null);
+    setTimeout(() => go(where), 0);
+  }
 
   const allErrors = Object.entries(errs);
   const allWarnings = Object.entries(warns);
@@ -270,7 +328,11 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
           </p>
         </div>
         {strategy?.status === "archived" && <StatusPill>Archived</StatusPill>}
-        <Button onClick={save} disabled={saving} className={cn(scrolled && slot && "invisible")}>
+        <Button
+          onClick={() => void save()}
+          disabled={saving || !dirty}
+          className={cn(scrolled && slot && "invisible")}
+        >
           <Save className="size-4" aria-hidden /> {saving ? "Saving…" : "Save"}
         </Button>
       </div>
@@ -278,11 +340,24 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
       {scrolled &&
         slot &&
         createPortal(
-          <Button size="sm" onClick={save} disabled={saving} className="animate-header-in mr-1 shrink-0">
+          <Button
+            size="sm"
+            onClick={() => void save()}
+            disabled={saving || !dirty}
+            className="animate-header-in mr-1 shrink-0"
+          >
             <Save className="size-4" aria-hidden /> {saving ? "Saving…" : "Save"}
           </Button>,
           slot,
         )}
+
+      <UnsavedDialog
+        open={leaving !== null}
+        saving={saving}
+        onSave={() => void saveAndLeave()}
+        onDiscard={discardAndLeave}
+        onCancel={() => setLeaving(null)}
+      />
 
       {note && (
         <p role="status" className={cn("text-sm", note.tone === "success" ? "text-profit" : "text-loss")}>
@@ -344,7 +419,6 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                     placeholder="e.g. Nifty morning straddle"
                     onChange={(e) => {
                       setName(e.target.value);
-                      setDirty(true);
                     }}
                   />
                 )}
@@ -378,7 +452,6 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                   maxLength={5000}
                   onChange={(e) => {
                     setDescription(e.target.value);
-                    setDirty(true);
                   }}
                 />
               )}
@@ -475,7 +548,6 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
                 checked={ready}
                 onCheckedChange={(on) => {
                   setReady(on);
-                  setDirty(true);
                 }}
                 aria-label="Ready to deploy"
               />

@@ -45,6 +45,34 @@ afterEach(() => {
 const legs = () => screen.queryAllByRole("group").filter((g) => g.tagName === "FIELDSET");
 const flush = () => act(async () => void (await vi.advanceTimersByTimeAsync(500)));
 
+describe("StrategyBuilder unsaved changes", () => {
+  it("keeps Save off until something changes, then asks before leaving by a link", async () => {
+    render(
+      <>
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a plain link is what the guard listens for */}
+        <a href="/strategies">Strategies</a>
+        <StrategyBuilder catalog={catalog} />
+      </>,
+    );
+    const save = () => screen.getByRole("button", { name: /^Save$/ }) as HTMLButtonElement;
+    expect(save().disabled).toBe(true);
+    fireEvent.click(screen.getByText("Strategies")); // nothing changed: no question
+    expect(screen.queryByText("Unsaved changes")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "My breakout" } });
+    await flush();
+    expect(save().disabled).toBe(false);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "" } }); // back to how it started
+    expect(save().disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "My breakout" } });
+    fireEvent.click(screen.getByText("Strategies"));
+    expect(screen.getByText("Unsaved changes")).toBeTruthy();
+    expect(push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Discard", hidden: true }));
+    await flush();
+    expect(push).toHaveBeenCalledWith("/strategies");
+  });
+});
+
 describe("StrategyBuilder", () => {
   it("starts from a preset, edits legs and saves the config", async () => {
     render(<StrategyBuilder catalog={catalog} />);
