@@ -86,3 +86,11 @@ def test_calendar_holidays_come_from_the_toml_file() -> None:
 
     h = calendar_holidays()
     assert date(2026, 10, 20) in h and date(2026, 12, 25) in h and date(2026, 10, 21) not in h
+
+
+def test_an_expiry_on_a_calendar_holiday_moves_back_even_beyond_the_stored_days() -> None:
+    from ae_marketdata.backfill import expiries
+
+    stored = [date(2026, 10, 13), date(2026, 10, 14)]  # nothing stored after today
+    ex = expiries("NIFTY", date(2026, 10, 13), date(2026, 10, 14), stored)
+    assert date(2026, 10, 19) in ex and date(2026, 10, 20) not in ex  # Tue 20 Oct is a holiday: Monday 19th

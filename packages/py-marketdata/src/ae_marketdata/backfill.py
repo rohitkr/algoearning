@@ -83,6 +83,7 @@ def expiries(underlying: str, start: date, end: date, trading_days: Sequence[dat
         raise ValueError(f"no expiry calendar for {underlying}")
     open_days = set(trading_days)
     known_until = max(open_days) if open_days else date.min
+    closed = calendar_holidays()  # the days after the last stored one are judged by the holiday calendar
     out: set[date] = set()
     d = start
     while d <= end + timedelta(days=40):
@@ -92,7 +93,9 @@ def expiries(underlying: str, start: date, end: date, trading_days: Sequence[dat
             if r.frequency == "monthly" and (d + timedelta(days=7)).month == d.month:
                 continue  # not the last such weekday of the month
             e = d
-            while e <= known_until and e not in open_days and e > d - timedelta(days=5):
+            while e > d - timedelta(days=5) and (
+                e in closed or e.weekday() >= 5 or (e <= known_until and e not in open_days)
+            ):
                 e -= timedelta(days=1)
             out.add(e)
         d += timedelta(days=1)

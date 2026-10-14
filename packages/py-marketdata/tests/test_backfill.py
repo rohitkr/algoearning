@@ -24,7 +24,7 @@ from ae_marketdata.types import IST
 def test_weekly_expiries_switch_weekday_and_move_back_over_holidays() -> None:
     days = [d for d in weekdays(date(2025, 8, 18), date(2025, 9, 12)) if d != date(2025, 8, 28)]  # a Thursday off
     ex = expiries("NIFTY", date(2025, 8, 18), date(2025, 9, 12), days)
-    assert date(2025, 8, 21) in ex and date(2025, 8, 27) in ex  # Thursday, then Wednesday for the holiday
+    assert date(2025, 8, 21) in ex and date(2025, 8, 26) in ex  # Thursday, then back over 28th (off) and 27th (calendar holiday)
     assert date(2025, 9, 2) in ex and date(2025, 9, 9) in ex  # Tuesdays from September 2025
 
 
