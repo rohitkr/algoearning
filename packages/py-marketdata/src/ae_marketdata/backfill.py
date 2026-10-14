@@ -373,7 +373,8 @@ async def checked_days(db: Database, underlying: str, tail: bool = False) -> set
         row = (
             await s.execute(select(PlatformSetting.value).where(PlatformSetting.key == _checked_key(underlying, tail)))
         ).scalar_one_or_none()
-    return {(k, date.fromisoformat(d)) for k, ds in dict(row or {}).items() for d in ds}
+    stored: dict[str, list[str]] = dict(row or {})
+    return {(k, date.fromisoformat(d)) for k, ds in stored.items() for d in ds}
 
 
 async def remember_checked(
