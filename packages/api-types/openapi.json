@@ -7501,6 +7501,14 @@
       },
       "SyncDay": {
         "properties": {
+          "closing_empty": {
+            "title": "Closing Empty",
+            "type": "integer"
+          },
+          "closing_have": {
+            "title": "Closing Have",
+            "type": "integer"
+          },
           "closing_missing": {
             "anyOf": [
               {
@@ -7556,7 +7564,9 @@
           "options_complete",
           "options_partial",
           "options_missing",
-          "closing_missing"
+          "closing_missing",
+          "closing_have",
+          "closing_empty"
         ],
         "title": "SyncDay",
         "type": "object"

@@ -111,6 +111,8 @@ async def data_sync_coverage(
                 options_partial=d.options_partial,
                 options_missing=d.options_missing,
                 closing_missing=d.closing_missing,
+                closing_have=d.closing_have,
+                closing_empty=d.closing_empty,
             )
             for d in cov.days
         ],

@@ -4320,6 +4320,10 @@ export interface components {
         };
         /** SyncDay */
         SyncDay: {
+            /** Closing Empty */
+            closing_empty: number;
+            /** Closing Have */
+            closing_have: number;
             /** Closing Missing */
             closing_missing: number | null;
             /**

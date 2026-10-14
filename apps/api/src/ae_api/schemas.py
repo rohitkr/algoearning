@@ -669,7 +669,9 @@ class SyncDay(BaseModel):
     options_complete: int
     options_partial: int
     options_missing: int
-    closing_missing: int | None  # contracts with no 15:30+ candle (null before the closing session began)
+    closing_missing: int | None  # contracts not yet asked for 15:30+ candles (null before the closing session began)
+    closing_have: int  # contracts with candles after 15:30
+    closing_empty: int  # contracts asked for it: the provider holds nothing (no trade then)
 
 
 class SyncPlan(BaseModel):

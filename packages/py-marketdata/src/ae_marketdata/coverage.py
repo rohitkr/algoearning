@@ -42,7 +42,9 @@ class DayCoverage:
     options_complete: int = 0
     options_partial: int = 0
     options_missing: int = 0
-    closing_missing: int | None = None  # contracts without a 15:30+ candle (None before the closing session began)
+    closing_missing: int | None = None  # contracts not yet asked for 15:30+ candles (None before the session began)
+    closing_have: int = 0  # contracts with candles after 15:30
+    closing_empty: int = 0  # contracts asked for it: the provider holds nothing (no trade then)
 
 
 @dataclass
@@ -101,14 +103,14 @@ async def coverage(
     wanted: dict[tuple[date, int, str], list[date]] = {}
     tail: set[tuple[str, date]] = set()
     checked: set[tuple[str, date]] = set()
+    tail_asked: set[tuple[str, date]] = set()
     if have:
         ex = expiries(underlying, start, end, have)
         wanted = contract_days(underlying, {d: index[d][:2] for d in have}, ex, strike_step, buffer)
         counts = await option_counts(db, underlying, start, end)
         checked = await checked_days(db, underlying)
-        tail = await tail_days(db, underlying, max(start, CAS_FROM), end) | await checked_days(
-            db, underlying, tail=True
-        )
+        tail = await tail_days(db, underlying, max(start, CAS_FROM), end)
+        tail_asked = await checked_days(db, underlying, tail=True)
         fetches = plan(underlying, wanted, have, stored_days(counts, FULL) | checked)
         out.plan.option_fetches, out.plan.option_calls = len(fetches), sum(f.calls for f in fetches)
 
@@ -124,7 +126,10 @@ async def coverage(
         complete = sum(n >= FULL for _, n in items)
         partial = sum(0 < n < FULL for _, n in items)
         missing = sum(n == 0 for _, n in items)
-        no_tail = sum((key, d) not in tail for key, _ in items) if d >= CAS_FROM and items else None
+        cas = d >= CAS_FROM and bool(items)
+        got = sum((key, d) in tail for key, _ in items) if cas else 0
+        asked_empty = sum((key, d) not in tail and (key, d) in tail_asked for key, _ in items) if cas else 0
+        no_tail = len(items) - got - asked_empty if cas else None
         closing += no_tail or 0
         bars = index.get(d, (0, 0, 0))[2]
         closed = d.weekday() >= 5 or d in holidays
@@ -138,6 +143,8 @@ async def coverage(
                 partial,
                 missing,
                 no_tail,
+                got,
+                asked_empty,
             )
         )
     out.plan.closing_fetches = out.plan.closing_calls = closing

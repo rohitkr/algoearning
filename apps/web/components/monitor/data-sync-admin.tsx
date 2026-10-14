@@ -38,6 +38,14 @@ const STATUS_CLASS: Record<SyncDay["status"], string> = {
   closed: "bg-surface-2",
 };
 
+/** The dot on a day since the closing session began: fetched (every contract asked; some have candles), none of them
+ * traded then, or still to fetch. Days before 3 Aug 2026 have none. */
+export function casMark(d: SyncDay): string | null {
+  if (d.closing_missing == null || d.status === "closed") return null;
+  if (d.closing_missing > 0) return "bg-black";
+  return d.closing_have > 0 ? "bg-white" : "bg-sky-400";
+}
+
 export const isActive = (j: Pick<SyncJobOut, "status">) => j.status === "pending" || j.status === "running";
 
 /** What the numbers in a day's tooltip say. */
@@ -52,7 +60,10 @@ export function dayLabel(d: SyncDay): string {
     parts.push(
       `options ${d.options_complete} complete, ${d.options_partial} partial, ${d.options_missing} missing of ${d.options_expected}`,
     );
-  if (d.closing_missing) parts.push(`${d.closing_missing} without 15:30 to 15:39 candles`);
+  if (d.closing_missing != null)
+    parts.push(
+      `closing session 15:30 to 15:39: ${d.closing_have} contracts with candles, ${d.closing_empty} asked but none traded, ${d.closing_missing} not fetched yet`,
+    );
   return `${head} (${parts.join("; ")})`;
 }
 
@@ -302,6 +313,9 @@ export function DataSyncPanel({
   const optionDays = trading.reduce((a, d) => a + d.options_expected, 0);
   const optionDone = trading.reduce((a, d) => a + d.options_complete, 0);
   const closingMissing = trading.reduce((a, d) => a + (d.closing_missing ?? 0), 0);
+  const closingHave = trading.reduce((a, d) => a + d.closing_have, 0);
+  const closingEmpty = trading.reduce((a, d) => a + d.closing_empty, 0);
+  const closingDays = trading.filter((d) => d.closing_missing != null);
   const budget =
     callsToday != null
       ? `${formatNumber(callsToday)} of ${formatNumber(DAILY_LIMIT)} Breeze calls used today`
@@ -389,8 +403,18 @@ export function DataSyncPanel({
         />
         <Tile
           label="Closing session (15:30 to 15:39)"
-          value={formatNumber(closingMissing)}
-          sub="contract-days without candles after 15:30"
+          value={
+            closingDays.length
+              ? closingMissing
+                ? `${formatNumber(closingMissing)} to fetch`
+                : "All fetched"
+              : "–"
+          }
+          sub={
+            closingDays.length
+              ? `since 3 Aug 2026: ${formatNumber(closingHave)} contract-days have candles, ${formatNumber(closingEmpty)} were asked for and nothing traded then`
+              : "no trading day since the closing session began (3 Aug 2026) in this range"
+          }
           tone={closingMissing ? "warn" : undefined}
         />
       </div>
@@ -455,6 +479,12 @@ export function DataSyncPanel({
                 <span className={cn("size-3 rounded-[3px]", STATUS_CLASS[k])} aria-hidden /> {STATUS_TEXT[k]}
               </span>
             ))}
+            <span className="flex items-center gap-1.5">
+              Closing session:
+              <span className="size-2 rounded-full bg-white" aria-hidden /> fetched
+              <span className="size-2 rounded-full bg-sky-400" aria-hidden /> none traded
+              <span className="size-2 rounded-full bg-black ring-1 ring-white/60" aria-hidden /> not fetched
+            </span>
           </span>
         </div>
         <div className="flex gap-3 overflow-x-auto pb-2">
@@ -482,10 +512,20 @@ export function DataSyncPanel({
                       onMouseLeave={() => setTip(null)}
                       onBlur={() => setTip(null)}
                       className={cn(
-                        "mx-auto size-6 cursor-pointer rounded-md ring-foreground/50 hover:ring-2 focus-visible:ring-2 focus-visible:outline-none",
+                        "relative mx-auto size-6 cursor-pointer rounded-md ring-foreground/50 hover:ring-2 focus-visible:ring-2 focus-visible:outline-none",
                         STATUS_CLASS[d.status],
                       )}
-                    />
+                    >
+                      {casMark(d) && (
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "absolute right-0.5 bottom-0.5 size-1.5 rounded-full ring-1 ring-black/40",
+                            casMark(d),
+                          )}
+                        />
+                      )}
+                    </button>
                   ) : (
                     <span key={date} className="mx-auto size-6 rounded-md bg-surface-2" />
                   ),
