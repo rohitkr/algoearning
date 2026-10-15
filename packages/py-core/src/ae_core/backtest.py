@@ -136,8 +136,7 @@ class BacktestResult:
     day_log: list[dict[str, Any]] = field(default_factory=list)  # per replayed day: option prices?, trades, why not
 
     def closed(self) -> list[ClosedTrade]:
-        # a trade (all its legs, held overnight or not) is counted on the day it was entered: one day, one trade
-        return [ClosedTrade(t.entry_time.date(), t.net) for t in sorted(self.trades, key=lambda t: t.entry_time)]
+        return [ClosedTrade(t.exit_time.date(), t.net) for t in sorted(self.trades, key=lambda t: t.exit_time)]
 
     def daily(self) -> list[Day]:
         return daily(self.closed())
