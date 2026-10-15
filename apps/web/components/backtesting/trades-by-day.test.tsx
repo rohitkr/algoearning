@@ -31,11 +31,11 @@ const TRADES = [
 ];
 
 describe("TradesByDay", () => {
-  it("groups by the day each trade was closed, with the combined net", () => {
+  it("groups by the day each trade was entered, with the combined net", () => {
     const g = groupByDay(TRADES);
     expect(g.map((x) => [x.key, x.net, x.trades.length])).toEqual([
       ["2026-09-15", 5999.5, 2],
-      ["2026-09-17", 100, 1], // entered on the 16th, closed on the 17th: that is the day it is booked
+      ["2026-09-16", 100, 1],
     ]);
     expect(g[0]?.title).toMatch(/^Tue, 15 Sept? 2026$/);
   });
@@ -55,9 +55,9 @@ describe("TradesByDay", () => {
     render(<TradesByDay trades={TRADES} total={3} />);
     expect(screen.getByText("NIFTY 23600 CE")).toBeTruthy(); // first day open
     expect(screen.queryByText("NIFTY 23350 CE")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /17 Sep/ }));
+    fireEvent.click(screen.getByRole("button", { name: /16 Sep/ }));
     expect(screen.getByText("NIFTY 23350 CE")).toBeTruthy();
-    expect(screen.getByText(/\(Wed, 16 Sep/)).toBeTruthy(); // a trade held overnight says which day it was entered
+    expect(screen.getByText(/\(Thu, 17 Sep/)).toBeTruthy(); // a trade held to another day says which
     fireEvent.click(screen.getByText("Collapse all"));
     expect(screen.queryByText("NIFTY 23600 CE")).toBeNull();
   });
