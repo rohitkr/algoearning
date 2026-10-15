@@ -1807,6 +1807,11 @@ export interface components {
              */
             multiplier: number;
             /**
+             * Open Delay Min
+             * @default 0
+             */
+            open_delay_min: number;
+            /**
              * Slippage Pct
              * @default 0.05
              */
@@ -1887,6 +1892,11 @@ export interface components {
              * @default 1
              */
             multiplier: number;
+            /**
+             * Open Delay Min
+             * @default 0
+             */
+            open_delay_min: number;
             /**
              * Slippage Pct
              * @default 0.05

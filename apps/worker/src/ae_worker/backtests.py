@@ -50,7 +50,10 @@ async def run_pending(db: Database) -> int:
             rows = (await s.execute(select(Instrument).where(Instrument.code.in_(used)))).scalars()
             insts = {i.code: (i.lot_size, i.strike_step) for i in rows}
             start, end, mult, slip = run.start_date, run.end_date, run.multiplier, run.slippage_pct
-        result = await replay_config(db, config, start, end, multiplier=mult, insts=insts, slippage_pct=slip)
+            delay = run.open_delay_min
+        result = await replay_config(
+            db, config, start, end, multiplier=mult, insts=insts, slippage_pct=slip, open_delay_min=delay
+        )
         out = summarize_result(result)
         out["warnings"] = [lot_size_note(insts, used), *out["warnings"]]
         async with db.system_session() as s:

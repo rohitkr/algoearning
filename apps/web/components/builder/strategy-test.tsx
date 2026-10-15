@@ -21,6 +21,7 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
   const [to, setTo] = useState("");
   const [multiplier, setMultiplier] = useState(1);
   const [slippage, setSlippage] = useState(0.05);
+  const [delay, setDelay] = useState(0); // minutes a trade held overnight waits after the open before it is judged
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; upgrade?: boolean } | null>(null);
   const [out, setOut] = useState<{ res: BacktestResultData; config: string; range: string } | null>(null);
@@ -66,7 +67,7 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
       const r = await apiRequest<BacktestPreview>(
         "POST",
         "/v1/backtests/preview",
-        { config, start_date: from, end_date: to, multiplier, slippage_pct: slippage },
+        { config, start_date: from, end_date: to, multiplier, slippage_pct: slippage, open_delay_min: delay },
         getToken,
       );
       setOut({
@@ -137,6 +138,15 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
             setSlippage(v ?? 0);
             remember({ slippage: v ?? 0 });
           }}
+        />
+        <NumberField
+          label="Wait after open"
+          value={delay}
+          suffix="min"
+          step={1}
+          min={0}
+          hint="Held trades are not judged for this many minutes after the open"
+          onChange={(v) => setDelay(Math.min(60, Math.max(0, Math.round(v ?? 0))))}
         />
         <div className="flex items-end">
           <Button onClick={run} disabled={busy || blocked || !from || !to || from > to}>

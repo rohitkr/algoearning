@@ -435,6 +435,7 @@ class BacktestRun(UUIDPk, Timestamps, Base):
     end_date: Mapped[date] = mapped_column(Date)
     multiplier: Mapped[int] = mapped_column(Integer, default=1)
     slippage_pct: Mapped[float] = mapped_column(Float, default=0.05)
+    open_delay_min: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # minutes after each open
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | running | done | error
     error: Mapped[str | None] = mapped_column(Text)
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

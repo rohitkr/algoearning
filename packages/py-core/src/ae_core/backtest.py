@@ -256,9 +256,12 @@ def simulate(
     slippage_pct: float = 0.05,
     spread_pct: float = 0.0,
     costs: Costs | None = None,
+    open_delay_min: int = 0,
 ) -> BacktestResult:
     """`spread_pct`: a modelled bid/ask spread (% of the premium); half of it is paid on every fill, on top of
-    the slippage (history has trades, not quotes)."""
+    the slippage (history has trades, not quotes). `open_delay_min`: a trade held over from an earlier day is not
+    judged (no stop-loss, limit or exit) during the first N minutes of each session: the opening prints are thin and a
+    live engine needs a little time too."""
     costs = costs or Costs()
     runner: Runner = make_runner(config, multiplier)
     u = config.underlying
@@ -314,7 +317,7 @@ def simulate(
     noted: dict[str, int] = {}
     carried: dict[str, float] = {}  # each contract's last known price from earlier days: only for getting out
     prev_opens: dict[str, float] = {}  # each contract's price at the previous minute's open (for fills at a level)
-    stale_exits = leftovers = 0
+    stale_exits = leftovers = delayed = 0
 
     no_options: list[date] = []
     for day in days:
@@ -341,6 +344,16 @@ def simulate(
             opens = {k: p for k in keys if (p := prices.open(k, now)) is not None}
             quotes = {k: prices.quote(k) for k in keys}
             m = Market(now, u, bar.open, done, opens, live_expiries, lot_size, strike_step, before, quotes)
+            if (
+                open_delay_min
+                and i < open_delay_min
+                and any(p.entry_time.date() < day for p in runner.open_positions())
+            ):
+                delayed += 1
+                prev_opens.update(opens)
+                for k in keys:
+                    prices.close(k, now)
+                continue
             # step A: the minute's open
             step_intents = runner.step(m)
             at_level = _level_prices(runner, step_intents, prev_opens, m.prices)
@@ -436,6 +449,11 @@ def simulate(
             f"{len(incomplete)} contract(s) have hours of missing option prices where a trade was opened or closed, so "
             f"those days are not full days and their result is not reliable: {shown}. Fetch the missing candles "
             "(backfill --refill-partial) and run again.",
+        )
+    if delayed:
+        result.warnings.append(
+            f"Trades held overnight were not judged for the first {open_delay_min} minute(s) after each open "
+            "(the 'wait after the open' setting)."
         )
     if leftovers:
         result.warnings.append(

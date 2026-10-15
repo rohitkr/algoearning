@@ -776,6 +776,13 @@
             "title": "Multiplier",
             "type": "integer"
           },
+          "open_delay_min": {
+            "default": 0,
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Open Delay Min",
+            "type": "integer"
+          },
           "slippage_pct": {
             "default": 0.05,
             "maximum": 5.0,
@@ -980,6 +987,13 @@
             "maximum": 100.0,
             "minimum": 1.0,
             "title": "Multiplier",
+            "type": "integer"
+          },
+          "open_delay_min": {
+            "default": 0,
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Open Delay Min",
             "type": "integer"
           },
           "slippage_pct": {
