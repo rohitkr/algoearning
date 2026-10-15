@@ -232,11 +232,7 @@ export function BacktestResultView({ res, meta }: { res: BacktestResultData; met
       <DaywiseBreakdown daily={res.daily} />
       {res.day_log && res.day_log.length > 0 && <DayTable rows={res.day_log} />}
       {res.trades.length > 0 && (
-        <TradesByDay
-          trades={res.trades.slice(0, 300)}
-          total={res.trades_total}
-          report={meta ? { res, meta } : undefined}
-        />
+        <TradesByDay trades={res.trades} total={res.trades_total} report={meta ? { res, meta } : undefined} />
       )}
       <p className="text-xs text-muted">
         Fills use each minute&apos;s open (stops and targets fill at their level, or the open if the price
