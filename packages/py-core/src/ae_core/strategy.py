@@ -259,6 +259,9 @@ class Holding(_Model):
     mode: Literal["intraday", "next_day", "days", "expiry"] = "intraday"
     exit: HHMM = "15:15"
     days: int = Field(default=1, ge=1, le=30)
+    # held trades only: for the first N minutes after the open on a later day, no stop-loss, target or limit is judged
+    # (thin opening prints, and a live engine needs a moment too). The exit time itself still applies.
+    open_delay_min: int = Field(default=0, ge=0, le=60)
 
 
 class CombinedStop(_Model):

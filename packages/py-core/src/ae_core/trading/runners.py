@@ -570,6 +570,16 @@ class RulesRunner(Runner):
             self._advance_cursors(m)
         return out
 
+    def _waiting_for_the_open(self, m: Market) -> bool:
+        """A trade held over from an earlier day is not judged during the first `open_delay_min` minutes after the
+        open (09:15): the opening prints are thin. Never for intraday trades, and the exit time still applies."""
+        h = self.cfg.holding
+        if h.mode == "intraday" or not h.open_delay_min:
+            return False
+        if (m.now.hour * 60 + m.now.minute) - (9 * 60 + 15) >= h.open_delay_min:
+            return False
+        return any(p.entry_time.date() < m.now.date() for p in self.open_positions())
+
     def _step(self, m: Market) -> list[Intent]:
         phase = self.s["phase"]
         if phase != "in" and "final" in self.s and any(p.id not in self.exiting for p in self.open_positions()):
@@ -585,6 +595,8 @@ class RulesRunner(Runner):
             self.s["final"] = rules.at(m.now.date(), cfg.holding.exit, IST).isoformat()
         if m.now >= datetime.fromisoformat(self.s["final"]):
             return self._close(m, f"exit time {cfg.holding.exit}")
+        if self._waiting_for_the_open(m):
+            return out
 
         # leg stop-loss / target / trailing
         sl_hit = False

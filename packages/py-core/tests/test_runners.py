@@ -708,3 +708,24 @@ def test_trade_limits_wait_until_every_leg_has_a_price() -> None:
     sim.prices = {hedge: 480.0}  # the sold leg has no price
     assert sim.at("09:20") == []
     assert any(n["event"] == "trade_limits_paused" for n in sim.r.notes)
+
+
+def test_a_held_trade_waits_for_the_open_delay_before_stops_apply_but_intraday_never_does() -> None:
+    leg = [{"id": "L1", "action": "SELL", "option_type": "CE", "stop_loss": {"unit": "percent", "value": 20}}]
+    sim = Sim(rr(legs=leg, holding={"mode": "next_day", "exit": "09:40", "open_delay_min": 10}), day=THU)
+    sim.prices = {c(25000, "CE", WEEK2): 100.0}
+    assert len(sim.at("15:00")) == 1
+    sim.day = FRI
+    sim.prices = {c(25000, "CE", WEEK2): 150.0}  # far above the stop at the open
+    assert sim.at("09:15") == [] and sim.at("09:24") == []  # within the first 10 minutes: not judged
+    (ex,) = sim.at("09:25")
+    assert ex.reason == "stop-loss"
+    # the same trade held for the same day is judged at once: the delay is for held trades only
+    same = Sim(
+        rr(legs=leg, entry={"at": "09:20"}, holding={"mode": "intraday", "exit": "15:15", "open_delay_min": 10}),
+        day=THU,
+    )
+    same.prices = {c(25000, "CE", WEEK2): 100.0}
+    assert len(same.at("09:20")) == 1
+    same.prices = {c(25000, "CE", WEEK2): 150.0}
+    assert [i.reason for i in same.at("09:21")] == ["stop-loss"]

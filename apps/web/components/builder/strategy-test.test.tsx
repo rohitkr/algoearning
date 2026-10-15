@@ -60,7 +60,6 @@ describe("StrategyTest", () => {
         end_date: "2026-10-09",
         multiplier: 1,
         slippage_pct: 0.05,
-        open_delay_min: 0,
       },
     });
     expect(await screen.findByText("Test again")).toBeTruthy();

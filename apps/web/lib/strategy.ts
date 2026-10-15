@@ -196,7 +196,7 @@ export function groupText(g: ConditionGroup): string {
 }
 
 export function holdingOf(c: { holding?: Partial<RulesHolding> | null }): RulesHolding {
-  return { mode: "intraday", exit: "15:15", days: 1, ...c.holding };
+  return { mode: "intraday", exit: "15:15", days: 1, open_delay_min: 0, ...c.holding };
 }
 
 export function rulesRiskOf(c: { risk?: Partial<RulesRisk> | null }): RulesRisk {

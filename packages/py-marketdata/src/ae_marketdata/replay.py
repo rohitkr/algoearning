@@ -19,7 +19,7 @@ WARMUP = timedelta(days=10)  # earlier sessions loaded for runners that read the
 
 async def replay(
     db: Database, config: AnyConfig, start: date, end: date, *, multiplier: int, lot_size: int, strike_step: int,
-    slippage_pct: float, open_delay_min: int = 0,
+    slippage_pct: float,
 ) -> BacktestResult:  # fmt: skip
     """Run the simulator. The intraday SMC scalper (no position outlives its day) is replayed a month at a time, so a
     long range of option history never has to fit in memory at once."""
@@ -30,7 +30,7 @@ async def replay(
         history = await load_history(db, config.underlying, first, end)
         return await asyncio.to_thread(
             simulate, config, history, start, end, multiplier=multiplier, lot_size=lot_size, strike_step=strike_step,
-            slippage_pct=slippage_pct, open_delay_min=open_delay_min,
+            slippage_pct=slippage_pct,
         )  # fmt: skip
     total = BacktestResult()
     for a, b in months(start, end):
@@ -46,7 +46,7 @@ async def replay(
 
 async def replay_config(
     db: Database, config: AnyConfig, start: date, end: date, *, multiplier: int, insts: Mapping[str, tuple[int, int]],
-    slippage_pct: float, open_delay_min: int = 0,
+    slippage_pct: float,
 ) -> BacktestResult:  # fmt: skip
     """`replay` for any config. A strategy of plans may trade several instruments: each instrument's plans are replayed
     on that instrument's own history and lot size, and the results are put together (every day row then says which
@@ -54,15 +54,14 @@ async def replay_config(
     if not isinstance(config, PlansConfig) or len(config.underlyings()) == 1:
         lot, step = insts[config.underlying]
         return await replay(
-            db, config, start, end, multiplier=multiplier, lot_size=lot, strike_step=step, slippage_pct=slippage_pct,
-            open_delay_min=open_delay_min,
-        )  # fmt: skip
+            db, config, start, end, multiplier=multiplier, lot_size=lot, strike_step=step, slippage_pct=slippage_pct
+        )
     total = BacktestResult()
     for u in config.underlyings():
         lot, step = insts[u]
         part = await replay(
             db, config.for_underlying(u), start, end, multiplier=multiplier, lot_size=lot, strike_step=step,
-            slippage_pct=slippage_pct, open_delay_min=open_delay_min,
+            slippage_pct=slippage_pct,
         )  # fmt: skip
         for row in part.day_log:
             row["underlying"] = u

@@ -116,7 +116,7 @@ async def preview_backtest(
     insts = {u: (instruments[u].lot_size, instruments[u].strike_step) for u in used}
     result = await replay_config(
         db, config, body.start_date, body.end_date, multiplier=body.multiplier, insts=insts,
-        slippage_pct=body.slippage_pct, open_delay_min=body.open_delay_min,
+        slippage_pct=body.slippage_pct,
     )  # fmt: skip
     out = summarize_result(result)
     out["warnings"] = [lot_size_note(insts, used), *out["warnings"]]
@@ -159,7 +159,6 @@ async def create_backtest(
         end_date=body.end_date,
         multiplier=body.multiplier,
         slippage_pct=body.slippage_pct,
-        open_delay_min=body.open_delay_min,
     )
     s.add(run)
     await s.flush()

@@ -30,7 +30,6 @@ export function NewBacktest({
   const [to, setTo] = useState(defaultRange(c).to);
   const [multiplier, setMultiplier] = useState(1);
   const [slippage, setSlippage] = useState(0.05);
-  const [delay, setDelay] = useState(0);
   useEffect(() => {
     // browser storage is only readable after mount (the server render has none)
     /* eslint-disable react-hooks/set-state-in-effect */
@@ -65,14 +64,7 @@ export function NewBacktest({
       const b = await apiRequest<Backtest>(
         "POST",
         "/v1/backtests",
-        {
-          strategy_id: sid,
-          start_date: from,
-          end_date: to,
-          multiplier,
-          slippage_pct: slippage,
-          open_delay_min: delay,
-        },
+        { strategy_id: sid, start_date: from, end_date: to, multiplier, slippage_pct: slippage },
         getToken,
       );
       router.push(`/backtesting/${b.id}`);
@@ -156,15 +148,6 @@ export function NewBacktest({
                   setSlippage(v ?? 0);
                   remember({ slippage: v ?? 0 });
                 }}
-              />
-              <NumberField
-                label="Wait after open"
-                suffix="min"
-                step={1}
-                min={0}
-                value={delay}
-                hint="Held trades are not judged for this many minutes after the open"
-                onChange={(v) => setDelay(Math.min(60, Math.max(0, Math.round(v ?? 0))))}
               />
             </div>
           </div>

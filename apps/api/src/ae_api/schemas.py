@@ -1010,9 +1010,6 @@ class BacktestIn(BaseModel):
     end_date: date
     multiplier: int = Field(default=1, ge=1, le=100)
     slippage_pct: float = Field(default=0.05, ge=0, le=5)
-    open_delay_min: int = Field(
-        default=0, ge=0, le=60
-    )  # trades held overnight are not judged for N minutes after the open
 
 
 class BacktestPreviewIn(BaseModel):
@@ -1024,7 +1021,6 @@ class BacktestPreviewIn(BaseModel):
     end_date: date
     multiplier: int = Field(default=1, ge=1, le=100)
     slippage_pct: float = Field(default=0.05, ge=0, le=5)
-    open_delay_min: int = Field(default=0, ge=0, le=60)
 
 
 class BacktestPreviewOut(BaseModel):

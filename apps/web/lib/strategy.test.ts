@@ -67,7 +67,7 @@ describe("strategy text", () => {
         max_tip_age_s: 120,
         on_tip_exit: "close",
       },
-      holding: { mode: "next_day", exit: "09:30", days: 1 },
+      holding: { mode: "next_day", exit: "09:30", days: 1, open_delay_min: 0 },
       legs: [leg()],
       risk: {
         exit_all_on_leg_sl: false,

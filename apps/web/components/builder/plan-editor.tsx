@@ -454,6 +454,19 @@ export function PlanEditor({
             error={errs["holding.exit"]}
             onChange={(v) => setHolding({ exit: v })}
           />
+          {h.mode !== "intraday" && (
+            <NumberField
+              label="Wait after open"
+              value={h.open_delay_min ?? 0}
+              suffix="min"
+              step={1}
+              min={0}
+              max={60}
+              hint="Stop-loss, target and limits are not judged for this many minutes after the open"
+              error={errs["holding.open_delay_min"]}
+              onChange={(v) => setHolding({ open_delay_min: Math.min(60, Math.max(0, Math.round(v ?? 0))) })}
+            />
+          )}
           {h.mode === "days" && (
             <NumberField
               label="Trading days"
