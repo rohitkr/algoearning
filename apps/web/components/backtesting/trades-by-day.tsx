@@ -3,7 +3,7 @@
 import { formatNumber } from "@algoearning/shared";
 import { Card, CardTitle, Pnl, StatusPill } from "@algoearning/ui";
 import { ChevronDown, Download, FileText } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { type ReportMeta, downloadCsv, downloadPdf } from "@/lib/backtest-export";
 
@@ -33,11 +33,13 @@ const shortDay = new Intl.DateTimeFormat("en-IN", {
 
 export type DayGroup = { key: string; title: string; net: number; trades: Trade[] };
 
-/** The trades grouped by the day they were entered (Indian time), oldest first, with each day's combined net P&L. */
+/** The trades grouped by the day they were closed (Indian time: when the profit or loss is booked, the same day the
+ * calendar and the summary use), oldest first, with each day's combined net P&L. A trade held overnight is listed
+ * under the day it ended and shows its earlier entry day. */
 export function groupByDay(trades: readonly Trade[]): DayGroup[] {
   const groups = new Map<string, DayGroup>();
   for (const t of trades) {
-    const when = new Date(t.entry_time);
+    const when = new Date(t.exit_time);
     const key = dayKey.format(when);
     const g = groups.get(key) ?? {
       key,
@@ -81,6 +83,18 @@ export function TradesByDay({
   const [busy, setBusy] = useState(false);
   const groups = groupByDay(trades);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set(groups.slice(0, 1).map((g) => g.key)));
+  // a day clicked in the calendar: open it and scroll to it
+  useEffect(() => {
+    const go = (e: Event) => {
+      const key = (e as CustomEvent<string>).detail;
+      setOpen((o) => new Set(o).add(key));
+      requestAnimationFrame(() =>
+        document.getElementById(`day-row-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      );
+    };
+    window.addEventListener("backtest-day", go);
+    return () => window.removeEventListener("backtest-day", go);
+  }, []);
   const toggle = (key: string) =>
     setOpen((cur) => {
       const next = new Set(cur);
@@ -136,7 +150,11 @@ export function TradesByDay({
           const isOpen = open.has(g.key);
           const panel = `day-${g.key}`;
           return (
-            <section key={g.key} className="overflow-hidden rounded-xl border border-border">
+            <section
+              key={g.key}
+              id={`day-row-${g.key}`}
+              className="scroll-mt-20 overflow-hidden rounded-xl border border-border"
+            >
               <button
                 type="button"
                 aria-expanded={isOpen}
@@ -183,7 +201,7 @@ export function TradesByDay({
                     </thead>
                     <tbody className="divide-y divide-border">
                       {g.trades.map((t, i) => {
-                        const sameDay = dayKey.format(new Date(t.exit_time)) === g.key;
+                        const entryDay = dayKey.format(new Date(t.entry_time)) !== g.key;
                         return (
                           <tr key={i}>
                             <td className="px-4 py-2 whitespace-nowrap">{t.contract}</td>
@@ -197,12 +215,12 @@ export function TradesByDay({
                             <td className="px-4 py-2 whitespace-nowrap">
                               Price: {formatNumber(t.entry_price)}
                               <br />
-                              <When iso={t.entry_time} withDay={false} />
+                              <When iso={t.entry_time} withDay={entryDay} />
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap">
                               Price: {formatNumber(t.exit_price)}
                               <br />
-                              <When iso={t.exit_time} withDay={!sameDay} />
+                              <When iso={t.exit_time} withDay={false} />
                             </td>
                             <td className="px-4 py-2">
                               <Pnl value={t.net} />

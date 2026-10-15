@@ -142,6 +142,7 @@ function MonthCard({ m }: { m: MonthBlock }) {
               onFocus={(e) => show(e.currentTarget, d.entry!)}
               onMouseLeave={() => setTip(null)}
               onBlur={() => setTip(null)}
+              onClick={() => window.dispatchEvent(new CustomEvent("backtest-day", { detail: d.date }))}
               className={`mx-auto size-6 cursor-pointer rounded-md ring-foreground/50 transition-shadow hover:ring-2 focus-visible:ring-2 focus-visible:outline-none ${d.entry.pnl === 0 ? "bg-muted" : "bg-surface-2"}`}
               style={squareStyle(d.entry, strength.get(d.date))}
             />
