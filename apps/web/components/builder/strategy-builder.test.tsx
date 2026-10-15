@@ -204,7 +204,7 @@ describe("StrategyBuilder", () => {
     expect(saved.config.kind).toBe("plans");
     const plan = saved.config.plans[0]!;
     expect(plan.entry).toMatchObject({ at: "15:00", dte: [2] });
-    expect(plan.holding).toEqual({ mode: "days", exit: "09:30", days: 2 });
+    expect(plan.holding).toEqual({ mode: "days", exit: "09:30", days: 2, open_delay_min: 0 });
     expect(plan.legs[1]!.strike).toEqual({ mode: "points", offset: 0, premium: null, points: 300 });
   });
 

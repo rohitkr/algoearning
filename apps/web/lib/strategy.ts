@@ -229,7 +229,7 @@ export function rulesFromTimeBased(c: TimeBasedConfig): RulesConfig {
       max_tip_age_s: 120,
       on_tip_exit: "close",
     },
-    holding: { mode: "intraday", exit: t.exit, days: 1 },
+    holding: { mode: "intraday", exit: t.exit, days: 1, open_delay_min: 0 },
     legs: c.legs,
     risk: { ...r, combined_stop: null, lock_profit: null },
     exit: { when: null, on_opposite_signal: false },
