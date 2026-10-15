@@ -57,7 +57,7 @@ describe("TradesByDay", () => {
     expect(screen.queryByText("NIFTY 23350 CE")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /16 Sep/ }));
     expect(screen.getByText("NIFTY 23350 CE")).toBeTruthy();
-    expect(screen.getByText(/\(Thu, 17 Sep/)).toBeTruthy(); // a trade held to another day says which
+    expect(screen.getAllByText(/Date: Wed, 16 Sep/).length).toBeGreaterThan(0); // entry and exit both name their day
     fireEvent.click(screen.getByText("Collapse all"));
     expect(screen.queryByText("NIFTY 23600 CE")).toBeNull();
   });

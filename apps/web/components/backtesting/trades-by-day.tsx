@@ -63,7 +63,12 @@ function When({ iso, withDay }: { iso: string; withDay: boolean }) {
   return (
     <>
       Time: {clock.format(d)}
-      {withDay && <span className="text-muted"> ({shortDay.format(d)})</span>}
+      {withDay && (
+        <>
+          <br />
+          <span className="text-muted">Date: {shortDay.format(d)}</span>
+        </>
+      )}
     </>
   );
 }
@@ -200,7 +205,6 @@ export function TradesByDay({
                     </thead>
                     <tbody className="divide-y divide-border">
                       {g.trades.map((t, i) => {
-                        const sameDay = dayKey.format(new Date(t.exit_time)) === g.key;
                         return (
                           <tr key={i}>
                             <td className="px-4 py-2 whitespace-nowrap">{t.contract}</td>
@@ -214,12 +218,12 @@ export function TradesByDay({
                             <td className="px-4 py-2 whitespace-nowrap">
                               Price: {formatNumber(t.entry_price)}
                               <br />
-                              <When iso={t.entry_time} withDay={false} />
+                              <When iso={t.entry_time} withDay />
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap">
                               Price: {formatNumber(t.exit_price)}
                               <br />
-                              <When iso={t.exit_time} withDay={!sameDay} />
+                              <When iso={t.exit_time} withDay />
                             </td>
                             <td className="px-4 py-2">
                               <Pnl value={t.net} />
