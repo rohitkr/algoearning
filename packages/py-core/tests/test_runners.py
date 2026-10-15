@@ -682,3 +682,15 @@ def test_an_entry_never_filled_does_not_hold_the_trade_open_into_the_next_day() 
     sim.day = FRI
     sim.at("09:15")
     assert sim.r.s["awaiting"] == [] and sim.r.s["phase"] == "waiting"
+
+
+def test_a_leg_switched_off_is_never_traded_and_old_configs_still_load() -> None:
+    legs = [
+        {"id": "L1", "action": "SELL", "option_type": "CE", "lots": 1},
+        {"id": "L2", "action": "SELL", "option_type": "PE", "lots": 1, "enabled": False},
+    ]
+    sim = Sim(rr(legs=legs, entry={"at": "15:00"}), day=THU)
+    sim.prices = {c(25000, "CE", WEEK2): 100.0, c(25000, "PE", WEEK2): 100.0}
+    out = sim.at("15:00")
+    assert [i.contract.right for i in out] == ["CE"]  # the PE leg is off
+    assert parse({"kind": "rules", "legs": [{"id": "L1", "action": "BUY", "option_type": "CE"}]}).legs[0].enabled

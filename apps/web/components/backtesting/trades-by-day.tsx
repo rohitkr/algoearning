@@ -1,7 +1,7 @@
 "use client";
 
 import { formatNumber } from "@algoearning/shared";
-import { Card, CardTitle, Pnl } from "@algoearning/ui";
+import { Card, CardTitle, Pnl, StatusPill } from "@algoearning/ui";
 import { ChevronDown, Download, FileText } from "lucide-react";
 import { useState } from "react";
 
@@ -52,17 +52,9 @@ export function groupByDay(trades: readonly Trade[]): DayGroup[] {
   return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key));
 }
 
-/** BUY or SELL as a labelled pill (not red/green text: those colours already mean profit and loss). */
+/** BUY green, SELL red: the same pills as the run page. */
 function SideBadge({ side }: { side: string }) {
-  return (
-    <span
-      className={`inline-block rounded-md border px-2 py-0.5 text-xs font-semibold ${
-        side === "SELL" ? "border-border bg-surface-2 text-foreground" : "border-border text-muted"
-      }`}
-    >
-      {side}
-    </span>
-  );
+  return <StatusPill tone={side === "BUY" ? "success" : "danger"}>{side}</StatusPill>;
 }
 
 function When({ iso, withDay }: { iso: string; withDay: boolean }) {

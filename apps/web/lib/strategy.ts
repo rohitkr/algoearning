@@ -273,6 +273,7 @@ export function describeLeg(leg: StrategyLeg, underlying: string, inst: Instrume
   const qty = legQuantity(leg, inst);
   const lots = `${leg.lots} lot${leg.lots === 1 ? "" : "s"}${qty ? ` (${qty} qty)` : ""}`;
   const parts = [
+    ...(leg.enabled === false ? ["OFF: not traded"] : []),
     `${leg.action === "BUY" ? "Buy" : "Sell"} ${lots} ${underlying} ${strikeLabel(leg.strike)} ${leg.option_type}`,
     EXPIRY_LABEL[leg.expiry],
   ];
@@ -508,6 +509,7 @@ export function newLeg(c: { legs: StrategyLeg[] }, weekly: boolean): StrategyLeg
     expiry: weekly ? "current_week" : "current_month",
     strike: { mode: "atm", offset: 0, premium: null, points: null },
     direction: "always",
+    enabled: true,
     stop_loss: null,
     target: null,
     trailing: null,

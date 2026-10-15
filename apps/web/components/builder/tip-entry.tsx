@@ -25,6 +25,7 @@ function leg(
     action,
     option_type,
     direction,
+    enabled: true,
     lots: 1,
     expiry: "current_week",
     strike: { mode: "atm", offset, premium: null, points: null },

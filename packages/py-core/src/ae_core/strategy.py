@@ -137,6 +137,7 @@ class Leg(_Model):
     reentry_on_sl: ReEntry | None = None
     reentry_on_target: ReEntry | None = None
     direction: Direction = "always"  # rules only: trade this leg on every entry, or only on an up / down signal
+    enabled: bool = True  # off: the leg stays in the strategy (to test with) but is never traded
 
 
 class Timing(_Model):
@@ -311,8 +312,8 @@ class RulesConfig(_Model):
     exit: RulesExit = Field(default_factory=RulesExit)
 
     def legs_for(self, day: date) -> list[Leg]:
-        """The legs that trade on this date."""
-        return (self.day_legs or {}).get(weekday_of(day), self.legs)
+        """The legs that trade on this date (the ones switched on)."""
+        return [leg for leg in (self.day_legs or {}).get(weekday_of(day), self.legs) if leg.enabled]
 
     def leg_sets(self) -> list[tuple[Loc, list[Leg]]]:
         """Every set of legs with its place in the config: the default legs, then each weekday's."""
@@ -729,6 +730,8 @@ def _check_legs(
     seen: set[str] | None = None,
 ) -> list[Issue]:  # fmt: skip
     issues: list[Issue] = []
+    if legs and not any(leg.enabled for leg in legs):
+        issues.append(Issue(prefix, "switch on at least one leg"))
     seen = set() if seen is None else seen  # shared between the sets of one config: ids are unique across them
     for i, leg in enumerate(legs):
         loc: Loc = (*prefix, i)
@@ -753,7 +756,7 @@ def _check_legs(
             issues.append(Issue((*loc, "reentry_on_sl"), "re-entry after a stop-loss needs a stop-loss"))
         if leg.reentry_on_target and not leg.target:
             issues.append(Issue((*loc, "reentry_on_target"), "re-entry after a target needs a target"))
-    if exit_all_on_leg_sl and not any(leg.stop_loss for leg in legs):
+    if exit_all_on_leg_sl and not any(leg.stop_loss for leg in legs if leg.enabled):
         issues.append(Issue(("risk", "exit_all_on_leg_sl"), "no leg has a stop-loss"))
     return issues
 

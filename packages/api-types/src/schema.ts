@@ -2521,6 +2521,11 @@ export interface components {
              */
             direction: "always" | "up" | "down";
             /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
              * Expiry
              * @default current_week
              * @enum {string}

@@ -31,6 +31,7 @@ const NIFTY: Instrument = {
 
 const leg = (over: Partial<StrategyLeg> = {}): StrategyLeg => ({
   id: "L1",
+  enabled: true,
   action: "SELL",
   option_type: "CE",
   lots: 2,

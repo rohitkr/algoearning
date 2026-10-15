@@ -223,12 +223,24 @@ export function LegEditor({
   const re: LegReEntry = { mode: "at_cost", count: 1 };
 
   return (
-    <fieldset className="rounded-xl border border-border bg-surface p-4">
+    <fieldset
+      className={cn("rounded-xl border border-border bg-surface p-4", leg.enabled === false && "opacity-60")}
+    >
       <legend className="sr-only">Leg {index + 1}</legend>
       <div className="flex flex-wrap items-center gap-2">
         <span className="mr-1 text-sm font-semibold" aria-hidden>
           Leg {index + 1}
         </span>
+        <label className="mr-1 flex cursor-pointer items-center gap-1.5 text-xs text-muted">
+          <input
+            type="checkbox"
+            className="size-4 cursor-pointer accent-primary"
+            checked={leg.enabled !== false}
+            onChange={(e) => set("enabled", e.target.checked)}
+            aria-label={`Trade leg ${index + 1}`}
+          />
+          Trade
+        </label>
         <FlipToggle
           label={`Leg ${index + 1} action`}
           value={leg.action}

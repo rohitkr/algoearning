@@ -2740,6 +2740,11 @@
             "title": "Direction",
             "type": "string"
           },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
           "expiry": {
             "default": "current_week",
             "enum": [
