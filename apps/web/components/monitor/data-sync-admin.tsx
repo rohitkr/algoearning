@@ -13,6 +13,7 @@ import { inputClass } from "@/components/builder/fields";
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
 
 import { fmtDateTime } from "./bits";
+import { RANGE_KEY, istDay, rememberedRange } from "./data-sync-range";
 
 const DAILY_LIMIT = 5000; // Breeze's daily call limit, shared with the live price feed
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -301,7 +302,31 @@ export function DataSyncPanel({
     }
   }
 
+  // dates picked today come back after a reload; tomorrow the page starts from 1 January to today again
+  useEffect(() => {
+    if (location.search.includes("start=")) return;
+    let saved: { start: string; end: string } | null = null;
+    try {
+      saved = rememberedRange(localStorage.getItem(RANGE_KEY));
+    } catch {
+      /* storage blocked: the default range stays */
+    }
+    if (saved && (saved.start !== c.start || saved.end !== c.end)) {
+      const q = new URLSearchParams({ underlying: c.underlying, start: saved.start, end: saved.end });
+      router.replace(`/monitor/data-sync?${q}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, []);
+
   function go(params: Record<string, string>) {
+    try {
+      localStorage.setItem(
+        RANGE_KEY,
+        JSON.stringify({ day: istDay.format(new Date()), start: from, end: to }),
+      );
+    } catch {
+      /* storage blocked: the dates are just not remembered */
+    }
     const q = new URLSearchParams({ underlying: c.underlying, start: from, end: to, ...params });
     startCheck(() => router.push(`/monitor/data-sync?${q}`));
   }

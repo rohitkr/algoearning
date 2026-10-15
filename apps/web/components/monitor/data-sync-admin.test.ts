@@ -2,6 +2,7 @@ import type { SyncDay } from "@algoearning/api-types";
 import { describe, expect, it } from "vitest";
 
 import { casMark, dayLabel, eta, isActive, monthsOf } from "./data-sync-admin";
+import { defaultRange, rememberedRange } from "./data-sync-range";
 
 const day = (over: Partial<SyncDay>): SyncDay => ({
   day: "2026-08-04",
@@ -66,5 +67,28 @@ describe("data sync helpers", () => {
     expect(isActive({ status: "pending" })).toBe(true);
     expect(isActive({ status: "running" })).toBe(true);
     expect(isActive({ status: "done" })).toBe(false);
+  });
+});
+
+describe("the date range", () => {
+  it("starts on 1 January of this year and ends today (India time)", () => {
+    expect(defaultRange(new Date("2026-10-15T10:00:00Z"))).toEqual({
+      start: "2026-01-01",
+      end: "2026-10-15",
+    });
+    expect(defaultRange(new Date("2026-12-31T19:00:00Z"))).toEqual({
+      start: "2027-01-01",
+      end: "2027-01-01",
+    }); // past midnight in IST
+  });
+  it("keeps the dates the admin picked for today only", () => {
+    const saved = JSON.stringify({ day: "2026-10-15", start: "2024-01-01", end: "2026-10-10" });
+    expect(rememberedRange(saved, new Date("2026-10-15T08:00:00Z"))).toEqual({
+      start: "2024-01-01",
+      end: "2026-10-10",
+    });
+    expect(rememberedRange(saved, new Date("2026-10-16T08:00:00Z"))).toBeNull();
+    expect(rememberedRange("not json")).toBeNull();
+    expect(rememberedRange(null)).toBeNull();
   });
 });

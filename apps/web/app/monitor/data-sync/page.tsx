@@ -1,6 +1,7 @@
 import type { DataSyncCoverage, MarketDataAdmin, SyncJobOut } from "@algoearning/api-types";
 
 import { DataSyncPanel } from "@/components/monitor/data-sync-admin";
+import { defaultRange } from "@/components/monitor/data-sync-range";
 import { LoadError } from "@/components/monitor/bits";
 import { apiGet } from "@/lib/api";
 
@@ -12,7 +13,8 @@ export default async function MonitorDataSync({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const sp = await searchParams;
-  const q = new URLSearchParams();
+  const dflt = defaultRange(); // this year's 1 January to today, unless the admin picked dates
+  const q = new URLSearchParams({ start: dflt.start, end: dflt.end });
   for (const k of ["underlying", "start", "end"] as const) if (sp[k]) q.set(k, sp[k]);
   const [cov, jobs, feed] = await Promise.all([
     apiGet<DataSyncCoverage>(`/v1/admin/data-sync/coverage?${q}`),
