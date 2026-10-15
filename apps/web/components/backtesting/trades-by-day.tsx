@@ -33,13 +33,12 @@ const shortDay = new Intl.DateTimeFormat("en-IN", {
 
 export type DayGroup = { key: string; title: string; net: number; trades: Trade[] };
 
-/** The trades grouped by the day they were closed (Indian time: when the profit or loss is booked, the same day the
- * calendar and the summary use), oldest first, with each day's combined net P&L. A trade held overnight is listed
- * under the day it ended and shows its earlier entry day. */
+/** The trades grouped by the day they were entered (Indian time), oldest first, with each day's combined net P&L: all
+ * the legs of one trade stay together, also when held overnight (the calendar and summary count the same way). */
 export function groupByDay(trades: readonly Trade[]): DayGroup[] {
   const groups = new Map<string, DayGroup>();
   for (const t of trades) {
-    const when = new Date(t.exit_time);
+    const when = new Date(t.entry_time);
     const key = dayKey.format(when);
     const g = groups.get(key) ?? {
       key,
@@ -201,7 +200,7 @@ export function TradesByDay({
                     </thead>
                     <tbody className="divide-y divide-border">
                       {g.trades.map((t, i) => {
-                        const entryDay = dayKey.format(new Date(t.entry_time)) !== g.key;
+                        const sameDay = dayKey.format(new Date(t.exit_time)) === g.key;
                         return (
                           <tr key={i}>
                             <td className="px-4 py-2 whitespace-nowrap">{t.contract}</td>
@@ -215,12 +214,12 @@ export function TradesByDay({
                             <td className="px-4 py-2 whitespace-nowrap">
                               Price: {formatNumber(t.entry_price)}
                               <br />
-                              <When iso={t.entry_time} withDay={entryDay} />
+                              <When iso={t.entry_time} withDay={false} />
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap">
                               Price: {formatNumber(t.exit_price)}
                               <br />
-                              <When iso={t.exit_time} withDay={false} />
+                              <When iso={t.exit_time} withDay={!sameDay} />
                             </td>
                             <td className="px-4 py-2">
                               <Pnl value={t.net} />

@@ -600,3 +600,18 @@ def test_a_held_trade_can_wait_some_minutes_after_the_open_before_it_is_judged()
     (later,) = r.trades
     assert (later.exit_time, later.exit_price, later.reason) == (ts("09:40"), 110, "exit time 09:40")
     assert any("first 10 minute" in w for w in r.warnings)
+
+
+def test_the_days_count_a_trade_on_its_entry_day_so_its_legs_stay_together() -> None:
+    mon = DAY - timedelta(days=1)
+    h = history({"15:00": flat(100)}, day=mon)
+    h.add_spot("NIFTY", [Candle(ts("09:15") + timedelta(minutes=i), 25000, 25001, 24999, 25000) for i in range(375)])
+    h.add_option(KEY, [Candle(ts("09:30"), *flat(70))])
+    config = parse({
+        "kind": "rules",
+        "entry": {"at": "15:00"},
+        "holding": {"mode": "next_day", "exit": "09:30"},
+        "legs": [{"id": "L1", "action": "SELL", "option_type": "CE"}],
+    })  # fmt: skip
+    r = simulate(config, h, mon, DAY, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
+    assert [d.day for d in r.daily()] == [mon]  # entered on the Monday, closed on the Tuesday

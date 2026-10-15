@@ -13,7 +13,7 @@ from datetime import date
 
 @dataclass(frozen=True)
 class ClosedTrade:
-    day: date  # the day it was closed
+    day: date  # the day it is counted on (live reports: closed; backtests: entered, so a trade stays together)
     pnl: float
 
 
