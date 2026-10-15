@@ -93,7 +93,7 @@ describe("strategy text", () => {
     };
     const r = rulesFromTimeBased(old);
     expect(r.entry).toMatchObject({ at: "09:30", days: ["MON"] });
-    expect(r.holding).toEqual({ mode: "intraday", exit: "15:00", days: 1 });
+    expect(r.holding).toEqual({ mode: "intraday", exit: "15:00", days: 1, open_delay_min: 0 });
     expect(configSummary(r)).toBe("NIFTY · 1 leg · 09:30–15:00");
   });
 
