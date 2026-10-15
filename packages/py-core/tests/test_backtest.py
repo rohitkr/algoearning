@@ -580,4 +580,3 @@ def test_an_entry_in_the_closing_session_trades_on_the_options_prices() -> None:
     })  # fmt: skip
     (t,) = run(config, h).trades
     assert (t.entry_price, t.exit_price, t.reason) == (80, 70, "exit time 15:38")
-
