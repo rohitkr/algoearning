@@ -162,6 +162,8 @@ def _why(note: dict[str, Any]) -> str | None:
         return _WHY[ev]
     if ev == "waiting_to_enter":
         return f"waiting to enter: {note.get('reason', '')}"
+    if ev == "trade_limits_paused":
+        return f"loss / profit limits not checked: {note.get('reason', '')} (missing data)"
     if ev == "order_not_placed":
         return f"order not placed: {note.get('reason', '')}"
     return None
@@ -361,7 +363,10 @@ def simulate(
                 p = at_level.get(intent.contract.key, m.price(intent.contract))
                 if p is None and intent.kind == "exit":
                     # getting out beats waiting for a trade: the contract's last known price (also from earlier days)
-                    p = prices.last.get(intent.contract.key) or carried.get(intent.contract.key)
+                    p = prices.last.get(intent.contract.key)
+                    if p is None and (p := carried.get(intent.contract.key)) is not None and len(why) < 4:
+                        why[f"{intent.contract.label} has no prices today: closed at its last price of an earlier day "
+                            "(the result for this day is not reliable)"] = None  # fmt: skip
                     stale_exits += p is not None
                 if p is None:
                     runner.reject(intent, "no price for the contract in the data")

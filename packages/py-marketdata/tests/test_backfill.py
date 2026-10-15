@@ -150,3 +150,16 @@ def test_archive_keeps_market_minutes_only() -> None:
     idx, opt = "NIFTY", "NIFTY:2026-10-13:22700:CE"
     assert in_session(idx, at(15, 29)) and not in_session(idx, at(15, 35)) and not in_session(idx, at(19, 30))
     assert in_session(opt, at(15, 39)) and not in_session(opt, at(15, 40)) and not in_session(opt, at(9, 14))
+
+
+def test_overnight_adds_the_next_trading_day_until_expiry() -> None:
+    from datetime import date
+
+    from ae_marketdata.backfill import contract_days
+
+    fri, mon, tue = date(2026, 3, 6), date(2026, 3, 9), date(2026, 3, 10)
+    ranges = {fri: (24480.0, 24500.0), mon: (23750.0, 23900.0), tue: (23800.0, 23850.0)}
+    want = contract_days("NIFTY", ranges, [tue, date(2026, 3, 17)], 50, 0, overnight=True)
+    assert want[(tue, 24500, "PE")] == [fri, mon]  # Friday's strike, priced on Monday after the gap
+    assert (tue, 24500, "PE") in contract_days("NIFTY", ranges, [tue], 50, 0) and contract_days(
+        "NIFTY", ranges, [tue], 50, 0)[(tue, 24500, "PE")] == [fri]  # fmt: skip

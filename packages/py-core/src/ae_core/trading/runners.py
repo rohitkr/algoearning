@@ -617,7 +617,16 @@ class RulesRunner(Runner):
 
         if m.intrabar:
             return out  # the whole trade is judged on prices that existed together: the open of a minute
-        # the whole trade
+        # the whole trade: judged only when every open leg has a price (a leg without one would count as zero and
+        # make a loss look like a profit, or the other way round)
+        unpriced = [
+            p.contract.label for p in self.open_positions() if p.id not in self.exiting and m.price(p.contract) is None
+        ]
+        if unpriced:
+            if self.s.get("unpriced_noted") != m.now.date().isoformat():
+                self.s["unpriced_noted"] = m.now.date().isoformat()
+                self.note("trade_limits_paused", reason="no price for " + ", ".join(unpriced))
+            return out
         pnl = self._cycle_pnl(m)
         if risk.mtm_stop_loss and pnl <= -risk.mtm_stop_loss:
             return out + self._close(

@@ -19,6 +19,7 @@ expiry is passed as YYYY-MM-DDT07:00:00.000Z. Expiry calendars below come from t
 from __future__ import annotations
 
 import asyncio
+import itertools
 import math
 import tomllib
 from collections.abc import Awaitable, Callable, Iterable, Sequence
@@ -124,9 +125,12 @@ def contract_days(
     expiry_list: Sequence[date],
     step: int,
     buffer: int,
+    overnight: bool = False,
 ) -> dict[tuple[date, int, str], list[date]]:
     """Every (expiry, strike, right) and the days it should be stored: the traded expiry of each day (the next one
-    too on expiry day), strikes from `buffer` below that day's low to `buffer` above its high."""
+    too on expiry day), strikes from `buffer` below that day's low to `buffer` above its high. With `overnight`, every
+    contract also on the next trading day (until it expires): a position held overnight is priced the next morning
+    even after a gap took the market far from yesterday's strikes."""
     out: dict[tuple[date, int, str], list[date]] = {}
     for d in sorted(ranges):
         lo, hi = ranges[d]
@@ -138,6 +142,13 @@ def contract_days(
             for k in range(first, last + 1, step):
                 for r in ("CE", "PE"):
                     out.setdefault((e, k, r), []).append(d)
+    if overnight:
+        days = sorted(ranges)
+        after = dict(itertools.pairwise(days))
+        for (e, _, _), ds in out.items():
+            extra = {n for d in ds if (n := after.get(d)) is not None and n <= e} - set(ds)
+            ds.extend(sorted(extra))
+            ds.sort()
     return out
 
 
@@ -502,7 +513,7 @@ async def backfill(
     if len(trading) < len(weekdays(start, end)) * 0.8:
         rep.notes.append(f"index history covers {len(trading)} days; options are planned only for those")
     ex = expiries(underlying, start, end, trading)
-    wanted = contract_days(underlying, {d: days[d][:2] for d in trading}, ex, strike_step, buffer)
+    wanted = contract_days(underlying, {d: days[d][:2] for d in trading}, ex, strike_step, buffer, overnight=True)
     # a contract-day with a few candles (a live feed that only watched it for a while, an interrupted download) counts
     # as stored unless asked to refill: then it must hold nearly the whole session, as the index days do
     stored = await _stored_option_days(db, underlying, start, end, int(BARS_PER_DAY * 0.9) if refill_partial else 1)

@@ -694,3 +694,17 @@ def test_a_leg_switched_off_is_never_traded_and_old_configs_still_load() -> None
     out = sim.at("15:00")
     assert [i.contract.right for i in out] == ["CE"]  # the PE leg is off
     assert parse({"kind": "rules", "legs": [{"id": "L1", "action": "BUY", "option_type": "CE"}]}).legs[0].enabled
+
+
+def test_trade_limits_wait_until_every_leg_has_a_price() -> None:
+    """A leg without a price counted as zero: on a gap day the hedge alone looked like a profit target (6 Mar 2026)."""
+    legs = [{"id": "L1", "action": "SELL", "option_type": "PE", "lots": 1},
+            {"id": "L2", "action": "BUY", "option_type": "PE", "lots": 1, "strike": {"mode": "atm", "offset": 6}}]  # fmt: skip
+    sim = Sim(rr(legs=legs, risk={"mtm_target": 5000}), day=THU)
+    sold, hedge = c(25000, "PE", WEEK2), c(24700, "PE", WEEK2)
+    sim.prices = {sold: 250.0, hedge: 150.0}
+    assert len(sim.at("15:00")) == 2
+    sim.day = FRI
+    sim.prices = {hedge: 480.0}  # the sold leg has no price
+    assert sim.at("09:20") == []
+    assert any(n["event"] == "trade_limits_paused" for n in sim.r.notes)
