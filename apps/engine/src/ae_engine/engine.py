@@ -277,6 +277,9 @@ class Engine:
                 m = markets.get(self._underlying(r))
                 if m is not None:
                     wanted |= runners[r.id].wanted(m)
+                # orders still being worked: their limit is re-priced from these prices (and the feed keeps them
+                # subscribed), so a contract being bought or sold must stay wanted until its order is done
+                wanted |= {d["contract"] for d in r.state.get("_inflight", [])}
             ticks = await self.hub.last(wanted)
             prices = {k: t.ltp for k, t in ticks.items()}
             quotes = {k: Quote(t.bid, t.ask, t.volume, t.oi) for k, t in ticks.items()}

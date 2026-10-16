@@ -347,3 +347,22 @@ async def test_a_strategy_the_engine_cannot_read_does_not_block_other_runs(env: 
     b = await run_row(db, bad_id)
     assert b.error is not None and "restart the engine" in b.error
     assert await events(db, bad_id) == ["cannot_read_strategy"]
+
+
+async def test_a_contract_with_an_order_being_worked_keeps_fresh_prices(env: Any) -> None:
+    """Live limits are re-priced from the engine's prices: a contract whose order is still being worked must stay
+    wanted, or its price freezes and the re-priced limit chases a stale level (16 Oct 2026: a leg never filled)."""
+    from ae_brokers.fake_kite import FakeKite
+
+    db, hub, ids = env
+    box = a_box()
+    acc_id = await live_setup(db, ids, box)
+    await add_run(db, ids, mode="live", broker_account_id=acc_id)
+    kite = FakeKite(prices={"NIFTY2610625000CE": 100.0})
+    clock = [at("09:20")]
+    eng = live_engine(db, hub, clock, box, kite)
+    await prices(hub, clock[0], 25010, 100.0)
+    await eng.tick()  # the entry is handed to the account: in flight
+    await prices(hub, clock[0], 25010, 90.0)
+    await eng.tick()
+    assert eng.prices[CE] == 90.0
