@@ -82,21 +82,46 @@ describe("proxy", () => {
     expect(r.headers.get("location")).toBe("http://localhost:3000/testing-dashboard");
   });
 
-  it("asks for the master password on every page when one is set", async () => {
+  it("asks for the master password on its own page, then remembers it in a cookie", async () => {
+    const { NextRequest } = await import("next/server");
     await import("./proxy");
     vi.stubEnv("APP_GATE_PASSWORD", "open-sesame");
     try {
-      const ask = (await handler(signedIn, req("/runs/abc"))) as Response;
+      const ask = (await handler(
+        signedIn,
+        new NextRequest("http://localhost:3000/runs/abc?x=1"),
+      )) as Response;
       expect(ask.status).toBe(401);
-      expect(ask.headers.get("www-authenticate")).toContain("Basic");
-      const withPassword = (pw: string) => {
-        const r = req("/testing-dashboard");
-        r.headers.set("authorization", `Basic ${btoa(`team:${pw}`)}`);
-        return r;
-      };
-      expect(((await handler(signedOut, withPassword("wrong"))) as Response).status).toBe(401);
-      const ok = (await handler(signedOut, withPassword("open-sesame"))) as Response;
-      expect(ok.headers.get("x-middleware-rewrite")).toBe("http://localhost:3000/landing.html");
+      expect(ask.headers.get("www-authenticate")).toBeNull(); // no browser pop-up
+      const page = await ask.text();
+      expect(page).toContain('action="/__gate"');
+      expect(page).toContain('value="/runs/abc?x=1"');
+
+      const post = (password: string, next = "/runs/abc?x=1") =>
+        new NextRequest("http://localhost:3000/__gate", {
+          method: "POST",
+          body: new URLSearchParams({ password, next }),
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+        });
+      const wrong = (await handler(signedOut, post("wrong"))) as Response;
+      expect(wrong.status).toBe(401);
+      expect(await wrong.text()).toContain("not right");
+
+      const ok = (await handler(signedOut, post("open-sesame"))) as Response;
+      expect(ok.status).toBe(303);
+      expect(ok.headers.get("location")).toBe("http://localhost:3000/runs/abc?x=1");
+      const cookie = ok.headers.get("set-cookie") ?? "";
+      expect(cookie).toMatch(/^ae_gate=[0-9a-f]{64};/);
+      expect(cookie).toContain("HttpOnly");
+      expect(cookie).not.toContain("open-sesame");
+
+      const evil = (await handler(signedOut, post("open-sesame", "//evil.com"))) as Response;
+      expect(evil.headers.get("location")).toBe("http://localhost:3000/");
+
+      const value = cookie.split(";")[0] ?? "";
+      const back = new NextRequest("http://localhost:3000/testing-dashboard", { headers: { cookie: value } });
+      const r = (await handler(signedOut, back)) as Response;
+      expect(r.headers.get("x-middleware-rewrite")).toBe("http://localhost:3000/landing.html");
     } finally {
       vi.unstubAllEnvs();
     }

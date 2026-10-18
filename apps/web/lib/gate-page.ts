@@ -1,7 +1,12 @@
-// The page behind proxy.ts's master password: browsers show it when the password pop-up is cancelled or the password
-// is wrong. Self-contained (inline styles and script), because nothing else on the site loads without the password.
-// Same look and theme key as the closed-alpha splash on algoearning.com (apps/landing).
-export const GATE_PAGE = `<!doctype html>
+// The page in front of proxy.ts's master password: a form that posts the password to /__gate, which sets the access
+// cookie and returns to the page asked for. Self-contained (inline styles and script), because nothing else on the
+// site loads without the password. Same look and theme key as the closed-alpha splash on algoearning.com.
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+export function gatePage(next: string, wrong: boolean): string {
+  return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -36,7 +41,13 @@ export const GATE_PAGE = `<!doctype html>
     font-weight: 600; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; }
   .lock svg { width: 12px; height: 12px; }
   p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; }
-  button { margin-top: 24px; width: 100%; padding: 11px 16px; font: inherit; font-weight: 600; color: #fff;
+  form { margin-top: 24px; text-align: left; }
+  label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  input { width: 100%; padding: 11px 12px; font: inherit; color: var(--fg); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 10px; }
+  input:focus { outline: 2px solid var(--primary); outline-offset: 1px; border-color: transparent; }
+  .error { margin-top: 10px; font-size: 13px; color: #ef4444; }
+  button { margin-top: 16px; width: 100%; padding: 11px 16px; font: inherit; font-weight: 600; color: #fff;
     background: var(--primary); border: 0; border-radius: 10px; cursor: pointer; }
   button:hover { background: var(--primary-hover); }
   button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
@@ -56,9 +67,16 @@ export const GATE_PAGE = `<!doctype html>
     Team access only
   </span>
   <p>Internal Alpha Test Environment. Closed to the public.</p>
-  <button type="button" onclick="location.reload()">Enter the team password</button>
-  <p class="hint">Any username works. Ask the team for the password.</p>
+  <form method="post" action="/__gate">
+    <input type="hidden" name="next" value="${escapeHtml(next)}" />
+    <label for="password">Team password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus />
+    ${wrong ? '<p class="error" role="alert">That password is not right. Try again.</p>' : ""}
+    <button type="submit">Enter</button>
+  </form>
+  <p class="hint">Ask the team for the password.</p>
 </main>
 </body>
 </html>
 `;
+}

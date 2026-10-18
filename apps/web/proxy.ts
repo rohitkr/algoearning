@@ -3,9 +3,9 @@
 // page protects itself with `await auth.protect()` (see lib/session.ts), and the API independently verifies the
 // session token on each call.
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
-import { GATE_PAGE } from "./lib/gate-page";
+import { gatePage } from "./lib/gate-page";
 
 // Monitor (the admin panel) also answers on its own host, e.g. monitor.algoearning.com: its home page is the
 // panel, and every other path (the panel's own /monitor/... links, sign-in) works as on the main host. Admin
@@ -14,13 +14,18 @@ import { GATE_PAGE } from "./lib/gate-page";
 // for the Breeze app), and the platform Kite app's login with ?request_token=<token>&status=success (ADR 0021).
 // Forward either to Monitor's market-data page, which saves the session, removes the token from the address bar
 // and confirms. If the admin is signed out, Clerk's sign-in returns to that same URL afterwards.
-// Test environment: when APP_GATE_PASSWORD is set (production on the Mac), every page asks for that master password
-// in the browser's sign-in pop-up (HTTP Basic auth, any username) before anything else, so app.algoearning.com is
-// closed to the public; algoearning.com itself only shows the closed-alpha splash (apps/landing).
+// Test environment: when APP_GATE_PASSWORD is set (production on the Mac), every page first shows the team password
+// page (lib/gate-page.ts) until that master password is entered, so app.algoearning.com is closed to the public;
+// algoearning.com itself only shows the closed-alpha splash (apps/landing). The form posts to /__gate, which sets an
+// HttpOnly cookie holding an HMAC of the password (never the password itself) for 30 days: changing the password signs
+// everyone out of the gate.
 // Behind the password everything starts at HOME: "/" goes there, and it shows the product page (apps/web/landing,
 // copied to public/landing.html by scripts/sync-landing.mjs) to anyone signed out and the dashboard to anyone signed
 // in. The sign-in pages send a signed-in user there too, and /dashboard sends a signed-out one there.
 const HOME = "/testing-dashboard";
+
+const GATE_COOKIE = "ae_gate";
+const GATE_DAYS = 30;
 
 function sameText(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -29,28 +34,61 @@ function sameText(a: string, b: string): boolean {
   return diff === 0;
 }
 
-function passwordOk(header: string | null, password: string): boolean {
-  if (!header?.startsWith("Basic ")) return false;
-  let decoded = "";
-  try {
-    decoded = atob(header.slice(6).trim());
-  } catch {
-    return false;
+async function gateToken(password: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(password),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode("algoearning-gate-v1")));
+  return Array.from(sig, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Only a path on this site: never another host ("//evil.com", "https://..."). */
+function safeNext(v: FormDataEntryValue | null): string {
+  const s = typeof v === "string" ? v : "/";
+  return s.startsWith("/") && !s.startsWith("//") && !s.startsWith("/\\") ? s : "/";
+}
+
+function gateResponse(next: string, wrong: boolean): NextResponse {
+  return new NextResponse(gatePage(next, wrong), {
+    status: 401,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
+async function gate(req: NextRequest, password: string): Promise<NextResponse | null> {
+  const token = await gateToken(password);
+  if (req.nextUrl.pathname === "/__gate" && req.method === "POST") {
+    const form = await req.formData().catch(() => null);
+    const next = safeNext(form?.get("next") ?? null);
+    const given = form?.get("password");
+    if (typeof given !== "string" || !sameText(await gateToken(given), token)) {
+      await new Promise((r) => setTimeout(r, 750)); // slows down guessing
+      return gateResponse(next, true);
+    }
+    const res = NextResponse.redirect(new URL(next, req.url), 303);
+    res.cookies.set(GATE_COOKIE, token, {
+      httpOnly: true,
+      secure: req.nextUrl.protocol === "https:",
+      sameSite: "lax",
+      path: "/",
+      maxAge: GATE_DAYS * 24 * 3600,
+    });
+    return res;
   }
-  return sameText(decoded.slice(decoded.indexOf(":") + 1), password);
+  if (sameText(req.cookies.get(GATE_COOKIE)?.value ?? "", token)) return null;
+  return gateResponse(req.nextUrl.pathname + req.nextUrl.search, false);
 }
 
 export default clerkMiddleware(async (auth, req) => {
   const password = process.env.APP_GATE_PASSWORD;
-  if (password && !passwordOk(req.headers.get("authorization"), password)) {
-    return new NextResponse(GATE_PAGE, {
-      status: 401,
-      headers: {
-        "WWW-Authenticate": 'Basic realm="AlgoEarning test", charset="UTF-8"',
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "no-store",
-      },
-    });
+  if (password) {
+    const blocked = await gate(req, password);
+    if (blocked) return blocked;
   }
   const token = req.nextUrl.searchParams.get("apisession");
   if (token && req.nextUrl.pathname !== "/monitor/market-data") {
