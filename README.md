@@ -208,6 +208,20 @@ scripts/home-host.sh setup|tunnel|install|uninstall   # one-time setup
 
 Services: postgres, redis, api, web, feed, worker, signals, engine, tunnel, awake.
 
+#### Team password (app.algoearning.com)
+
+The master password that guards the whole site is the `APP_GATE_PASSWORD=` line in
+`apps/web/.env.production.local`. That file is git-ignored, so VS Code's search does not look inside it: open it by
+path (Cmd+P, then type `.env.production.local`) or read it with:
+
+```bash
+grep APP_GATE_PASSWORD apps/web/.env.production.local
+```
+
+To change it, replace the value after `APP_GATE_PASSWORD=` (no spaces or quotes), then run
+`scripts/home-host.sh deploy`. Everyone enters the new password once; the old 30-day sign-ins stop working. An empty
+value opens the site to anyone (the build warns).
+
 ## Conventions
 
 - Colours come only from theme tokens (`bg-surface`, `text-muted`, `text-profit`, ...); see `packages/ui/src/styles.css`.
