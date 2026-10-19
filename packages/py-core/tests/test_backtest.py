@@ -639,3 +639,21 @@ def test_a_tips_quarters_are_one_trade_in_the_result() -> None:
     assert (one.qty, one.entry_price, one.gross, one.charges) == (520, 157.15, 29341.0, 40.0)
     assert one.exit_price == round((176.1 + 196.5 + 215.55 + 266.1) / 4, 2) and one.exit_time == ts("10:04")
     assert one.reason.startswith("130 at 176.1 (target 1 (175)); 130 at 196.5") and rest is other
+
+
+def test_a_tips_stop_inside_a_minute_fills_at_the_stop_not_the_next_open() -> None:
+    """9 Jul 2026 10:41: the option fell from 151 to 68 inside one minute; a stop at 150 fills at 150."""
+    from ae_core.trading.model import Tip
+
+    src = "00000000-0000-0000-0000-0000000000aa"
+    config = parse({
+        "kind": "rules",
+        "entry": {"mode": "tip", "at": "09:15", "source_id": src, "tip_trade": "as_given", "tip_lots": 1},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [{"id": "L1", "action": "BUY", "option_type": "CE"}],
+    })  # fmt: skip
+    tip = Tip(1, src, ts("10:30") + timedelta(seconds=20), "BULLISH", "OPEN", True, "BUY NIFTY 25000 CE", "NIFTY",
+              "BUY", 25000, "CE", 95.0, 100.0, 80.0, (110.0, 120.0, 130.0))  # fmt: skip
+    h = history({"10:31": flat(99), "11:00": (95, 96, 60, 70), "11:01": flat(66), "15:15": flat(100)})
+    (t,) = run(config, h, tips=[tip]).trades
+    assert (t.entry_price, t.exit_price, t.reason) == (99, 80, "the tip's stop-loss (80)")

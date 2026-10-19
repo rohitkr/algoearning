@@ -518,12 +518,21 @@ class RulesRunner(Runner):
             return []
         buy = tip.action == "BUY"
         low = tip.entry_low if tip.entry_low is not None else tip.entry_high
-        if buy and px > tip.entry_high + e.tip_buffer:
-            return skip(f"price {px:g} is above the entry {tip.entry_high:g} + buffer {e.tip_buffer:g}")
-        if not buy and px < low - e.tip_buffer:
-            return skip(f"price {px:g} is below the entry {low:g} - buffer {e.tip_buffer:g}")
         if (px - tip.stop_loss) * (1 if buy else -1) <= 0:
             return skip(f"price {px:g} is already at or past the stop-loss {tip.stop_loss:g}")
+        limit = tip.entry_high + e.tip_buffer if buy else low - e.tip_buffer
+        if (px - limit) * (1 if buy else -1) > 0:
+            # like a limit order at the entry + buffer: wait for the price to come back while the tip is fresh
+            age = (m.now - tip.date).total_seconds()
+            if age > e.max_tip_age_s:
+                where = "above" if buy else "below"
+                return skip(f"the price stayed {where} {limit:g} (entry + buffer) for {e.max_tip_age_s}s")
+            self.s["armed"] = {"dir": direction, "at": m.now.isoformat(), "tip": tip_id}
+            why = f"waiting for {c.label} to come back to {limit:g}"
+            if self.s.get("waiting_reason") != why:
+                self.s["waiting_reason"] = why
+                self.note("waiting_to_enter", reason=f"{why} (now {px:g})")
+            return []
         lots = e.tip_lots
         split = lots % 4 == 0
         parts = [lots // 4] * 4 if split else [lots]
@@ -549,17 +558,18 @@ class RulesRunner(Runner):
         sign = 1 if tp["side"] == "BUY" else -1
         out: list[Intent] = []
 
-        def close(positions: list[Position], reason: str) -> None:
+        def close(positions: list[Position], reason: str, level: float) -> None:
             for p in positions:
                 i = self._exit(p, reason)
                 if i is not None:
+                    i.at_price = level
                     out.append(i)
 
         if (px - tp["sl"]) * sign <= 0:
             what = (
                 "the tip's stop-loss" if tp["stage"] == 0 else "stop at cost" if tp["stage"] == 1 else "trailing stop"
             )
-            close(held, f"{what} ({tp['sl']:g})")
+            close(held, f"{what} ({tp['sl']:g})", tp["sl"])
             return out
         targets = tp["targets"]
         while tp["stage"] < 3 and (px - targets[tp["stage"]]) * sign >= 0:
@@ -569,13 +579,15 @@ class RulesRunner(Runner):
             tp["sl"] = round(entry, 2) if k == 1 else targets[k - 2]
             self.note("tip_target", target=k, price=px, stop=tp["sl"])
             if tp["split"]:
-                close([p for p in held if p.leg == f"T{k}"], f"target {k} ({targets[k - 1]:g})")
+                close([p for p in held if p.leg == f"T{k}"], f"target {k} ({targets[k - 1]:g})", targets[k - 1])
             elif k == 3:
-                close(held, f"target 3 ({targets[2]:g})")
+                close(held, f"target 3 ({targets[2]:g})", targets[2])
         if tp["split"] and tp["stage"] >= 3:
             last = round(targets[2] * (1 + 0.2 * sign), 2)
             if (px - last) * sign >= 0:
-                close([p for p in held if p.leg == "T4" and p.id not in self.exiting], f"target 3 + 20% ({last:g})")
+                close(
+                    [p for p in held if p.leg == "T4" and p.id not in self.exiting], f"target 3 + 20% ({last:g})", last
+                )
         return out
 
     # -- in a trade -------------------------------------------------------------------------------------------------

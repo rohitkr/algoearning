@@ -808,11 +808,20 @@ def test_a_tip_as_given_with_lots_not_a_multiple_of_4_exits_whole_at_target_3() 
     assert out.reason == "target 3 (210)"
 
 
-def test_a_tip_as_given_is_skipped_when_the_price_ran_away() -> None:
-    sim = TipSim(as_given(4), [the_tip()])
-    sim.prices = {c(25000, "PE", DAY): 166.0}
+def test_a_tip_as_given_waits_like_a_limit_order_while_the_price_is_above_the_entry() -> None:
+    """9 Jul 2026: BUY @240 posted at 09:28, the next minute opened at 250, the one after at 224: a follower's limit
+    order fills then. A tip whose price never comes back within its age limit is skipped."""
+    sim = TipSim(as_given(4), [the_tip()])  # entry 156-160, buffer 5: buy at 165 or less
+    pe = c(25000, "PE", DAY)
+    sim.prices = {pe: 170.0}
     assert sim.at("10:31") == []
-    assert any(n["event"] == "tip_skipped" and "above the entry 160 + buffer 5" in n["reason"] for n in sim.r.notes)
+    assert any(n["event"] == "waiting_to_enter" and "come back to 165" in n["reason"] for n in sim.r.notes)
+    sim.prices[pe] = 162.0
+    assert len(sim.at("10:32")) == 4  # back in range: bought
+    late = TipSim(as_given(4), [the_tip()])
+    late.prices = {pe: 170.0}
+    assert late.at("10:31") == [] and late.at("10:32") == [] and late.at("10:33") == []  # older than 120 s by 10:33
+    assert any(n["event"] == "tip_skipped" and "stayed above 165" in n["reason"] for n in late.r.notes)
 
 
 def test_a_tip_as_given_is_not_cut_short_by_the_strategys_loss_limit() -> None:

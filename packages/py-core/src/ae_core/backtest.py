@@ -596,7 +596,11 @@ def _extremes(
         opened = m.price(intent.contract)
         extreme = ext.get(intent.contract.key)
         px: float | None = extreme if extreme is not None else opened
-        if intent.contract.key in at_level:
+        if intent.at_price is not None and opened is not None:
+            # a stop / limit at a price of the contract: filled there, or at the open if the price gapped past it
+            worse = min if (intent.side == "SELL") == adverse else max
+            px = worse(intent.at_price, opened)
+        elif intent.contract.key in at_level:
             px = at_level[intent.contract.key]  # the trade's own profit / loss level was crossed
         elif intent.reason.startswith("another leg") and opened is not None:
             px = opened  # the other legs leave when one leg stops: at the minute's open, not at their own extremes
@@ -617,7 +621,11 @@ def _extremes(
 # exits taken inside a minute (exact reasons, reason prefixes): stops and strategy-wide limits on the adverse pass,
 # targets and strategy-wide limits on the favourable one
 # the strategy-wide stops are stops too: the profit lock's floor, the combined premium stop, "exit all on a leg's stop"
-_STOPS = (("stop-loss",), ("stop-loss:", "strategy", "profit fell", "sold premiums", "another leg"))
+_STOPS = (
+    ("stop-loss",),
+    ("stop-loss:", "strategy", "profit fell", "sold premiums", "another leg", "the tip's stop", "stop at cost",
+     "trailing stop"),
+)  # fmt: skip
 _TARGETS = (("target",), ("target ", "strategy"))
 # runner notes worth telling the user about, counted (not listed per day), with their plain meaning
 _NOTED = {

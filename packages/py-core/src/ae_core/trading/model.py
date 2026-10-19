@@ -134,6 +134,9 @@ class Intent:
     # standing order would); the live engine just sends the order.
     level: float | None = None
     level_pnl: float | None = None
+    # an exit at a price of its own contract (a tip's stop-loss or target): a backtest fills there, or at the minute's
+    # open when the price gapped past it, as a standing stop / limit order would
+    at_price: float | None = None
 
 
 @dataclass
