@@ -3,6 +3,7 @@ import { StatusPill } from "@algoearning/ui";
 
 import { SignalFeed } from "@/components/signals/signal-feed";
 import { TipReplayView } from "@/components/signals/tip-replay";
+import { TipStrategyBacktest } from "@/components/signals/tip-strategy-backtest";
 import { SignalSources } from "@/components/signals/signal-sources";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
@@ -32,6 +33,7 @@ export default async function SignalsPage() {
             .map((s) => (
               <div key={s.id} className="flex flex-col gap-4">
                 <SignalFeed source={s} />
+                <TipStrategyBacktest source={s} />
                 <TipReplayView source={s} />
               </div>
             ))}

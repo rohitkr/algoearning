@@ -16,14 +16,18 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, cast
 
 import structlog
+from ae_core.backtest import summarize_result
 from ae_core.secrets import SecretBox, mask_phone
 from ae_core.signals import Message, assemble
+from ae_core.strategy import check, tip_source_ids, underlyings_of, uses_tips
 from ae_core.tip_replay import BREAKEVEN, BUFFER, ReplayParams, Tip, replay
 from ae_core.trading.model import IST
+from ae_core.trading.model import Tip as TradeTip
 from ae_db.models import Instrument, SignalMessage, SignalOverride, SignalRow, SignalSource
 from ae_db.session import Database
 from ae_db.signal_store import load_messages, load_overrides, rebuild
 from ae_marketdata.history import load_tip_prices
+from ae_marketdata.replay import lot_size_note, replay_config
 from ae_telegram import (
     Chat,
     CodeExpired,
@@ -46,6 +50,8 @@ from ..entitlements import load_entitlements, require_feature, require_within
 from ..errors import AppError, Conflict, NotFound, TooManyRequests, Unavailable
 from ..schemas import (
     ERROR_RESPONSES,
+    BacktestPreviewIn,
+    BacktestPreviewOut,
     SignalKindIn,
     SignalMessageOut,
     SignalOut,
@@ -440,6 +446,59 @@ async def list_signals(
 
 
 FIRST_TIP = date(2026, 7, 9)  # the channel's first trade message
+
+
+@router.post("/signal-sources/{source_id}/backtest", response_model=BacktestPreviewOut)
+async def backtest_tip_strategy(
+    source_id: uuid.UUID, body: BacktestPreviewIn, user: CurrentUser, s: UserSession, db: DbDep,
+    settings: SettingsDep,
+) -> BacktestPreviewOut:  # fmt: skip
+    """Backtest a strategy that enters on this source's tips: the normal backtest (the same runner the engine uses
+    live), with the source's stored tips shown to it from the minute each was posted. Nothing is stored. The
+    channel's later "target done" / "SL hit" messages are not replayed: the strategy's own exits decide."""
+    await _own(s, user.user_id, source_id)
+    ent = await load_entitlements(s, user.user_id, timedelta(days=settings.subscription_grace_days))
+    require_feature(ent, "backtesting")
+    if body.start_date > body.end_date:
+        raise AppError("the start date must not be after the end date")
+    config = body.config
+    if not uses_tips(config) or source_id not in tip_source_ids(config):
+        raise Conflict("this strategy does not enter on this channel's tips", {"reason": "not_this_source"})
+    from .strategies import _instruments  # the strategies router owns the instrument lookup
+
+    instruments = await _instruments(s)
+    issues = check(config, instruments)
+    if issues:
+        raise Conflict(f"the strategy does not pass its checks: {issues[0].msg}", {"reason": "invalid"})
+    lo = datetime.combine(body.start_date, datetime.min.time(), tzinfo=IST)
+    hi = datetime.combine(body.end_date + timedelta(days=1), datetime.min.time(), tzinfo=IST)
+    rows = (
+        await s.execute(
+            select(SignalRow)
+            .where(SignalRow.source_id == source_id, SignalRow.date >= lo, SignalRow.date < hi)
+            .order_by(SignalRow.date, SignalRow.header_msg_id)
+        )
+    ).scalars().all()  # fmt: skip
+    # every tip as it looked when posted: open (its later status is what happened next, not known then)
+    tips = [
+        TradeTip(r.header_msg_id, str(source_id), r.date, r.direction, "OPEN", r.complete,  # type: ignore[arg-type]
+                 f"{r.action} {r.index} {r.strike} {r.option_type}", r.index, r.action, r.strike, r.option_type,
+                 r.entry_low, r.entry_high, r.stop_loss, tuple(r.targets or ()))
+        for r in rows
+    ]  # fmt: skip
+    used = underlyings_of(config)
+    insts = {u: (instruments[u].lot_size, instruments[u].strike_step) for u in used}
+    result = await replay_config(
+        db, config, body.start_date, body.end_date, multiplier=body.multiplier, insts=insts,
+        slippage_pct=body.slippage_pct, tips=tips,
+    )  # fmt: skip
+    out = summarize_result(result)
+    note = f"{len(tips)} tips posted in the range; the channel's own exit messages are not replayed."
+    out["warnings"] = [note, lot_size_note(insts, used), *out["warnings"]]
+    return BacktestPreviewOut(
+        underlying=config.underlying, start_date=body.start_date, end_date=body.end_date,
+        multiplier=body.multiplier, slippage_pct=body.slippage_pct, result=out,
+    )  # fmt: skip
 
 
 @router.get("/signal-sources/{source_id}/replay", response_model=TipReplayOut)

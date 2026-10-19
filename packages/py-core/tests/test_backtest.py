@@ -595,3 +595,26 @@ def test_the_days_count_a_trade_on_its_entry_day_so_its_legs_stay_together() -> 
     })  # fmt: skip
     r = simulate(config, h, mon, DAY, lot_size=65, strike_step=50, slippage_pct=0.0, costs=Costs(0, 0, 0, 0, 0, 0))
     assert [d.day for d in r.daily()] == [mon]  # entered on the Monday, closed on the Tuesday
+
+
+def test_a_tip_strategy_is_backtested_over_the_channels_stored_tips() -> None:
+    """A tip is shown to the runner from the minute it was posted; bought as given, a quarter out at each target."""
+    from ae_core.trading.model import Tip
+
+    src = "00000000-0000-0000-0000-0000000000aa"
+    config = parse({
+        "kind": "rules",
+        "entry": {"mode": "tip", "at": "09:15", "source_id": src, "tip_trade": "as_given", "tip_lots": 4},
+        "holding": {"mode": "intraday", "exit": "15:15"},
+        "legs": [{"id": "L1", "action": "BUY", "option_type": "CE"}],
+    })  # fmt: skip
+    tip = Tip(1, src, ts("10:30") + timedelta(seconds=20), "BULLISH", "OPEN", True, "BUY NIFTY 25000 CE", "NIFTY",
+              "BUY", 25000, "CE", 95.0, 100.0, 80.0, (110.0, 120.0, 130.0))  # fmt: skip
+    h = history({"10:30": flat(98), "10:31": flat(99), "11:00": flat(111), "11:30": flat(121), "12:00": flat(131),
+                 "12:30": flat(119), "15:15": flat(100)})  # fmt: skip
+    r = run(config, h, tips=[tip])
+    assert [(t.entry_price, t.exit_price, t.reason) for t in r.trades] == [
+        (99, 111, "target 1 (110)"), (99, 121, "target 2 (120)"), (99, 131, "target 3 (130)"),
+        (99, 119, "trailing stop (120)"),
+    ]  # fmt: skip
+    assert run(config, h).trades == []  # no tips, no trades

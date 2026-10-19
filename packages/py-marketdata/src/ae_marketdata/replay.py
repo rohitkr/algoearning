@@ -4,11 +4,12 @@ the builder's "test before saving", so both run exactly the same code."""
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 
 from ae_core.backtest import BacktestResult, simulate
 from ae_core.strategy import AnyConfig, PlansConfig, RulesConfig, SmcScalpConfig, prior_days_needed
+from ae_core.trading.model import Tip
 from ae_db.session import Database
 
 from .history import load_history
@@ -19,7 +20,7 @@ WARMUP = timedelta(days=10)  # earlier sessions loaded for runners that read the
 
 async def replay(
     db: Database, config: AnyConfig, start: date, end: date, *, multiplier: int, lot_size: int, strike_step: int,
-    slippage_pct: float,
+    slippage_pct: float, tips: Sequence[Tip] = (),
 ) -> BacktestResult:  # fmt: skip
     """Run the simulator. The intraday SMC scalper (no position outlives its day) is replayed a month at a time, so a
     long range of option history never has to fit in memory at once."""
@@ -30,7 +31,7 @@ async def replay(
         history = await load_history(db, config.underlying, first, end)
         return await asyncio.to_thread(
             simulate, config, history, start, end, multiplier=multiplier, lot_size=lot_size, strike_step=strike_step,
-            slippage_pct=slippage_pct,
+            slippage_pct=slippage_pct, tips=tips,
         )  # fmt: skip
     total = BacktestResult()
     for a, b in months(start, end):
@@ -46,7 +47,7 @@ async def replay(
 
 async def replay_config(
     db: Database, config: AnyConfig, start: date, end: date, *, multiplier: int, insts: Mapping[str, tuple[int, int]],
-    slippage_pct: float,
+    slippage_pct: float, tips: Sequence[Tip] = (),
 ) -> BacktestResult:  # fmt: skip
     """`replay` for any config. A strategy of plans may trade several instruments: each instrument's plans are replayed
     on that instrument's own history and lot size, and the results are put together (every day row then says which
@@ -54,14 +55,15 @@ async def replay_config(
     if not isinstance(config, PlansConfig) or len(config.underlyings()) == 1:
         lot, step = insts[config.underlying]
         return await replay(
-            db, config, start, end, multiplier=multiplier, lot_size=lot, strike_step=step, slippage_pct=slippage_pct
-        )
+            db, config, start, end, multiplier=multiplier, lot_size=lot, strike_step=step, slippage_pct=slippage_pct,
+            tips=tips,
+        )  # fmt: skip
     total = BacktestResult()
     for u in config.underlyings():
         lot, step = insts[u]
         part = await replay(
             db, config.for_underlying(u), start, end, multiplier=multiplier, lot_size=lot, strike_step=step,
-            slippage_pct=slippage_pct,
+            slippage_pct=slippage_pct, tips=tips,
         )  # fmt: skip
         for row in part.day_log:
             row["underlying"] = u

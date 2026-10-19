@@ -757,8 +757,23 @@ def as_given(lots: int = 4) -> Runner:
 def the_tip(minute: str = "10:30") -> Any:
     from ae_core.trading.model import Tip
 
-    return Tip(7, SRC, datetime.combine(DAY, time.fromisoformat(minute), tzinfo=IST), "BEARISH", "OPEN", True,
-               "BUY NIFTY 25000 PE", "NIFTY", "BUY", 25000, "PE", 156.0, 160.0, 141.0, (175.0, 190.0, 210.0))  # fmt: skip
+    return Tip(
+        7,
+        SRC,
+        datetime.combine(DAY, time.fromisoformat(minute), tzinfo=IST),
+        "BEARISH",
+        "OPEN",
+        True,
+        "BUY NIFTY 25000 PE",
+        "NIFTY",
+        "BUY",
+        25000,
+        "PE",
+        156.0,
+        160.0,
+        141.0,
+        (175.0, 190.0, 210.0),
+    )
 
 
 def test_a_tip_as_given_books_a_quarter_at_each_target_and_trails_the_stop() -> None:

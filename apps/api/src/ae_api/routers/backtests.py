@@ -62,8 +62,8 @@ def _out(r: BacktestRun) -> BacktestOut:
 
 COVERAGE_TTL_S = 600
 TIP_NOT_SUPPORTED = (
-    "a strategy that trades Telegram tips cannot be backtested here yet (the replay over stored tips is not built): "
-    'use "Replay the tips as given" in the Signals tab'
+    "a strategy that trades Telegram tips is backtested in the Signals tab, over the channel's stored tips: "
+    'open Signals and use "Backtest a Telegram strategy"'
 )
 
 

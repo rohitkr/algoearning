@@ -26,7 +26,7 @@ from typing import Any, Protocol
 
 from .reports import ClosedTrade, Day, Summary, daily, max_losing_streak, summarize
 from .strategy import AnyConfig
-from .trading.model import IST, Intent, Market, Position, Quote
+from .trading.model import IST, Intent, Market, Position, Quote, Tip
 from .trading.runners import Runner, make_runner
 
 TICK = 0.05
@@ -259,9 +259,11 @@ def simulate(
     slippage_pct: float = 0.05,
     spread_pct: float = 0.0,
     costs: Costs | None = None,
+    tips: Sequence[Tip] = (),
 ) -> BacktestResult:
     """`spread_pct`: a modelled bid/ask spread (% of the premium); half of it is paid on every fill, on top of
-    the slippage (history has trades, not quotes)."""
+    the slippage (history has trades, not quotes). `tips`: a Telegram channel's stored tips, for strategies that
+    enter on them: each is shown to the runner from the moment it was posted (a fill is then the next minute's open)."""
     costs = costs or Costs()
     runner: Runner = make_runner(config, multiplier)
     u = config.underlying
@@ -332,18 +334,21 @@ def simulate(
             no_options.append(day)
         why: dict[str, None] = {}  # this day's reasons, in order, once each
         prices = _Prices(history, day)
+        day_tips = [t for t in tips if t.date.astimezone(IST).date() == day]
         live_expiries = [e for e in expiries if e >= day]
         before = [c for d in prior for c in d]
         for i, bar in enumerate(spot):
             now = bar.ts
             done = list(spot[:i])
             m0 = Market(now, u, bar.open, done, {}, live_expiries, lot_size, strike_step, before)
+            m0.tips = [t for t in day_tips if t.date <= now]
             keys = runner.wanted(m0)
             for k in keys:
                 prices.seen(k, now)
             opens = {k: p for k in keys if (p := prices.open(k, now)) is not None}
             quotes = {k: prices.quote(k) for k in keys}
             m = Market(now, u, bar.open, done, opens, live_expiries, lot_size, strike_step, before, quotes)
+            m.tips = m0.tips
             # step A: the minute's open
             step_intents = runner.step(m)
             at_level = _level_prices(runner, step_intents, prev_opens, m.prices)
