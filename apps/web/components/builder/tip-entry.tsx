@@ -105,6 +105,41 @@ export function TipEntry<T extends { entry?: Partial<RulesEntry> | null; legs: S
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <SelectField
+            label="How to trade a tip"
+            value={e.tip_trade}
+            options={[
+              { value: "legs", label: "Only its direction (my legs below)" },
+              { value: "as_given", label: "As given (the tip's own option, targets and stop)" },
+            ]}
+            onChange={(tip_trade) => setEntry({ tip_trade })}
+          />
+          {e.tip_trade === "as_given" && (
+            <>
+              <NumberField
+                label="Lots"
+                value={e.tip_lots}
+                min={1}
+                max={100}
+                hint={
+                  e.tip_lots % 4 === 0
+                    ? "A quarter out at each target, the last at target 3 + 20%"
+                    : "Not a multiple of 4: everything out at target 3"
+                }
+                error={errs["entry.tip_lots"]}
+                onChange={(v) => setEntry({ tip_lots: v ?? Number.NaN })}
+              />
+              <NumberField
+                label="Buy up to entry +"
+                value={e.tip_buffer}
+                min={0}
+                max={100}
+                suffix="pts"
+                error={errs["entry.tip_buffer"]}
+                onChange={(v) => setEntry({ tip_buffer: v ?? Number.NaN })}
+              />
+            </>
+          )}
+          <SelectField
             label="Source"
             value={e.source_id ?? ""}
             error={errs["entry.source_id"]}

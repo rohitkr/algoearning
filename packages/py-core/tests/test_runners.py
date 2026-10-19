@@ -698,8 +698,9 @@ def test_a_leg_switched_off_is_never_traded_and_old_configs_still_load() -> None
 
 def test_trade_limits_wait_until_every_leg_has_a_price() -> None:
     """A leg without a price counted as zero: on a gap day the hedge alone looked like a profit target (6 Mar 2026)."""
+    hedge_strike = {"mode": "atm", "offset": 6}
     legs = [{"id": "L1", "action": "SELL", "option_type": "PE", "lots": 1},
-            {"id": "L2", "action": "BUY", "option_type": "PE", "lots": 1, "strike": {"mode": "atm", "offset": 6}}]  # fmt: skip
+            {"id": "L2", "action": "BUY", "option_type": "PE", "lots": 1, "strike": hedge_strike}]  # fmt: skip
     sim = Sim(rr(legs=legs, risk={"mtm_target": 5000}), day=THU)
     sold, hedge = c(25000, "PE", WEEK2), c(24700, "PE", WEEK2)
     sim.prices = {sold: 250.0, hedge: 150.0}
@@ -729,3 +730,71 @@ def test_a_held_trade_waits_for_the_open_delay_before_stops_apply_but_intraday_n
     assert len(same.at("09:20")) == 1
     same.prices = {c(25000, "CE", WEEK2): 150.0}
     assert [i.reason for i in same.at("09:21")] == ["stop-loss"]
+
+
+SRC = "00000000-0000-0000-0000-0000000000aa"
+
+
+class TipSim(Sim):
+    def __init__(self, runner: Runner, tips: list[Any], day: date = DAY) -> None:
+        super().__init__(runner, day)
+        self.tips = tips
+
+    def market(self, hm: str) -> Market:
+        m = super().market(hm)
+        m.tips = list(self.tips)
+        return m
+
+
+def as_given(lots: int = 4) -> Runner:
+    return rr(
+        entry={"mode": "tip", "at": "09:15", "source_id": SRC, "tip_trade": "as_given", "tip_lots": lots},
+        holding={"mode": "intraday", "exit": "15:15"},
+        legs=[],
+    )
+
+
+def the_tip(minute: str = "10:30") -> Any:
+    from ae_core.trading.model import Tip
+
+    return Tip(7, SRC, datetime.combine(DAY, time.fromisoformat(minute), tzinfo=IST), "BEARISH", "OPEN", True,
+               "BUY NIFTY 25000 PE", "NIFTY", "BUY", 25000, "PE", 156.0, 160.0, 141.0, (175.0, 190.0, 210.0))  # fmt: skip
+
+
+def test_a_tip_as_given_books_a_quarter_at_each_target_and_trails_the_stop() -> None:
+    sim = TipSim(as_given(4), [the_tip()])
+    pe = c(25000, "PE", DAY)
+    assert sim.r.wanted(sim.market("10:30")) >= {pe}  # streamed before the entry
+    sim.prices = {pe: 163.0}  # within 160 + buffer 5
+    out = sim.at("10:31")
+    assert [(i.side, i.lots, i.leg) for i in out] == [("BUY", 1, f"T{k}") for k in (1, 2, 3, 4)]
+    sim.prices[pe] = 176.0
+    (t1,) = sim.at("10:35")
+    assert t1.leg == "T1" and t1.reason == "target 1 (175)" and sim.r.s["tipplan"]["sl"] == 163.0  # cost
+    sim.prices[pe] = 211.0  # TP2 and TP3 in one minute
+    assert [i.leg for i in sim.at("10:40")] == ["T2", "T3"] and sim.r.s["tipplan"]["sl"] == 190.0
+    sim.prices[pe] = 240.0
+    assert sim.at("10:45") == []  # the last quarter runs to TP3 + 20% (252)
+    sim.prices[pe] = 189.0
+    (last,) = sim.at("10:50")
+    assert last.leg == "T4" and last.reason == "trailing stop (190)"
+
+
+def test_a_tip_as_given_with_lots_not_a_multiple_of_4_exits_whole_at_target_3() -> None:
+    sim = TipSim(as_given(3), [the_tip()])
+    pe = c(25000, "PE", DAY)
+    sim.prices = {pe: 158.0}
+    (entry,) = sim.at("10:31")
+    assert entry.lots == 3
+    sim.prices[pe] = 192.0
+    assert sim.at("10:35") == [] and sim.r.s["tipplan"]["sl"] == 175.0  # stop at TP1 after TP2
+    sim.prices[pe] = 212.0
+    (out,) = sim.at("10:40")
+    assert out.reason == "target 3 (210)"
+
+
+def test_a_tip_as_given_is_skipped_when_the_price_ran_away() -> None:
+    sim = TipSim(as_given(4), [the_tip()])
+    sim.prices = {c(25000, "PE", DAY): 166.0}
+    assert sim.at("10:31") == []
+    assert any(n["event"] == "tip_skipped" and "above the entry 160 + buffer 5" in n["reason"] for n in sim.r.notes)

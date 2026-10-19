@@ -5358,6 +5358,29 @@
             ],
             "title": "Source Id"
           },
+          "tip_buffer": {
+            "default": 5.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Tip Buffer",
+            "type": "number"
+          },
+          "tip_lots": {
+            "default": 4,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Tip Lots",
+            "type": "integer"
+          },
+          "tip_trade": {
+            "default": "legs",
+            "enum": [
+              "legs",
+              "as_given"
+            ],
+            "title": "Tip Trade",
+            "type": "string"
+          },
           "until": {
             "anyOf": [
               {

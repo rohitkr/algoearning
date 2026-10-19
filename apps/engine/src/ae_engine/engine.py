@@ -222,6 +222,13 @@ class Engine:
                 r.complete,
                 f"{r.action} {r.index} {r.strike} {r.option_type}",
                 r.index,
+                r.action,
+                r.strike,
+                r.option_type,
+                r.entry_low,
+                r.entry_high,
+                r.stop_loss,
+                tuple(r.targets or ()),
             )
             for r in (await s.execute(q)).scalars()
         ]

@@ -105,3 +105,12 @@ at target 1, one third at target 2, everything left at target 3; once the option
 points (adjustable; 0 = stay at cost), only ever moving up. A stop change applies from the next minute (the order
 inside a minute is unknown). Every tip also reports whether the market moved our way before it was stopped (highest
 price in the minutes before the exit, in points), when the stop reached cost and how often it trailed up.
+
+**Trading a tip as given (built).** A tip strategy can trade the tip itself instead of only its direction (`entry.tip_trade
+= as_given`): the tip's own option (strike, CE/PE, BUY/SELL; the current-week expiry, as tips name none) with
+`tip_lots`, entered only while its price is at most the entry range's top + `tip_buffer` (default 5 points; for a SELL
+tip, at least the bottom - buffer) and not past the tip's stop-loss; otherwise the tip is skipped with the reason. With
+lots a multiple of 4 the position is entered as four quarters: one quarter out at each of TP1, TP2 and TP3 and the last
+at TP3 + 20%; with other lots everything goes at TP3. The stop starts at the tip's stop-loss and moves to cost at TP1,
+to TP1 at TP2 and to TP2 at TP3. The strategy's exit time and loss / profit limits still apply; the channel's SL hit
+closes the trade (its target 3 does not: the last quarter runs on). The legs are kept but not used.

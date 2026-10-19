@@ -181,6 +181,7 @@ export function PlanEditor({
   const byConditions = e.mode === "conditions";
   const byTip = e.mode === "tip";
   const directional = byConditions || byTip;
+  const asGiven = byTip && e.tip_trade === "as_given"; // the tip itself is the leg: the legs are kept but not used
   const lastLock = useRemembered(r.lock_profit);
   const lastCombined = useRemembered(r.combined_stop);
   const lastUntil = useRemembered(e.until);
@@ -370,7 +371,7 @@ export function PlanEditor({
       </Card>
 
       {/* 2 · LEGS */}
-      <Card className="flex flex-col gap-4">
+      <Card className={asGiven ? "hidden" : "flex flex-col gap-4"}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <Step
             n={2}

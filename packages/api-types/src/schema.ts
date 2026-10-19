@@ -3475,6 +3475,22 @@ export interface components {
             signals?: components["schemas"]["Signal"][];
             /** Source Id */
             source_id?: string | null;
+            /**
+             * Tip Buffer
+             * @default 5
+             */
+            tip_buffer: number;
+            /**
+             * Tip Lots
+             * @default 4
+             */
+            tip_lots: number;
+            /**
+             * Tip Trade
+             * @default legs
+             * @enum {string}
+             */
+            tip_trade: "legs" | "as_given";
             /** Until */
             until?: string | null;
         };

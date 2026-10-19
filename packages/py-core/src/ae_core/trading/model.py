@@ -81,6 +81,14 @@ class Tip:
     complete: bool  # stop-loss given: tradable
     tip: str = ""  # e.g. "BUY NIFTY 22450 CE", for the log
     index: str = ""  # the tip's underlying, e.g. NIFTY: a strategy takes only tips for its own underlying
+    # the tip itself, for trading it as given
+    action: str = ""  # BUY | SELL
+    strike: int = 0
+    option_type: str = ""  # CE | PE
+    entry_low: float | None = None
+    entry_high: float | None = None
+    stop_loss: float | None = None
+    targets: tuple[float, ...] = ()
 
 
 @dataclass

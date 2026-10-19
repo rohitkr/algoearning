@@ -224,7 +224,13 @@ class RulesRunner(Runner):
     def wanted(self, m: Market) -> set[str]:
         keys = super().wanted(m)
         keys |= {p["contract"] for p in self.s.get("pending", [])}
-        if self.s.get("phase", "waiting") == "waiting":
+        e = self.cfg.entry
+        if self.s.get("phase", "waiting") == "waiting" and e.mode == "tip" and e.tip_trade == "as_given":
+            seen = set(self.s.get("tips_seen", [])) - {(self.s.get("armed") or {}).get("tip")}
+            for tip in m.tips:
+                if tip.source_id == str(e.source_id) and tip.id not in seen and (c := self._tip_contract(m, tip)):
+                    keys.add(c.key)
+        elif self.s.get("phase", "waiting") == "waiting":
             for leg in self.cfg.legs_for(m.now.date()):
                 expiry = rules.pick_expiry(m.expiries, m.now.date(), leg.expiry)
                 if expiry is None or m.spot is None:
@@ -377,10 +383,10 @@ class RulesRunner(Runner):
         if today.strftime("%a").upper()[:3] not in e.days:
             return "not_a_trading_day_for_this_strategy"
         legs = self.cfg.legs_for(today)
-        if not legs:
+        if not legs and not (e.mode == "tip" and e.tip_trade == "as_given"):  # as given: the tip is the leg
             return "no_legs_for_this_day"
         if e.dte is not None:
-            expiry = rules.pick_expiry(m.expiries, today, legs[0].expiry)
+            expiry = rules.pick_expiry(m.expiries, today, legs[0].expiry if legs else "current_week")
             if expiry is None or rules.weekdays_between(today, expiry) not in e.dte:
                 return "not_a_chosen_day_before_expiry"
         return None
@@ -426,6 +432,8 @@ class RulesRunner(Runner):
                     return []
                 direction = found
                 self.s["armed"] = {"dir": found, "at": now.isoformat()}
+        if e.mode == "tip" and e.tip_trade == "as_given" and tip_id is not None:
+            return self._tip_as_given(m, tip_id, direction, today)
         legs = [leg for leg in self.cfg.legs_for(now.date()) if leg.direction in ("always", direction)]
         if not legs:
             if tip_id is not None:
@@ -473,6 +481,102 @@ class RulesRunner(Runner):
         intents = _buy_first([self._enter(m, c, leg.action, leg.lots, leg.id, why_in) for leg, c in contracts])
         self.s["awaiting"] = [i.position_id for i in intents]
         return intents
+
+    # -- a tip traded as given ------------------------------------------------------------------------------------
+    def _tip_contract(self, m: Market, tip: Tip) -> Contract | None:
+        expiry = rules.pick_expiry(m.expiries, m.now.date(), "current_week")
+        if expiry is None or not tip.strike or tip.option_type not in ("CE", "PE"):
+            return None
+        return Contract(self.cfg.underlying, expiry, tip.strike, tip.option_type)  # type: ignore[arg-type]
+
+    def _tip_as_given(self, m: Market, tip_id: int, direction: str, today: str) -> list[Intent]:
+        """Buy (or sell) the tip's own option while its price is still within the entry range + buffer."""
+        e = self.cfg.entry
+        tip = next((t for t in m.tips if t.id == tip_id and t.source_id == str(e.source_id)), None)
+
+        def skip(reason: str) -> list[Intent]:
+            self.s.pop("armed", None)
+            self.note("tip_skipped", tip_id=tip_id, tip=tip.tip if tip else "", reason=reason)
+            return []
+
+        if tip is None:
+            return skip("the tip is no longer listed")
+        if tip.action not in ("BUY", "SELL") or tip.stop_loss is None or tip.entry_high is None or len(tip.targets) < 3:
+            return skip("the tip has no entry, stop-loss and three targets")
+        c = self._tip_contract(m, tip)
+        if c is None:
+            return skip("no current-week expiry for the tip's option")
+        final = self._final(m)
+        if isinstance(final, str) or final <= m.now:
+            return skip("the exit time has passed")
+        px = m.price(c)
+        if px is None:
+            why = "no price yet for " + c.label
+            if self.s.get("waiting_reason") != why:
+                self.s["waiting_reason"] = why
+                self.note("waiting_to_enter", reason=why)
+            return []
+        buy = tip.action == "BUY"
+        low = tip.entry_low if tip.entry_low is not None else tip.entry_high
+        if buy and px > tip.entry_high + e.tip_buffer:
+            return skip(f"price {px:g} is above the entry {tip.entry_high:g} + buffer {e.tip_buffer:g}")
+        if not buy and px < low - e.tip_buffer:
+            return skip(f"price {px:g} is below the entry {low:g} - buffer {e.tip_buffer:g}")
+        if (px - tip.stop_loss) * (1 if buy else -1) <= 0:
+            return skip(f"price {px:g} is already at or past the stop-loss {tip.stop_loss:g}")
+        lots = e.tip_lots
+        split = lots % 4 == 0
+        parts = [lots // 4] * 4 if split else [lots]
+        why_in = f"Telegram tip {tip_id} as given ({tip.tip})"
+        side: Side = "BUY" if buy else "SELL"
+        intents = [self._enter(m, c, side, n, f"T{i + 1}" if split else "T", why_in) for i, n in enumerate(parts)]
+        self.s.pop("armed", None)
+        self.s.pop("exit_retry_at", None)
+        self.s.update(phase="in", entries_day=today, entries=self._entries_today(m) + 1, final=final.isoformat(),
+                      cycle_realized=self.realized, reentries={}, pending=[], sold={}, lock_floor=None,
+                      direction=direction, tip_id=tip_id, awaiting=[i.position_id for i in intents],
+                      tipplan={"contract": c.key, "side": side, "targets": list(tip.targets[:3]),
+                               "sl": tip.stop_loss, "stage": 0, "split": split})  # fmt: skip
+        return intents
+
+    def _tip_exits(self, m: Market) -> list[Intent]:
+        """The tip's own exits: a quarter at each target, the stop moving up behind the price, the rest at TP3 + 20%."""
+        tp = self.s["tipplan"]
+        px = m.price(Contract.from_key(tp["contract"]))
+        held = [p for p in self.open_positions() if p.id not in self.exiting]
+        if px is None or not held:
+            return []
+        sign = 1 if tp["side"] == "BUY" else -1
+        out: list[Intent] = []
+
+        def close(positions: list[Position], reason: str) -> None:
+            for p in positions:
+                i = self._exit(p, reason)
+                if i is not None:
+                    out.append(i)
+
+        if (px - tp["sl"]) * sign <= 0:
+            what = (
+                "the tip's stop-loss" if tp["stage"] == 0 else "stop at cost" if tp["stage"] == 1 else "trailing stop"
+            )
+            close(held, f"{what} ({tp['sl']:g})")
+            return out
+        targets = tp["targets"]
+        while tp["stage"] < 3 and (px - targets[tp["stage"]]) * sign >= 0:
+            tp["stage"] += 1
+            k = tp["stage"]
+            entry = sum(p.entry_price * p.qty for p in held) / sum(p.qty for p in held)
+            tp["sl"] = round(entry, 2) if k == 1 else targets[k - 2]
+            self.note("tip_target", target=k, price=px, stop=tp["sl"])
+            if tp["split"]:
+                close([p for p in held if p.leg == f"T{k}"], f"target {k} ({targets[k - 1]:g})")
+            elif k == 3:
+                close(held, f"target 3 ({targets[2]:g})")
+        if tp["split"] and tp["stage"] >= 3:
+            last = round(targets[2] * (1 + 0.2 * sign), 2)
+            if (px - last) * sign >= 0:
+                close([p for p in held if p.leg == "T4" and p.id not in self.exiting], f"target 3 + 20% ({last:g})")
+        return out
 
     # -- in a trade -------------------------------------------------------------------------------------------------
     def _arrived(self, pid: str) -> None:
@@ -595,6 +699,10 @@ class RulesRunner(Runner):
             self.s["final"] = rules.at(m.now.date(), cfg.holding.exit, IST).isoformat()
         if m.now >= datetime.fromisoformat(self.s["final"]):
             return self._close(m, f"exit time {cfg.holding.exit}")
+        if self.s.get("tipplan"):
+            out = self._tip_exits(m)
+            if out:
+                return out
         if self._waiting_for_the_open(m):
             return out
 
@@ -663,7 +771,8 @@ class RulesRunner(Runner):
         if cfg.entry.mode == "tip" and cfg.entry.on_tip_exit == "close" and self.s.get("tip_id") is not None:
             done = next((t for t in m.tips if t.id == self.s["tip_id"] and t.source_id == str(cfg.entry.source_id)),
                         None)  # fmt: skip
-            if done is not None and done.status in ("SL_HIT", "T3"):
+            closing = ("SL_HIT",) if self.s.get("tipplan") else ("SL_HIT", "T3")  # as given: we run past target 3
+            if done is not None and done.status in closing:
                 why = "the channel's stop-loss hit" if done.status == "SL_HIT" else "the channel's target 3"
                 return out + self._close(m, f"tip closed: {why}", "tip_closed", tip_id=done.id, pnl=pnl)
 

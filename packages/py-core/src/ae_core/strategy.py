@@ -250,6 +250,13 @@ class RulesEntry(_Model):
     source_id: uuid.UUID | None = None
     max_tip_age_s: int = Field(default=120, ge=10, le=3600)
     on_tip_exit: Literal["close", "ignore"] = "close"
+    # tip_trade "as_given": trade the tip's own option (its strike, CE/PE, BUY/SELL; current-week expiry) with
+    # tip_lots, only while its price is within the tip's entry range + tip_buffer, and exit on the tip's targets:
+    # a quarter at each of TP1-TP3 (lots a multiple of 4; otherwise everything at TP3), the stop moving to cost at
+    # TP1, to TP1 at TP2, to TP2 at TP3, and the last quarter out at TP3 + 20%. The legs are not used.
+    tip_trade: Literal["legs", "as_given"] = "legs"
+    tip_lots: int = Field(default=4, ge=1, le=100)
+    tip_buffer: float = Field(default=5.0, ge=0, le=100)
 
 
 class Holding(_Model):
@@ -785,7 +792,7 @@ def _check_rules(c: RulesConfig, inst: Instrument) -> list[Issue]:
             issues.append(Issue(("holding", "exit"), "must be after the entry time"))
         elif e.until is not None and e.until >= h.exit:
             issues.append(Issue(("entry", "until"), f"must be before the exit time ({h.exit})"))
-    if not c.every_leg():
+    if not c.every_leg() and not (e.mode == "tip" and e.tip_trade == "as_given"):  # as given: the tip is the leg
         issues.append(Issue(("legs",), "add at least one leg"))
     seen: set[str] = set()
     for prefix, legs in c.leg_sets():
@@ -851,7 +858,7 @@ def _check_conditions(c: RulesConfig, inst: Instrument) -> list[Issue]:
         if e.signals:
             issues.append(Issue(("entry", "signals"), "conditions do not apply when entering on a Telegram tip"))
         dirs = {leg.direction for leg in c.every_leg()}
-        if "always" not in dirs and not {"up", "down"} & dirs:
+        if e.tip_trade == "legs" and "always" not in dirs and not {"up", "down"} & dirs:
             issues.append(Issue(("legs",), "add the legs to trade on a tip"))
         if c.exit.on_opposite_signal:
             issues.append(Issue(("exit", "on_opposite_signal"), "needs entry on conditions"))

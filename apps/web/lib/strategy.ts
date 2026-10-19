@@ -63,6 +63,9 @@ export function entryOf(c: { entry?: Partial<RulesEntry> | null }): RulesEntry {
     source_id: null,
     max_tip_age_s: 120,
     on_tip_exit: "close",
+    tip_trade: "legs",
+    tip_lots: 4,
+    tip_buffer: 5,
     ...c.entry,
   };
 }
@@ -228,6 +231,9 @@ export function rulesFromTimeBased(c: TimeBasedConfig): RulesConfig {
       source_id: null,
       max_tip_age_s: 120,
       on_tip_exit: "close",
+      tip_trade: "legs",
+      tip_lots: 4,
+      tip_buffer: 5,
     },
     holding: { mode: "intraday", exit: t.exit, days: 1, open_delay_min: 0 },
     legs: c.legs,
@@ -414,7 +420,9 @@ export function describeRules(c: RulesConfig, inst: Instrument | undefined): str
   const entry =
     e.mode === "tip"
       ? [
-          `From ${e.at}${until}, ${days(e.days)}${when}, enter on a Telegram tip no older than ${e.max_tip_age_s}s (up to ${e.max_per_day} trade${e.max_per_day === 1 ? "" : "s"} a day): a bullish tip trades the up legs, a bearish one the down legs; ${holdingText(h)}.`,
+          e.tip_trade === "as_given"
+            ? `From ${e.at}${until}, ${days(e.days)}${when}, trade each Telegram tip as given (no older than ${e.max_tip_age_s}s, up to ${e.max_per_day} a day): ${e.tip_lots} lot${e.tip_lots === 1 ? "" : "s"} of the tip's own option, current week, only while its price is within the entry range + ${e.tip_buffer}; ${e.tip_lots % 4 === 0 ? "a quarter out at each of target 1, 2 and 3, the last quarter at target 3 + 20%" : "everything out at target 3"}, the stop moving to cost at target 1, to target 1 at target 2 and to target 2 at target 3; ${holdingText(h)}.`
+            : `From ${e.at}${until}, ${days(e.days)}${when}, enter on a Telegram tip no older than ${e.max_tip_age_s}s (up to ${e.max_per_day} trade${e.max_per_day === 1 ? "" : "s"} a day): a bullish tip trades the up legs, a bearish one the down legs; ${holdingText(h)}.`,
           e.on_tip_exit === "close"
             ? "When the channel reports the tip's stop-loss hit or its target 3, exit everything."
             : "The channel's own stop-loss and targets are ignored.",
