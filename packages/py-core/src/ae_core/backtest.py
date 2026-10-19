@@ -122,6 +122,36 @@ class BacktestTrade:
         return (self.exit_time - self.entry_time).total_seconds() / 60
 
 
+def merge_tranches(trades: Sequence[BacktestTrade]) -> list[BacktestTrade]:
+    """A Telegram tip traded as given is entered as quarters (legs T1-T4) that leave at different targets: one tip is
+    one trade, so its quarters become one row with their combined quantity, average exit and every exit listed."""
+    out: list[BacktestTrade] = []
+    groups: dict[tuple[str, datetime, str], list[BacktestTrade]] = {}
+    for t in trades:
+        if t.leg in ("T1", "T2", "T3", "T4"):
+            key = (t.contract, t.entry_time, t.side)
+            if key not in groups:
+                groups[key] = []
+                out.append(t)  # placeholder: replaced below, keeps the order
+            groups[key].append(t)
+        else:
+            out.append(t)
+    for i, t in enumerate(out):
+        parts = groups.get((t.contract, t.entry_time, t.side)) if t.leg in ("T1", "T2", "T3", "T4") else None
+        if not parts:
+            continue
+        qty = sum(p.qty for p in parts)
+        last = max(parts, key=lambda p: p.exit_time)
+        out[i] = BacktestTrade(
+            "T", t.contract, t.side, qty, t.entry_time,
+            round(sum(p.entry_price * p.qty for p in parts) / qty, 2), last.exit_time,
+            round(sum(p.exit_price * p.qty for p in parts) / qty, 2),
+            "; ".join(f"{p.qty} at {p.exit_price:g} ({p.reason})" for p in sorted(parts, key=lambda p: p.exit_time)),
+            round(sum(p.gross for p in parts), 2), round(sum(p.charges for p in parts), 2), t.group,
+        )  # fmt: skip
+    return out
+
+
 @dataclass
 class BacktestResult:
     trades: list[BacktestTrade] = field(default_factory=list)

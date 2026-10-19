@@ -618,3 +618,24 @@ def test_a_tip_strategy_is_backtested_over_the_channels_stored_tips() -> None:
         (99, 119, "trailing stop (120)"),
     ]  # fmt: skip
     assert run(config, h).trades == []  # no tips, no trades
+
+
+def test_a_tips_quarters_are_one_trade_in_the_result() -> None:
+    from ae_core.backtest import BacktestTrade, merge_tranches
+
+    t0 = ts("09:42")
+    exits = [
+        (1, 176.1, "target 1 (175)", 2470.0),
+        (2, 196.5, "target 2 (190)", 5115.5),
+        (3, 215.55, "target 3 (210)", 7592.0),
+        (4, 266.1, "target 3 + 20% (252)", 14163.5),
+    ]
+    c = "NIFTY 19 Oct 22850 CE"
+    parts = [
+        BacktestTrade(f"T{k}", c, "BUY", 130, t0, 157.15, ts(f"10:0{k}"), px, why, g, 10.0) for k, px, why, g in exits
+    ]
+    other = BacktestTrade("L1", "X", "SELL", 65, t0, 100, ts("10:00"), 90, "exit time", 650.0, 5.0)
+    (one, rest) = merge_tranches([*parts, other])
+    assert (one.qty, one.entry_price, one.gross, one.charges) == (520, 157.15, 29341.0, 40.0)
+    assert one.exit_price == round((176.1 + 196.5 + 215.55 + 266.1) / 4, 2) and one.exit_time == ts("10:04")
+    assert one.reason.startswith("130 at 176.1 (target 1 (175)); 130 at 196.5") and rest is other

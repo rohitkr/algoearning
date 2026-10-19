@@ -16,7 +16,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, cast
 
 import structlog
-from ae_core.backtest import summarize_result
+from ae_core.backtest import merge_tranches, summarize_result
 from ae_core.secrets import SecretBox, mask_phone
 from ae_core.signals import Message, assemble
 from ae_core.strategy import check, tip_source_ids, underlyings_of, uses_tips
@@ -492,9 +492,22 @@ async def backtest_tip_strategy(
         db, config, body.start_date, body.end_date, multiplier=body.multiplier, insts=insts,
         slippage_pct=body.slippage_pct, tips=tips,
     )  # fmt: skip
+    result.trades = merge_tranches(result.trades)  # one tip, one trade (its quarters in one row)
+    per_day: dict[str, int] = {}
+    for t in result.trades:
+        d = t.entry_time.astimezone(IST).date().isoformat()
+        per_day[d] = per_day.get(d, 0) + 1
+    for row in result.day_log:
+        row["trades"] = per_day.get(str(row.get("day")), 0)
     out = summarize_result(result)
-    note = f"{len(tips)} tips posted in the range; the channel's own exit messages are not replayed."
-    out["warnings"] = [note, lot_size_note(insts, used), *out["warnings"]]
+    notes = [f"{len(tips)} tips posted in the range; the channel's own exit messages are not replayed."]
+    limited = sum("strategy loss reached" in t.reason for t in result.trades)
+    if limited:
+        notes.append(
+            f"{limited} trade(s) were closed by the strategy's own loss limit (Exit everything if the trade's loss "
+            "reaches ₹…) before the tip's stop-loss: with several lots a small limit is hit within a few points."
+        )
+    out["warnings"] = [*notes, lot_size_note(insts, used), *out["warnings"]]
     return BacktestPreviewOut(
         underlying=config.underlying, start_date=body.start_date, end_date=body.end_date,
         multiplier=body.multiplier, slippage_pct=body.slippage_pct, result=out,
