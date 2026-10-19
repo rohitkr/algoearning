@@ -230,6 +230,10 @@ class Signal(ConditionGroup):
     direction: Direction = "always"
 
 
+def _tip_indexes() -> list[Underlying]:
+    return ["NIFTY", "SENSEX"]
+
+
 class RulesEntry(_Model):
     """When a new trade may start. mode time: at `at`. mode conditions: on the first of `signals` that is true
     between `at` and `until`. `dte`: only on days that many trading days (Mon-Fri) before the first leg's expiry
@@ -257,6 +261,8 @@ class RulesEntry(_Model):
     tip_trade: Literal["legs", "as_given"] = "legs"
     tip_lots: int = Field(default=4, ge=1, le=100)
     tip_buffer: float = Field(default=5.0, ge=0, le=100)
+    # as given: the instruments whose tips are traded (a tip names its own index); one run per instrument
+    tip_underlyings: list[Underlying] = Field(default_factory=_tip_indexes, min_length=1, max_length=5)
 
 
 class Holding(_Model):
@@ -445,6 +451,30 @@ class PlansConfig(_Model):
 
     def rules(self) -> list[tuple[Plan, RulesConfig]]:
         return [(p, p.to_rules()) for p in self.plans]
+
+
+def _as_given(e: RulesEntry) -> bool:
+    return e.mode == "tip" and e.tip_trade == "as_given"
+
+
+def split_by_instrument(c: AnyConfig) -> list[tuple[str, AnyConfig]]:
+    """What runs (live) or is replayed (backtest) per instrument: a run trades one instrument. A strategy of plans on
+    several instruments splits by plan; a Telegram tip traded as given is traded on every instrument in its
+    `tip_underlyings` (a tip names its own index, and a run only takes the tips of its instrument)."""
+    if isinstance(c, RulesConfig):
+        if not _as_given(c.entry):
+            return [(c.underlying, c)]
+        return [(u, c.model_copy(deep=True, update={"underlying": u})) for u in dict.fromkeys(c.entry.tip_underlyings)]
+    if isinstance(c, PlansConfig):
+        by_u: dict[str, list[Plan]] = {}
+        for p in c.plans:
+            us = list(dict.fromkeys(p.entry.tip_underlyings)) if _as_given(p.entry) else [p.underlying]
+            for u in us:
+                by_u.setdefault(u, []).append(
+                    p if u == p.underlying else p.model_copy(deep=True, update={"underlying": u})
+                )
+        return [(u, PlansConfig(plans=ps)) for u, ps in by_u.items()]
+    return [(c.underlying, c)]
 
 
 def underlyings_of(c: AnyConfig) -> list[str]:

@@ -220,3 +220,20 @@ def test_condition_rules() -> None:
         except ValidationError:
             continue
         assert ls  # schema-valid but wrong: a number against a number, or an unset number
+
+
+def test_a_tip_traded_as_given_runs_on_every_instrument_it_takes_tips_for() -> None:
+    from ae_core.strategy import split_by_instrument
+
+    tip = {"mode": "tip", "source_id": "00000000-0000-0000-0000-0000000000aa", "tip_trade": "as_given"}
+    legs = [{"id": "L1", "action": "BUY", "option_type": "CE"}]
+    plans = parse({"kind": "plans", "plans": [
+        {"id": "P1", "name": "Tips", "underlying": "NIFTY", "entry": tip, "legs": legs},
+        {"id": "P2", "name": "Straddle", "underlying": "NIFTY", "legs": legs},
+    ]})  # fmt: skip
+    parts = dict(split_by_instrument(plans))
+    assert list(parts) == ["NIFTY", "SENSEX"]
+    assert [p.id for p in parts["NIFTY"].plans] == ["P1", "P2"] and parts["SENSEX"].underlying == "SENSEX"
+    assert [p.id for p in parts["SENSEX"].plans] == ["P1"]  # only the tip plan follows the tips to SENSEX
+    only = parse({"kind": "rules", "entry": {**tip, "tip_underlyings": ["NIFTY"]}, "legs": legs})
+    assert [u for u, _ in split_by_instrument(only)] == ["NIFTY"]

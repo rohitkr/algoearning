@@ -7,7 +7,15 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from ae_core.strategy import AnyConfig, PlansConfig, check, max_order_lots, parse, tip_source_ids, uses_tips
+from ae_core.strategy import (
+    AnyConfig,
+    check,
+    max_order_lots,
+    parse,
+    split_by_instrument,
+    tip_source_ids,
+    uses_tips,
+)
 from ae_db.enums import BrokerAccountStatus, RunStatus, StrategyStatus, TradingMode
 from ae_db.models import (
     BrokerAccount,
@@ -155,11 +163,11 @@ async def deploy(
         raise NotFound("broker account not found")
     # a run trades one instrument (one market feed): a strategy of plans on several instruments deploys as one run per
     # instrument, all of them started and stopped together from the page, each holding every plan of its instrument
+    # (a Telegram tip traded as given likewise runs once per instrument it takes tips for)
     parts: list[tuple[str, dict[str, Any]]] = [(strat.name, dict(strat.config))]
-    if isinstance(config, PlansConfig) and len(config.underlyings()) > 1:
-        parts = [
-            (f"{strat.name} · {u}", config.for_underlying(u).model_dump(mode="json")) for u in config.underlyings()
-        ]
+    split = split_by_instrument(config)
+    if len(split) > 1:
+        parts = [(f"{strat.name} · {u}", c.model_dump(mode="json")) for u, c in split]
     runs: list[StrategyRun] = []
     for n, (name, snapshot) in enumerate(parts):
         require_within(ent, "max_running_strategies", ent.usage["max_running_strategies"] + n)

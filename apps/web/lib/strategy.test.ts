@@ -69,6 +69,7 @@ describe("strategy text", () => {
         tip_trade: "legs",
         tip_lots: 4,
         tip_buffer: 5,
+        tip_underlyings: ["NIFTY", "SENSEX"],
       },
       holding: { mode: "next_day", exit: "09:30", days: 1, open_delay_min: 0 },
       legs: [leg()],

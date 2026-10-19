@@ -132,6 +132,30 @@ export function TipEntry<T extends { entry?: Partial<RulesEntry> | null; legs: S
                 error={errs["entry.tip_lots"]}
                 onChange={(v) => setEntry({ tip_lots: v ?? Number.NaN })}
               />
+              <fieldset className="flex flex-col gap-1 text-xs font-medium text-muted">
+                <legend className="mb-1">Trade tips for</legend>
+                <div className="flex flex-wrap gap-3 text-sm text-foreground">
+                  {(["NIFTY", "SENSEX", "BANKNIFTY"] as const).map((u) => {
+                    const chosen = e.tip_underlyings ?? ["NIFTY", "SENSEX"];
+                    const on = chosen.includes(u);
+                    return (
+                      <label key={u} className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          disabled={on && chosen.length === 1}
+                          onChange={() =>
+                            setEntry({
+                              tip_underlyings: on ? chosen.filter((x) => x !== u) : [...chosen, u],
+                            })
+                          }
+                        />
+                        {u}
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
               <NumberField
                 label="Buy up to entry +"
                 value={e.tip_buffer}

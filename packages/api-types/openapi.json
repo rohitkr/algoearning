@@ -5381,6 +5381,22 @@
             "title": "Tip Trade",
             "type": "string"
           },
+          "tip_underlyings": {
+            "items": {
+              "enum": [
+                "NIFTY",
+                "BANKNIFTY",
+                "FINNIFTY",
+                "MIDCPNIFTY",
+                "SENSEX"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Tip Underlyings",
+            "type": "array"
+          },
           "until": {
             "anyOf": [
               {
@@ -15857,6 +15873,110 @@
         ]
       }
     },
+    "/v1/signal-sources/{source_id}/backtest": {
+      "post": {
+        "description": "Backtest a strategy that enters on this source's tips: the normal backtest (the same runner the engine uses\nlive), with the source's stored tips shown to it from the minute each was posted. Nothing is stored. The\nchannel's later \"target done\" / \"SL hit\" messages are not replayed: the strategy's own exits decide.",
+        "operationId": "backtest_tip_strategy_v1_signal_sources__source_id__backtest_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestPreviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Backtest Tip Strategy",
+        "tags": [
+          "signal-sources"
+        ]
+      }
+    },
     "/v1/signal-sources/{source_id}/chat": {
       "put": {
         "description": "Read tips from this chat: one of the account's own channels or groups (checked with Telegram).",
@@ -16362,7 +16482,7 @@
     },
     "/v1/signal-sources/{source_id}/messages": {
       "get": {
-        "description": "The chat's messages of the last `days` as received, newest first, each with how it was read (the user's\ncorrections applied).",
+        "description": "The chat's messages of the last `days` (or from `start` to `end`, IST days, both included) as received, newest\nfirst, each with how it was read (the user's corrections applied).",
         "operationId": "list_messages_v1_signal_sources__source_id__messages_get",
         "parameters": [
           {
@@ -16397,6 +16517,40 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
             }
           }
         ],

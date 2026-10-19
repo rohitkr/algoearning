@@ -58,6 +58,8 @@ const READER: Record<SignalSource["reader_state"], { tone: StatusTone; text: str
   off: { tone: "neutral", text: "Not reading" },
 };
 
+const todayIst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
 /** One source's signals and its chat as read (ADR 0025): refreshed every few seconds while the page is open. */
 export function SignalFeed({ source }: { source: SignalSource }) {
   const { getToken } = useAuth();
@@ -65,7 +67,11 @@ export function SignalFeed({ source }: { source: SignalSource }) {
   const [messages, setMessages] = useState<SignalMessage[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [hideTicks, setHideTicks] = useState(true);
-  const [day, setDay] = useState(""); // "" = the last 3 days, else one day's messages
+  const [from, setFrom] = useState(""); // both "" = the last 3 days, else the days from - to
+  const [to, setTo] = useState("");
+  const rangeFrom = from || to;
+  const rangeTo = to || from;
+  const range = rangeFrom ? { from: rangeFrom, to: rangeTo } : null;
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -74,7 +80,7 @@ export function SignalFeed({ source }: { source: SignalSource }) {
         apiRequest<TipSignal[]>("GET", `/v1/signal-sources/${source.id}/signals?days=7`, undefined, getToken),
         apiRequest<SignalMessage[]>(
           "GET",
-          `/v1/signal-sources/${source.id}/messages?${day ? `day=${day}` : "days=3"}`,
+          `/v1/signal-sources/${source.id}/messages?${rangeFrom ? `start=${rangeFrom}&end=${rangeTo}&limit=2000` : "days=3"}`,
           undefined,
           getToken,
         ),
@@ -85,7 +91,7 @@ export function SignalFeed({ source }: { source: SignalSource }) {
     } catch (e) {
       setError(e instanceof ApiRequestError ? e.message : (e as Error).message);
     }
-  }, [source.id, getToken, day]);
+  }, [source.id, getToken, rangeFrom, rangeTo]);
 
   useEffect(() => {
     const first = setTimeout(() => void load(), 0);
@@ -289,23 +295,52 @@ export function SignalFeed({ source }: { source: SignalSource }) {
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Messages ({day ? `on ${day}` : "last 3 days"})</h3>
-          <label className="flex items-center gap-2 text-xs">
-            Day
-            <input
-              type="date"
-              aria-label="Show the messages of one day"
-              className="h-7 rounded border border-border bg-surface px-1 text-xs"
-              value={day}
-              max={new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })}
-              onChange={(e) => setDay(e.target.value)}
-            />
-            {day && (
-              <button type="button" className="text-primary-text underline" onClick={() => setDay("")}>
+          <h3 className="text-sm font-semibold">
+            Messages (
+            {range
+              ? range.from === range.to
+                ? `on ${range.from}`
+                : `${range.from} to ${range.to}`
+              : "last 3 days"}
+            )
+          </h3>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <label className="flex items-center gap-1">
+              From
+              <input
+                type="date"
+                aria-label="Messages from"
+                className="h-7 rounded border border-border bg-surface px-1 text-xs"
+                value={from}
+                max={to || todayIst}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+            </label>
+            <label className="flex items-center gap-1">
+              To
+              <input
+                type="date"
+                aria-label="Messages to"
+                className="h-7 rounded border border-border bg-surface px-1 text-xs"
+                value={to}
+                min={from || undefined}
+                max={todayIst}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </label>
+            {range && (
+              <button
+                type="button"
+                className="text-primary-text underline"
+                onClick={() => {
+                  setFrom("");
+                  setTo("");
+                }}
+              >
                 Last 3 days
               </button>
             )}
-          </label>
+          </div>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={hideTicks} onChange={(e) => setHideTicks(e.target.checked)} />
             Hide price ticks
@@ -344,7 +379,9 @@ export function SignalFeed({ source }: { source: SignalSource }) {
             </li>
           ))}
           {shown.length === 0 && (
-            <li className="text-sm text-muted">No messages {day ? `on ${day}` : "in the last 3 days"}.</li>
+            <li className="text-sm text-muted">
+              No messages {range ? "in these days" : "in the last 3 days"}.
+            </li>
           )}
         </ul>
       </div>

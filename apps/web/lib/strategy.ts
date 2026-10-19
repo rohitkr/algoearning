@@ -66,6 +66,7 @@ export function entryOf(c: { entry?: Partial<RulesEntry> | null }): RulesEntry {
     tip_trade: "legs",
     tip_lots: 4,
     tip_buffer: 5,
+    tip_underlyings: ["NIFTY", "SENSEX"],
     ...c.entry,
   };
 }
@@ -234,6 +235,7 @@ export function rulesFromTimeBased(c: TimeBasedConfig): RulesConfig {
       tip_trade: "legs",
       tip_lots: 4,
       tip_buffer: 5,
+      tip_underlyings: ["NIFTY", "SENSEX"],
     },
     holding: { mode: "intraday", exit: t.exit, days: 1, open_delay_min: 0 },
     legs: c.legs,

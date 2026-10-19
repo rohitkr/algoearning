@@ -16,10 +16,10 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, cast
 
 import structlog
-from ae_core.backtest import merge_tranches, summarize_result
+from ae_core.backtest import BacktestResult, merge_tranches, summarize_result
 from ae_core.secrets import SecretBox, mask_phone
 from ae_core.signals import Message, assemble
-from ae_core.strategy import check, tip_source_ids, underlyings_of, uses_tips
+from ae_core.strategy import check, split_by_instrument, tip_source_ids, uses_tips
 from ae_core.tip_replay import BREAKEVEN, BUFFER, ReplayParams, Tip, replay
 from ae_core.trading.model import IST
 from ae_core.trading.model import Tip as TradeTip
@@ -27,7 +27,8 @@ from ae_db.models import Instrument, SignalMessage, SignalOverride, SignalRow, S
 from ae_db.session import Database
 from ae_db.signal_store import load_messages, load_overrides, rebuild
 from ae_marketdata.history import load_tip_prices
-from ae_marketdata.replay import lot_size_note, replay_config
+from ae_marketdata.replay import lot_size_note, merge
+from ae_marketdata.replay import replay as replay_strategy
 from ae_telegram import (
     Chat,
     CodeExpired,
@@ -486,12 +487,21 @@ async def backtest_tip_strategy(
                  r.entry_low, r.entry_high, r.stop_loss, tuple(r.targets or ()))
         for r in rows
     ]  # fmt: skip
-    used = underlyings_of(config)
+    # one replay per instrument: a tip traded as given trades on every instrument the strategy takes tips for
+    parts = [(u, c) for u, c in split_by_instrument(config) if u in instruments]
+    used = [u for u, _ in parts]
     insts = {u: (instruments[u].lot_size, instruments[u].strike_step) for u in used}
-    result = await replay_config(
-        db, config, body.start_date, body.end_date, multiplier=body.multiplier, insts=insts,
-        slippage_pct=body.slippage_pct, tips=tips,
-    )  # fmt: skip
+    result = BacktestResult()
+    for u, part_config in parts:
+        part = await replay_strategy(
+            db, part_config, body.start_date, body.end_date, multiplier=body.multiplier, lot_size=insts[u][0],
+            strike_step=insts[u][1], slippage_pct=body.slippage_pct, tips=tips,
+        )  # fmt: skip
+        if len(parts) > 1:
+            for row in part.day_log:
+                row["underlying"] = u
+        merge(result, part)
+    result.trades.sort(key=lambda t: t.entry_time)
     result.trades = merge_tranches(result.trades)  # one tip, one trade (its quarters in one row)
     per_day: dict[str, int] = {}
     for t in result.trades:
@@ -619,14 +629,19 @@ async def list_messages(
     s: UserSession,
     days: Annotated[int, Query(ge=1, le=90)] = 3,
     limit: Annotated[int, Query(ge=1, le=2000)] = 500,
-    day: date | None = None,
+    start: date | None = None,
+    end: date | None = None,
 ) -> list[SignalMessageOut]:
-    """The chat's messages of the last `days` (or of one `day`, IST) as received, newest first, each with how it was
-    read (the user's corrections applied)."""
+    """The chat's messages of the last `days` (or from `start` to `end`, IST days, both included) as received, newest
+    first, each with how it was read (the user's corrections applied)."""
     src = await _own(s, user.user_id, source_id)
-    if day is not None:
-        since = datetime.combine(day, datetime.min.time(), tzinfo=IST)
-        until = since + timedelta(days=1)
+    if start is not None or end is not None:
+        first, last = start or end, end or start
+        assert first is not None and last is not None
+        if first > last:
+            raise AppError("the start date must not be after the end date")
+        since = datetime.combine(first, datetime.min.time(), tzinfo=IST)
+        until = datetime.combine(last + timedelta(days=1), datetime.min.time(), tzinfo=IST)
     else:
         since, until = datetime.now(UTC) - timedelta(days=days), datetime.now(UTC) + timedelta(days=1)
     rows = list(

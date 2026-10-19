@@ -1181,6 +1181,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/signal-sources/{source_id}/backtest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Backtest Tip Strategy
+         * @description Backtest a strategy that enters on this source's tips: the normal backtest (the same runner the engine uses
+         *     live), with the source's stored tips shown to it from the minute each was posted. Nothing is stored. The
+         *     channel's later "target done" / "SL hit" messages are not replayed: the strategy's own exits decide.
+         */
+        post: operations["backtest_tip_strategy_v1_signal_sources__source_id__backtest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/signal-sources/{source_id}/chat": {
         parameters: {
             query?: never;
@@ -1288,8 +1310,8 @@ export interface paths {
         };
         /**
          * List Messages
-         * @description The chat's messages of the last `days` as received, newest first, each with how it was read (the user's
-         *     corrections applied).
+         * @description The chat's messages of the last `days` (or from `start` to `end`, IST days, both included) as received, newest
+         *     first, each with how it was read (the user's corrections applied).
          */
         get: operations["list_messages_v1_signal_sources__source_id__messages_get"];
         put?: never;
@@ -3491,6 +3513,8 @@ export interface components {
              * @enum {string}
              */
             tip_trade: "legs" | "as_given";
+            /** Tip Underlyings */
+            tip_underlyings?: ("NIFTY" | "BANKNIFTY" | "FINNIFTY" | "MIDCPNIFTY" | "SENSEX")[];
             /** Until */
             until?: string | null;
         };
@@ -10323,6 +10347,86 @@ export interface operations {
             };
         };
     };
+    backtest_tip_strategy_v1_signal_sources__source_id__backtest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BacktestPreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestPreviewOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     pick_chat_v1_signal_sources__source_id__chat_put: {
         parameters: {
             query?: never;
@@ -10720,6 +10824,8 @@ export interface operations {
             query?: {
                 days?: number;
                 limit?: number;
+                start?: string | null;
+                end?: string | null;
             };
             header?: never;
             path: {
