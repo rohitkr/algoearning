@@ -813,3 +813,20 @@ def test_a_tip_as_given_is_skipped_when_the_price_ran_away() -> None:
     sim.prices = {c(25000, "PE", DAY): 166.0}
     assert sim.at("10:31") == []
     assert any(n["event"] == "tip_skipped" and "above the entry 160 + buffer 5" in n["reason"] for n in sim.r.notes)
+
+
+def test_a_tip_as_given_is_not_cut_short_by_the_strategys_loss_limit() -> None:
+    """16 Oct 2026: a ₹1,000 trade-wide loss limit closed 8 lots within 2 points; the tip's own stop (141) decides."""
+    r = rr(
+        entry={"mode": "tip", "at": "09:15", "source_id": SRC, "tip_trade": "as_given", "tip_lots": 8},
+        holding={"mode": "intraday", "exit": "15:15"},
+        risk={"mtm_stop_loss": 1000},
+    )
+    sim = TipSim(r, [the_tip()])
+    pe = c(25000, "PE", DAY)
+    sim.prices = {pe: 157.0}
+    assert len(sim.at("10:31")) == 4
+    sim.prices[pe] = 150.0  # -₹3,640 on 520 qty: above the tip's stop-loss
+    assert sim.at("10:35") == []
+    sim.prices[pe] = 140.0
+    assert {i.reason for i in sim.at("10:40")} == {"the tip's stop-loss (141)"}

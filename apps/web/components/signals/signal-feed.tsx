@@ -65,6 +65,7 @@ export function SignalFeed({ source }: { source: SignalSource }) {
   const [messages, setMessages] = useState<SignalMessage[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [hideTicks, setHideTicks] = useState(true);
+  const [day, setDay] = useState(""); // "" = the last 3 days, else one day's messages
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -73,7 +74,7 @@ export function SignalFeed({ source }: { source: SignalSource }) {
         apiRequest<TipSignal[]>("GET", `/v1/signal-sources/${source.id}/signals?days=7`, undefined, getToken),
         apiRequest<SignalMessage[]>(
           "GET",
-          `/v1/signal-sources/${source.id}/messages?days=3`,
+          `/v1/signal-sources/${source.id}/messages?${day ? `day=${day}` : "days=3"}`,
           undefined,
           getToken,
         ),
@@ -84,7 +85,7 @@ export function SignalFeed({ source }: { source: SignalSource }) {
     } catch (e) {
       setError(e instanceof ApiRequestError ? e.message : (e as Error).message);
     }
-  }, [source.id, getToken]);
+  }, [source.id, getToken, day]);
 
   useEffect(() => {
     const first = setTimeout(() => void load(), 0);
@@ -288,7 +289,23 @@ export function SignalFeed({ source }: { source: SignalSource }) {
 
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Messages (last 3 days)</h3>
+          <h3 className="text-sm font-semibold">Messages ({day ? `on ${day}` : "last 3 days"})</h3>
+          <label className="flex items-center gap-2 text-xs">
+            Day
+            <input
+              type="date"
+              aria-label="Show the messages of one day"
+              className="h-7 rounded border border-border bg-surface px-1 text-xs"
+              value={day}
+              max={new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })}
+              onChange={(e) => setDay(e.target.value)}
+            />
+            {day && (
+              <button type="button" className="text-primary-text underline" onClick={() => setDay("")}>
+                Last 3 days
+              </button>
+            )}
+          </label>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={hideTicks} onChange={(e) => setHideTicks(e.target.checked)} />
             Hide price ticks
@@ -326,7 +343,9 @@ export function SignalFeed({ source }: { source: SignalSource }) {
               </select>
             </li>
           ))}
-          {shown.length === 0 && <li className="text-sm text-muted">No messages in the last 3 days.</li>}
+          {shown.length === 0 && (
+            <li className="text-sm text-muted">No messages {day ? `on ${day}` : "in the last 3 days"}.</li>
+          )}
         </ul>
       </div>
     </Card>

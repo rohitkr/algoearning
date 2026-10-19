@@ -619,16 +619,21 @@ async def list_messages(
     s: UserSession,
     days: Annotated[int, Query(ge=1, le=90)] = 3,
     limit: Annotated[int, Query(ge=1, le=2000)] = 500,
+    day: date | None = None,
 ) -> list[SignalMessageOut]:
-    """The chat's messages of the last `days` as received, newest first, each with how it was read (the user's
-    corrections applied)."""
+    """The chat's messages of the last `days` (or of one `day`, IST) as received, newest first, each with how it was
+    read (the user's corrections applied)."""
     src = await _own(s, user.user_id, source_id)
-    since = datetime.now(UTC) - timedelta(days=days)
+    if day is not None:
+        since = datetime.combine(day, datetime.min.time(), tzinfo=IST)
+        until = since + timedelta(days=1)
+    else:
+        since, until = datetime.now(UTC) - timedelta(days=days), datetime.now(UTC) + timedelta(days=1)
     rows = list(
         (
             await s.execute(
                 select(SignalMessage)
-                .where(SignalMessage.source_id == source_id, SignalMessage.date >= since)
+                .where(SignalMessage.source_id == source_id, SignalMessage.date >= since, SignalMessage.date < until)
                 .order_by(SignalMessage.date, SignalMessage.msg_id)
             )
         ).scalars()

@@ -115,6 +115,10 @@ export function TipEntry<T extends { entry?: Partial<RulesEntry> | null; legs: S
           />
           {e.tip_trade === "as_given" && (
             <>
+              <p className="text-xs text-muted sm:col-span-3">
+                The tip&apos;s own stop-loss and targets decide: the trade-wide ₹ limits below are not used.
+                Your exit time still closes whatever is left.
+              </p>
               <NumberField
                 label="Lots"
                 value={e.tip_lots}

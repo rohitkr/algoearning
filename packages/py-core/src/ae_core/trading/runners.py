@@ -748,6 +748,10 @@ class RulesRunner(Runner):
                 self.note("trade_limits_paused", reason="no price for " + ", ".join(unpriced))
             return out
         pnl = self._cycle_pnl(m)
+        if self.s.get("tipplan"):
+            # the tip's own stop-loss and targets decide a tip traded as given: no trade-wide ₹ limit cuts it short
+            risk = risk.model_copy(update={"mtm_stop_loss": None, "mtm_target": None, "lock_profit": None,
+                                           "combined_stop": None})  # fmt: skip
         if risk.mtm_stop_loss and pnl <= -risk.mtm_stop_loss:
             return out + self._close(
                 m, f"strategy loss reached ₹{risk.mtm_stop_loss:g}", "mtm_stop_loss", level=-risk.mtm_stop_loss, pnl=pnl
@@ -756,12 +760,13 @@ class RulesRunner(Runner):
             return out + self._close(
                 m, f"strategy profit reached ₹{risk.mtm_target:g}", "mtm_target", level=risk.mtm_target, pnl=pnl
             )
-        if self._combined_hit(m):
+        as_given = bool(self.s.get("tipplan"))
+        if not as_given and self._combined_hit(m):
             cs = risk.combined_stop
             assert cs is not None
             u = "%" if cs.unit == "percent" else " points"
             return out + self._close(m, f"sold premiums up {cs.value:g}{u}", "combined_stop", pnl=pnl)
-        if self._lock_hit(pnl):
+        if not as_given and self._lock_hit(pnl):
             floor = self.s["lock_floor"]
             return out + self._close(
                 m, f"profit fell to the locked ₹{floor:g}", "profit_lock_exit", level=floor, pnl=pnl
