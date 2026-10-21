@@ -219,7 +219,12 @@ async def get_run(run_id: uuid.UUID, user: CurrentUser, s: UserSession) -> RunDe
     run = await _own_run(s, run_id)
     trades = list(
         (
-            await s.execute(select(Trade).where(Trade.run_id == run.id).order_by(Trade.entry_time.desc()).limit(200))
+            await s.execute(
+                select(Trade)
+                .where(Trade.run_id == run.id)
+                .order_by(Trade.entry_time.desc(), Trade.tradingsymbol, Trade.id)
+                .limit(200)
+            )
         ).scalars()
     )
     orders = list(
@@ -234,6 +239,9 @@ async def get_run(run_id: uuid.UUID, user: CurrentUser, s: UserSession) -> RunDe
     )
     eq = select(TradeEvent).where(TradeEvent.run_id == run.id).order_by(TradeEvent.id.desc()).limit(200)
     events: list[TradeEvent] = list((await s.execute(eq)).scalars())
+    # legs entered together keep one order on every refresh: newest trade first, then by leg (L1, L2, ...)
+    trades.sort(key=lambda t: (str((t.rules or {}).get("leg") or ""), t.tradingsymbol))
+    trades.sort(key=lambda t: t.entry_time or datetime.min.replace(tzinfo=UTC), reverse=True)
     return RunDetail(
         run=run_out(run, len([t for t in trades if t.status == "open"])),
         positions=[
