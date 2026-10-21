@@ -855,7 +855,7 @@ def test_enter_now_starts_todays_trade_after_the_entry_window() -> None:
     assert sim.at("15:21") == [] and sim.r.s["phase"] == "done"  # the window has passed
     assert sim.r.force_entry(sim.market("15:25")) is None
     (entry,) = sim.at("15:25")
-    assert entry.kind == "entry" and any(n["event"] == "manual_entry" for n in sim.r.notes)
+    assert entry.reason == "entered by hand (Enter now)" and any(n["event"] == "manual_entry" for n in sim.r.notes)
     assert sim.r.force_entry(sim.market("15:26")) == "a trade is already open"
     sim.day = FRI
     (ex,) = sim.at("09:30")

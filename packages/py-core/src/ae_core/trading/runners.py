@@ -481,13 +481,15 @@ class RulesRunner(Runner):
         self.s.pop("entered", None)
         self.s.pop("armed", None)
         self.s.pop("exit_retry_at", None)
-        if self.s.pop("forced", None):
+        manual = bool(self.s.pop("forced", None))
+        if manual:
             self.note("manual_entry", reason="Enter now")
         self.s.update(phase="in", entries_day=today, entries=self._entries_today(m) + 1, final=final.isoformat(),
                       cycle_realized=self.realized, reentries={}, pending=[], sold={}, lock_floor=None,
                       direction=direction, tip_id=tip_id)  # fmt: skip
         why_in = (
-            f"{direction} signal" if e.mode == "conditions"
+            "entered by hand (Enter now)" if manual
+            else f"{direction} signal" if e.mode == "conditions"
             else f"Telegram tip {tip_id} ({'bullish' if direction == 'up' else 'bearish'})" if e.mode == "tip"
             else f"entry at {e.at}"
         )  # fmt: skip
