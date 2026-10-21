@@ -512,15 +512,6 @@ def test_new_strike_modes() -> None:
     assert pick(m, "CE", Strike(mode="premium_gte", premium=500), DAY) == "no CE strike costs at least ₹500"
 
 
-def test_no_overnight_entry_in_an_option_that_expires_first() -> None:
-    sim = Sim(rr())  # Tuesday, expiry day: the current week's options expire tonight
-    sim.prices = {c(25000): 100.0}
-    assert sim.at("15:00") == [] and sim.r.notes[-1]["event"] == "leg_expires_before_the_exit"
-    sim = Sim(rr(legs=[{"id": "L1", "action": "SELL", "option_type": "CE", "expiry": "next_week"}]))
-    sim.prices = {c(25000, expiry=WEEK2): 100.0}
-    assert len(sim.at("15:00")) == 1
-
-
 def test_a_time_based_run_in_progress_carries_on_after_the_upgrade() -> None:
     sim = Sim(tb())
     sim.prices = {c(25000): 100.0}
@@ -860,3 +851,12 @@ def test_enter_now_starts_todays_trade_after_the_entry_window() -> None:
     sim.day = FRI
     (ex,) = sim.at("09:30")
     assert ex.reason == "exit time 09:30"  # held overnight as the strategy says
+
+
+def test_an_overnight_trade_on_expiry_day_rolls_to_the_next_expiry() -> None:
+    """19 Oct 2026: NIFTY's weekly contract expired that Monday, before the next day's exit: the overnight entry
+    takes next week's contract instead of being skipped."""
+    sim = Sim(rr(), day=DAY)  # DAY is an expiry; rr holds to the next day
+    sim.prices = {c(25000, "CE", WEEK2): 100.0}
+    (entry,) = sim.at("15:00")
+    assert entry.contract.key == c(25000, "CE", WEEK2)

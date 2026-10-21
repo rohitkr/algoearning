@@ -221,7 +221,7 @@ class RulesRunner(Runner):
 
     def _resolve(self, m: Market, leg: Leg) -> Contract | str:
         """The leg's contract right now, or why it cannot be chosen yet."""
-        expiry = rules.pick_expiry(m.expiries, m.now.date(), leg.expiry)
+        expiry = self._leg_expiry(m, leg)
         if expiry is None:
             return f"no {leg.expiry.replace('_', ' ')} expiry listed"
         return options.pick(m, leg.option_type, leg.strike, expiry)
@@ -237,7 +237,7 @@ class RulesRunner(Runner):
                     keys.add(c.key)
         elif self.s.get("phase", "waiting") == "waiting":
             for leg in self.cfg.legs_for(m.now.date()):
-                expiry = rules.pick_expiry(m.expiries, m.now.date(), leg.expiry)
+                expiry = self._leg_expiry(m, leg)
                 if expiry is None or m.spot is None:
                     continue
                 if leg.strike.mode in PREMIUM_MODES:
@@ -308,6 +308,19 @@ class RulesRunner(Runner):
     def _until(self) -> str | None:
         e, h = self.cfg.entry, self.cfg.holding
         return e.until or (h.exit if h.mode == "intraday" else None)
+
+    def _leg_expiry(self, m: Market, leg: Leg) -> date | None:
+        """The leg's expiry. A trade held overnight does not take a contract that expires before its exit: on an
+        expiry day "current week" (or month) rolls to the next one (19 Oct 2026: NIFTY expired on a Monday, before
+        the next day's 13:30 exit, and the overnight entry was skipped)."""
+        today = m.now.date()
+        expiry = rules.pick_expiry(m.expiries, today, leg.expiry)
+        if expiry is None or self.cfg.holding.mode in ("intraday", "expiry") or not leg.expiry.startswith("current"):
+            return expiry
+        final = self._final(m)
+        if isinstance(final, datetime) and expiry < final.date():
+            return rules.pick_expiry(m.expiries, today, leg.expiry.replace("current", "next")) or expiry
+        return expiry
 
     def _final(self, m: Market) -> datetime | str:
         """When the trade entered now must be out, or why it cannot be worked out."""
