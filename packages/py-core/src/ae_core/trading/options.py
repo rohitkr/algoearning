@@ -34,9 +34,12 @@ def candidates(m: Market, right: Right, expiry: date, offsets: Sequence[int] = C
     ]
 
 
-def pick(m: Market, right: Right, strike: Strike, expiry: date, offset_shift: int = 0) -> Contract | str:
+def pick(
+    m: Market, right: Right, strike: Strike, expiry: date, offset_shift: int = 0, beyond: int | None = None
+) -> Contract | str:
     """The contract for a strike rule right now, or why it cannot be chosen yet. `offset_shift` moves an ATM-offset
-    choice that many strikes (the liquidity fallback)."""
+    choice that many strikes (the liquidity fallback). `beyond`: a premium choice only among strikes further out of
+    the money than this one (a hedge bought against a short at that strike)."""
     if m.spot is None:
         return "no index price yet"
     if strike.mode == "atm":
@@ -50,6 +53,10 @@ def pick(m: Market, right: Right, strike: Strike, expiry: date, offset_shift: in
     known = {k: v for k, v in prices.items() if v is not None}
     if len(known) < len(prices) // 2 or not known:
         return "waiting for option prices to choose the strike"
+    if beyond is not None:
+        known = {k: v for k, v in known.items() if (k > beyond if right == "CE" else k < beyond)}
+        if not known:
+            return f"no {right} strike beyond {beyond} has a price"
     want = float(strike.premium or 0)
     if strike.mode == "premium_gte":
         known = {k: v for k, v in known.items() if v >= want}

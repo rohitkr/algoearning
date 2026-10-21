@@ -860,3 +860,19 @@ def test_an_overnight_trade_on_expiry_day_rolls_to_the_next_expiry() -> None:
     sim.prices = {c(25000, "CE", WEEK2): 100.0}
     (entry,) = sim.at("15:00")
     assert entry.contract.key == c(25000, "CE", WEEK2)
+
+
+def test_a_premium_hedge_is_never_the_strike_it_hedges() -> None:
+    """12 Oct 2026, a day before expiry: the at-the-money call itself cost about ₹68, so "the ~₹60 call" was the sold
+    call; buying and selling the same option is no hedge. The hedge goes to the nearest strike beyond the short."""
+    legs = [
+        {"id": "L1", "action": "SELL", "option_type": "CE"},
+        {"id": "L3", "action": "BUY", "option_type": "CE", "strike": {"mode": "premium", "premium": 60}},
+    ]
+    sim = Sim(rr(legs=legs), day=THU)
+    for k in sim.r.wanted(sim.market("15:00")):
+        ct = Contract.from_key(k)
+        sim.prices[k] = max(1.0, 68 - (ct.strike - 25000) / 2) if ct.right == "CE" else 50.0
+    out = sim.at("15:00")
+    strikes = {i.side: i.contract.strike for i in out}
+    assert strikes["SELL"] == 25000 and strikes["BUY"] > 25000
