@@ -12,6 +12,7 @@ from ae_core.strategy import AnyConfig, PlansConfig, RulesConfig, SmcScalpConfig
 from ae_core.trading.model import Tip
 from ae_db.session import Database
 
+from .backfill import calendar_holidays
 from .history import load_history
 
 SMC_SPREAD_PCT = 0.3  # modelled bid/ask spread for bought options (history has trades, not quotes): ADR 0018
@@ -31,14 +32,14 @@ async def replay(
         history = await load_history(db, config.underlying, first, end)
         return await asyncio.to_thread(
             simulate, config, history, start, end, multiplier=multiplier, lot_size=lot_size, strike_step=strike_step,
-            slippage_pct=slippage_pct, tips=tips,
+            slippage_pct=slippage_pct, tips=tips, holidays=calendar_holidays(),
         )  # fmt: skip
     total = BacktestResult()
     for a, b in months(start, end):
         history = await load_history(db, config.underlying, a - WARMUP, b)
         part = await asyncio.to_thread(
             simulate, config, history, a, b, multiplier=multiplier, lot_size=lot_size, strike_step=strike_step,
-            slippage_pct=slippage_pct, spread_pct=SMC_SPREAD_PCT,
+            slippage_pct=slippage_pct, spread_pct=SMC_SPREAD_PCT, holidays=calendar_holidays(),
         )  # fmt: skip
         merge(total, part)
     total.warnings.insert(0, f"Option fills include a modelled bid/ask spread of {SMC_SPREAD_PCT}% of the premium.")

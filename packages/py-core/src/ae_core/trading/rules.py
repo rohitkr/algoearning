@@ -3,7 +3,7 @@ algo-trading-claude's backtest/rules.py (the backtested specification); the time
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import date, datetime, time, timedelta
 from typing import Literal
 
@@ -115,12 +115,12 @@ def closest_premium(prices: dict[int, float], premium: float) -> int | None:
     return min(prices, key=lambda k: (abs(prices[k] - premium), prices[k]))
 
 
-def add_weekdays(day: date, n: int) -> date:
-    """The weekday `n` weekdays after `day` (exchange holidays are not known here: a trade due out on one exits at
-    the next session's first step)."""
+def add_weekdays(day: date, n: int, holidays: Collection[date] = ()) -> date:
+    """The trading day `n` trading days after `day`: weekends and the given exchange holidays are skipped (without
+    them, a trade due out on a holiday exits at the next session's first step)."""
     while n > 0:
         day += timedelta(days=1)
-        if day.weekday() < 5:
+        if day.weekday() < 5 and day not in holidays:
             n -= 1
     return day
 

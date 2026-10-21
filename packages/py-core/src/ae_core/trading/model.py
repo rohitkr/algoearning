@@ -107,6 +107,7 @@ class Market:
     prior_spot_bars: Sequence[BarLike] = ()
     quotes: Mapping[str, Quote] = field(default_factory=dict)  # contract key -> bid/ask/volume/OI, when known
     tips: Sequence[Tip] = ()  # today's Telegram tips of the user's signal sources, oldest first (ADR 0025)
+    holidays: frozenset[date] = frozenset()  # the exchange's trading holidays (weekdays without a session)
     # a backtest's probe of a minute's extremes with several positions open: each price is a different leg's best or
     # worst, so no two of them ever existed together and the trade's combined figures (MTM stop / target, premium
     # stop, profit lock) mean nothing

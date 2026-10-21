@@ -876,3 +876,23 @@ def test_a_premium_hedge_is_never_the_strike_it_hedges() -> None:
     out = sim.at("15:00")
     strikes = {i.side: i.contract.strike for i in out}
     assert strikes["SELL"] == 25000 and strikes["BUY"] > 25000
+
+
+def test_an_overnight_exit_skips_an_exchange_holiday() -> None:
+    """19 Oct 2026: entered Monday, Tuesday 20 Oct was a holiday: the 13:30 exit is on Wednesday at 13:30, not at
+    Wednesday's open."""
+    sim = Sim(rr(holding={"mode": "next_day", "exit": "13:30"}), day=THU)
+    sim.prices = {c(25000, "CE", WEEK2): 100.0}
+    real = sim.market
+
+    def with_holiday(hm: str) -> Market:
+        m = real(hm)
+        m.holidays = frozenset({FRI})
+        return m
+
+    sim.market = with_holiday  # type: ignore[method-assign]
+    assert len(sim.at("15:00")) == 1
+    sim.day = MON  # Friday was the holiday
+    assert sim.at("09:15") == [] and sim.at("13:29") == []
+    (ex,) = sim.at("13:30")
+    assert ex.reason == "exit time 13:30"

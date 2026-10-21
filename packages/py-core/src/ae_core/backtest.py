@@ -19,7 +19,7 @@ of a range trades like any other."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Any, Protocol
@@ -290,6 +290,7 @@ def simulate(
     spread_pct: float = 0.0,
     costs: Costs | None = None,
     tips: Sequence[Tip] = (),
+    holidays: Collection[date] = (),
 ) -> BacktestResult:
     """`spread_pct`: a modelled bid/ask spread (% of the premium); half of it is paid on every fill, on top of
     the slippage (history has trades, not quotes). `tips`: a Telegram channel's stored tips, for strategies that
@@ -352,6 +353,7 @@ def simulate(
     stale_exits = leftovers = 0
 
     no_options: list[date] = []
+    closed = frozenset(holidays)
     for day in days:
         spot = session_bars(history.spot(u, day), day)
         if not spot:
@@ -372,13 +374,14 @@ def simulate(
             done = list(spot[:i])
             m0 = Market(now, u, bar.open, done, {}, live_expiries, lot_size, strike_step, before)
             m0.tips = [t for t in day_tips if t.date <= now]
+            m0.holidays = closed
             keys = runner.wanted(m0)
             for k in keys:
                 prices.seen(k, now)
             opens = {k: p for k in keys if (p := prices.open(k, now)) is not None}
             quotes = {k: prices.quote(k) for k in keys}
             m = Market(now, u, bar.open, done, opens, live_expiries, lot_size, strike_step, before, quotes)
-            m.tips = m0.tips
+            m.tips, m.holidays = m0.tips, closed
             # step A: the minute's open
             step_intents = runner.step(m)
             at_level = _level_prices(runner, step_intents, prev_opens, m.prices)
@@ -580,7 +583,8 @@ def _extremes(
         short = p.side == "SELL"
         ext[p.contract.key] = (b.high if short else b.low) if adverse else (b.low if short else b.high)
     m2 = Market(now, m.underlying, m.spot if spot is None else spot, m.spot_bars, ext, m.expiries, m.lot_size,
-                m.strike_step, m.prior_spot_bars, m.quotes, m.tips, intrabar=len(opens) > 1)  # fmt: skip
+                m.strike_step, m.prior_spot_bars, m.quotes, m.tips, m.holidays,
+                intrabar=len(opens) > 1)  # fmt: skip
     taken = _STOPS if adverse else _TARGETS
     snap = runner.snapshot()
     intents = runner.step(m2)

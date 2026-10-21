@@ -328,9 +328,9 @@ class RulesRunner(Runner):
         if h.mode == "intraday":
             day = today
         elif h.mode == "next_day":
-            day = rules.add_weekdays(today, 1)
+            day = rules.add_weekdays(today, 1, m.holidays)
         elif h.mode == "days":
-            day = rules.add_weekdays(today, h.days)
+            day = rules.add_weekdays(today, h.days, m.holidays)
         else:
             leg = self.cfg.legs_for(today)[0]
             found = rules.pick_expiry(m.expiries, today, leg.expiry)

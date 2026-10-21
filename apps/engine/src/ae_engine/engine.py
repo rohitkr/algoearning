@@ -49,6 +49,7 @@ from ae_db.models import (
     UserRiskSettings,
 )
 from ae_db.session import Database
+from ae_marketdata.backfill import calendar_holidays
 from ae_marketdata.hub import Hub
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,6 +60,7 @@ from .paper import PaperExchange
 log = structlog.get_logger("ae_engine")
 ACTIVE = (RunStatus.PENDING, RunStatus.RUNNING, RunStatus.STOPPING)
 STALE = timedelta(minutes=2)
+HOLIDAYS = frozenset(calendar_holidays())  # NSE's trading holidays (ae_marketdata/holidays.toml)
 FORCE_KEY = "ae:enter_now:{}"  # set by the API's "Enter now" (a run id), read and removed by the engine
 FEED_GRACE = timedelta(minutes=2)
 NO_FEED = (
@@ -276,7 +278,8 @@ class Engine:
                 continue
             t = last.get(u)
             spot = t.ltp if t is not None and (now - t.ts < STALE or closing_price(t.ts, now)) else None
-            out[u] = Market(now, u, spot, await self.hub.bars(u, now.date()), {}, i.expiries, i.lot_size, i.strike_step)
+            out[u] = Market(now, u, spot, await self.hub.bars(u, now.date()), {}, i.expiries, i.lot_size, i.strike_step,
+                            holidays=HOLIDAYS)  # fmt: skip
         return out
 
     async def _user(
