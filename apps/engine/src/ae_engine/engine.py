@@ -59,6 +59,10 @@ from .paper import PaperExchange
 log = structlog.get_logger("ae_engine")
 ACTIVE = (RunStatus.PENDING, RunStatus.RUNNING, RunStatus.STOPPING)
 STALE = timedelta(minutes=2)
+FEED_GRACE = timedelta(minutes=2)
+NO_FEED = (
+    "No live prices: strategies cannot trade"  # the feed may reconnect on its own: tell only after this long without it
+)
 
 
 def closing_price(tick_ts: datetime, now: datetime) -> bool:
@@ -152,6 +156,8 @@ class Engine:
         self.kite_transport, self.sleep = kite_transport, sleep
         self.accounts: dict[uuid.UUID | None, LiveAccount] = {}  # None: the dry-run account (no broker)
         self.account_token: dict[uuid.UUID, bytes | None] = {}
+        self.feed_down_since: datetime | None = None
+        self.feed_alerted: date | None = None
         self.prices: dict[str, float] = {}  # latest feed prices, for live limit pricing between steps
         self.tick_ts: dict[str, datetime] = {}  # when each of those prices was last quoted
         self.recover: set[uuid.UUID] = set()  # live runs whose in-flight orders must be looked up after a restart
@@ -199,7 +205,34 @@ class Engine:
                     self.runners.pop(r.id, None)
         if wanted:
             await self.hub.want(wanted)
+        await self._watch_feed(runs, insts, now)
         return len(runs)
+
+    async def _watch_feed(self, runs: list[StrategyRun], insts: dict[str, Inst], now: datetime) -> None:
+        """No price feed while the market is open and strategies run (no market-data login today, the feed down):
+        nothing can enter or be judged on live prices. Tell each of their users once a day, on the run log too."""
+        open_runs = [r for r in runs if (i := insts.get(self._underlying(r))) is not None and self.in_session(i, now)]
+        if not open_runs:
+            self.feed_down_since = None
+            return
+        health = await self.hub.health()
+        if health.get("connected") and not health.get("error"):
+            self.feed_down_since = None
+            return
+        self.feed_down_since = self.feed_down_since or now
+        today = now.astimezone(IST).date()
+        if now - self.feed_down_since < FEED_GRACE or self.feed_alerted == today:
+            return
+        self.feed_alerted = today
+        why = str(health.get("error") or "the price feed is not connected")
+        log.warning("no live prices while strategies run", error=why, runs=len(open_runs))
+        async with self.db.system_session() as s:
+            for user_id in {r.user_id for r in open_runs}:
+                body = (f"{why}. Log in from Monitor > Market data; until then no entry can be placed and stop-losses "
+                        "are not watched on live prices.")  # fmt: skip
+                s.add(Notification(user_id=user_id, event="prices_stale", title=NO_FEED, body=body))
+            for r in open_runs:
+                self._event(s, r, "no_live_prices", level="ERROR", reason=why)
 
     async def _tips(self, s: Any, user_id: uuid.UUID, runners: Any, now: datetime) -> list[Tip]:
         """Today's Telegram tips of the signal sources this user's runs trade on (ADR 0025), oldest first."""

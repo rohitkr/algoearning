@@ -511,6 +511,9 @@ class RulesRunner(Runner):
             return skip("the exit time has passed")
         px = m.price(c)
         if px is None:
+            if (m.now - tip.date).total_seconds() > e.max_tip_age_s:
+                return skip(f"no price for {c.label} within {e.max_tip_age_s}s: is the price feed logged in?")
+            self.s["armed"] = {"dir": direction, "at": m.now.isoformat(), "tip": tip_id}  # keep waiting for it
             why = "no price yet for " + c.label
             if self.s.get("waiting_reason") != why:
                 self.s["waiting_reason"] = why

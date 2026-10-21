@@ -366,3 +366,25 @@ async def test_a_contract_with_an_order_being_worked_keeps_fresh_prices(env: Any
     await prices(hub, clock[0], 25010, 90.0)
     await eng.tick()
     assert eng.prices[CE] == 90.0
+
+
+async def test_no_price_feed_while_strategies_run_is_told_once_a_day(env: Any) -> None:
+    """20-21 Oct 2026: no market-data login, so no prices all day and no tip could trade, and nobody was told."""
+    from datetime import timedelta
+
+    from ae_db.models import Notification
+
+    db, hub, ids = env
+    await add_run(db, ids)
+    await hub.set_health(connected=False, error="no Kite session today: log in from Monitor > Market data")
+    clock = [at("09:30")]
+    eng = Engine(db, hub, now=lambda: clock[0])
+    await eng.tick()
+    clock[0] += timedelta(minutes=3)
+    await eng.tick()
+    clock[0] += timedelta(minutes=3)
+    await eng.tick()
+    async with db.system_session() as s:
+        notes = list((await s.execute(select(Notification).where(Notification.event == "prices_stale"))).scalars())
+        events = list((await s.execute(select(TradeEvent).where(TradeEvent.event == "no_live_prices"))).scalars())
+    assert len(notes) == 1 and "no Kite session today" in notes[0].body and len(events) == 1

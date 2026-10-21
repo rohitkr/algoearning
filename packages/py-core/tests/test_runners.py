@@ -839,3 +839,10 @@ def test_a_tip_as_given_is_not_cut_short_by_the_strategys_loss_limit() -> None:
     assert sim.at("10:35") == []
     sim.prices[pe] = 140.0
     assert {i.reason for i in sim.at("10:40")} == {"the tip's stop-loss (141)"}
+
+
+def test_a_tip_as_given_without_a_price_is_skipped_with_the_reason_not_dropped_silently() -> None:
+    sim = TipSim(as_given(4), [the_tip()])  # no prices at all: the feed is not logged in
+    for minute in ("10:31", "10:32", "10:33"):
+        assert sim.at(minute) == []
+    assert any(n["event"] == "tip_skipped" and "is the price feed logged in" in n["reason"] for n in sim.r.notes)
