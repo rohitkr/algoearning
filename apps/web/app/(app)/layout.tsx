@@ -9,6 +9,7 @@ import { ApiStatus } from "@/components/api-status";
 import { Logo } from "@/components/logo";
 import { MarketTicker } from "@/components/market-ticker";
 import { MobileNav } from "@/components/mobile-nav";
+import { SoundAlerts } from "@/components/sound-alerts";
 import { Sidebar } from "@/components/sidebar";
 import { StickyHeader } from "@/components/sticky-header";
 import { apiGet } from "@/lib/api";
@@ -38,6 +39,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             <ApiStatus />
           </span>
           <ThemeToggle />
+          <SoundAlerts />
           <Tooltip label="Notifications">
             <Link
               href="/notifications"

@@ -23,6 +23,7 @@ from ae_db.models import (
     BrokerSession,
     Instrument,
     Order,
+    SignalRow,
     SignalSource,
     StrategyRun,
     Trade,
@@ -339,6 +340,52 @@ async def stop_all(user: CurrentUser, s: UserSession, request: Request) -> list[
 
 
 # -- risk settings -----------------------------------------------------------------------------------------------
+@router.get("/v1/me/activity")
+async def recent_activity(user: CurrentUser, s: UserSession, since: datetime | None = None) -> dict[str, Any]:
+    """What happened since `since` (for the web app's sound alerts): Telegram tips received and trades executed
+    (entries and exits) of the user's strategies, oldest first. Without `since`: nothing, only the server's time to
+    start from."""
+    now = datetime.now(UTC)
+    if since is None:
+        return {"now": now.isoformat(), "signals": [], "trades": []}
+    since = max(since, now - timedelta(hours=1))  # a tab left open for days does not ring for all of it
+    sigs = (
+        await s.execute(
+            select(SignalRow).where(SignalRow.updated_at > since, SignalRow.date > since).order_by(SignalRow.date)
+        )
+    ).scalars().all()  # fmt: skip
+    evs = (
+        await s.execute(
+            select(TradeEvent, StrategyRun.strategy_name)
+            .join(StrategyRun, StrategyRun.id == TradeEvent.run_id)
+            .where(TradeEvent.ts > since, TradeEvent.event.in_(("entry", "exit")))
+            .order_by(TradeEvent.ts)
+            .limit(50)
+        )
+    ).all()  # fmt: skip
+    return {
+        "now": now.isoformat(),
+        "signals": [
+            {
+                "id": r.header_msg_id,
+                "tip": f"{r.action} {r.index} {r.strike} {r.option_type}",
+                "date": r.date.isoformat(),
+            }
+            for r in sigs
+        ],
+        "trades": [
+            {
+                "event": e.event,
+                "strategy": name,
+                "contract": e.detail.get("contract"),
+                "side": e.detail.get("side"),
+                "ts": e.ts.isoformat(),
+            }
+            for e, name in evs
+        ],
+    }
+
+
 @router.get("/v1/me/risk", response_model=RiskSettingsIO)
 async def get_risk(user: CurrentUser, s: UserSession) -> RiskSettingsIO:
     rs = (await s.execute(select(UserRiskSettings))).scalar_one_or_none()
