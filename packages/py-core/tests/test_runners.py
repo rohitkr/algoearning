@@ -846,3 +846,17 @@ def test_a_tip_as_given_without_a_price_is_skipped_with_the_reason_not_dropped_s
     for minute in ("10:31", "10:32", "10:33"):
         assert sim.at(minute) == []
     assert any(n["event"] == "tip_skipped" and "is the price feed logged in" in n["reason"] for n in sim.r.notes)
+
+
+def test_enter_now_starts_todays_trade_after_the_entry_window() -> None:
+    """21 Oct 2026: the 15:00 entry was missed (no prices until 15:25): "Enter now" enters at once, once."""
+    sim = Sim(rr(entry={"at": "15:00", "until": "15:20"}), day=THU)
+    sim.prices = {c(25000, "CE", WEEK2): 100.0}
+    assert sim.at("15:21") == [] and sim.r.s["phase"] == "done"  # the window has passed
+    assert sim.r.force_entry(sim.market("15:25")) is None
+    (entry,) = sim.at("15:25")
+    assert entry.kind == "entry" and any(n["event"] == "manual_entry" for n in sim.r.notes)
+    assert sim.r.force_entry(sim.market("15:26")) == "a trade is already open"
+    sim.day = FRI
+    (ex,) = sim.at("09:30")
+    assert ex.reason == "exit time 09:30"  # held overnight as the strategy says

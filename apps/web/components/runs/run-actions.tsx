@@ -3,7 +3,7 @@
 import type { RiskSettings } from "@algoearning/api-types";
 import { Button, Card, CardTitle, Switch, cn, useConfirm } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
-import { OctagonX, Square } from "lucide-react";
+import { OctagonX, Play, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -53,6 +53,37 @@ export function StopRunButton({ runId, name }: { runId: string; name: string }) 
         <Square className="size-3.5" aria-hidden /> Stop
       </Button>
       {note && !note.ok && <span className="text-xs text-loss">{note.text}</span>}
+    </span>
+  );
+}
+
+/** "Enter now": start today's trade at once when its entry time was missed (live runs place real orders). */
+export function EnterNowButton({ runId, name, live }: { runId: string; name: string; live: boolean }) {
+  const { call, busy, note } = useCall();
+  const confirm = useConfirm();
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={busy}
+        onClick={async () => {
+          const ok = await confirm({
+            title: `Enter ${name} now?`,
+            message:
+              "Today's trade is entered right away, outside its entry time, with the usual legs, lots and risk " +
+              "checks." +
+              (live ? " This is a live run: real orders go to your broker." : ""),
+            confirmLabel: "Enter now",
+            tone: live ? "danger" : undefined,
+          });
+          if (ok)
+            await call("POST", `/v1/runs/${runId}/enter-now`, undefined, "Asked the engine to enter now.");
+        }}
+      >
+        <Play className="size-3.5" aria-hidden /> Enter now
+      </Button>
+      {note && <span className={cn("text-xs", note.ok ? "text-muted" : "text-loss")}>{note.text}</span>}
     </span>
   );
 }

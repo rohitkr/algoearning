@@ -388,3 +388,22 @@ async def test_no_price_feed_while_strategies_run_is_told_once_a_day(env: Any) -
         notes = list((await s.execute(select(Notification).where(Notification.event == "prices_stale"))).scalars())
         events = list((await s.execute(select(TradeEvent).where(TradeEvent.event == "no_live_prices"))).scalars())
     assert len(notes) == 1 and "no Kite session today" in notes[0].body and len(events) == 1
+
+
+async def test_enter_now_is_taken_from_redis_once(env: Any) -> None:
+    db, hub, ids = env
+    rid = await add_run(db, ids)
+    clock = [at("15:20")]  # after the strategy's window (09:20-15:15): it would not enter on its own
+    eng = Engine(db, hub, now=lambda: clock[0])
+    await prices(hub, clock[0], 25010, 100.0)
+    await eng.tick()
+    await hub.r.set(f"ae:enter_now:{rid}", "user", ex=120)
+    await eng.tick()
+    assert await hub.r.get(f"ae:enter_now:{rid}") is None
+    await eng.tick()  # the leg's price is asked for on the step that took the request: entered on the next
+    async with db.system_session() as s:
+        evs = list((await s.execute(select(TradeEvent).where(TradeEvent.run_id == rid))).scalars())
+        kinds = [e.event for e in evs]
+    # taken once; this intraday strategy's exit (15:15) has passed, so the runner says why it cannot enter
+    assert kinds.count("manual_entry_requested") == 1
+    assert any(e.event == "waiting_to_enter" and "has passed" in e.detail["reason"] for e in evs)

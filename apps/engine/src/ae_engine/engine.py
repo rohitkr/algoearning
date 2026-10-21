@@ -59,6 +59,7 @@ from .paper import PaperExchange
 log = structlog.get_logger("ae_engine")
 ACTIVE = (RunStatus.PENDING, RunStatus.RUNNING, RunStatus.STOPPING)
 STALE = timedelta(minutes=2)
+FORCE_KEY = "ae:enter_now:{}"  # set by the API's "Enter now" (a run id), read and removed by the engine
 FEED_GRACE = timedelta(minutes=2)
 NO_FEED = (
     "No live prices: strategies cannot trade"  # the feed may reconnect on its own: tell only after this long without it
@@ -422,6 +423,16 @@ class Engine:
         )[:500]
         self._event(s, r, "cannot_read_strategy", level="ERROR", error=why)
 
+    async def _enter_now(self, s: AsyncSession, r: StrategyRun, rn: Runner, m: Market) -> None:
+        """The user pressed "Enter now" (the API leaves the request in Redis): start today's trade at once, once."""
+        if not await self.hub.r.getdel(FORCE_KEY.format(r.id)):
+            return
+        why = rn.force_entry(m)
+        if why:
+            self._event(s, r, "manual_entry_refused", level="WARNING", reason=why)
+        else:
+            self._event(s, r, "manual_entry_requested", reason="Enter now: today's trade is entered now")
+
     def _runner(self, r: StrategyRun) -> Runner:
         rn = self.runners.get(r.id)
         if rn is None:
@@ -452,6 +463,7 @@ class Engine:
                 self._event(s, r, "risk_limit", level="WARNING", reason=stop_all)
             intents = rn.exit_all(reason, m)
         else:
+            await self._enter_now(s, r, rn, m)
             intents = rn.step(m)
         for intent in intents:
             refused = check_entry(intent, ctx())
@@ -557,6 +569,7 @@ class Engine:
                 self._event(s, r, "risk_limit", level="WARNING", reason=stop_all)
             intents = rn.exit_all(reason, m)
         else:
+            await self._enter_now(s, r, rn, m)
             intents = rn.step(m)
         for pid, due in list(retry.items()):
             pos = rn.position(pid)

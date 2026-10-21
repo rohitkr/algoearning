@@ -16,10 +16,12 @@ from ae_core.strategy import (
     tip_source_ids,
     uses_tips,
 )
+from ae_core.trading.model import IST
 from ae_db.enums import BrokerAccountStatus, RunStatus, StrategyStatus, TradingMode
 from ae_db.models import (
     BrokerAccount,
     BrokerSession,
+    Instrument,
     Order,
     SignalSource,
     StrategyRun,
@@ -36,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import audit
 from ..deps import CurrentUser, UserSession
 from ..entitlements import load_entitlements, require_feature, require_within
-from ..errors import Conflict, NotFound, PlanLimitReached
+from ..errors import Conflict, NotFound, PlanLimitReached, Unavailable
 from ..schemas import (
     ERROR_RESPONSES,
     DeployIn,
@@ -292,6 +294,30 @@ async def stop_run(run_id: uuid.UUID, user: CurrentUser, s: UserSession, request
         raise Conflict("the run has already stopped")
     await _stop(s, run, "stopped by you")
     await audit(s, request, "run.stop", user.user_id, "strategy_run", run.id)
+    return run_out(run, (await _open_counts(s, [run.id])).get(run.id, 0))
+
+
+ENTER_NOW_KEY = "ae:enter_now:{}"  # the engine's FORCE_KEY: it takes the request on its next step
+
+
+@router.post("/v1/runs/{run_id}/enter-now", response_model=RunOut)
+async def enter_now(run_id: uuid.UUID, user: CurrentUser, s: UserSession, request: Request) -> RunOut:
+    """Start today's trade now, outside the entry window (e.g. the entry time was missed): the engine enters it on its
+    next step with the usual legs, lots and risk checks, while the exchange is open. Live runs place real orders."""
+    run = await _own_run(s, run_id)
+    if run.status != RunStatus.RUNNING:
+        raise Conflict("the strategy is not running")
+    inst = (
+        await s.execute(select(Instrument).where(Instrument.code == run.config_snapshot.get("underlying", "NIFTY")))
+    ).scalar_one_or_none()
+    now = datetime.now(IST)
+    if inst is None or now.weekday() >= 5 or not (inst.session_open <= f"{now:%H:%M}" < inst.session_close):
+        raise Conflict("the market is closed: Enter now works while the exchange is open", {"reason": "closed"})
+    redis = getattr(request.app.state, "redis", None)
+    if redis is None:
+        raise Unavailable("the trading engine cannot be reached")
+    await redis.set(ENTER_NOW_KEY.format(run.id), str(user.user_id), ex=120)
+    await audit(s, request, "run.enter_now", user.user_id, "strategy_run", run.id)
     return run_out(run, (await _open_counts(s, [run.id])).get(run.id, 0))
 
 

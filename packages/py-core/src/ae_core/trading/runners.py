@@ -79,6 +79,10 @@ class Runner:
         self.on_exit(pos, m)
         return pos
 
+    def force_entry(self, m: Market) -> str | None:
+        """ "Enter now" (rules and plans runners): start today's trade at once. Returns why it cannot, or None."""
+        return "this kind of strategy cannot be entered by hand"
+
     def idle_positions(self) -> list[Position]:
         """Positions still open although the trade they belong to has ended and nothing is closing them (a safety net
         for the backtest: such a position would block every later entry). Only the rules runner can have them."""
@@ -168,6 +172,7 @@ class Runner:
 
 EXIT_RETRY = timedelta(seconds=30)  # a refused exit is sent again after this long
 ARM_FOR = timedelta(minutes=2)  # a fired signal stays valid this long while option prices stream in
+FORCE_FOR = timedelta(minutes=2)  # "Enter now" keeps trying this long (prices may still be arriving)
 
 
 def _buy_first(intents: list[Intent]) -> list[Intent]:
@@ -396,14 +401,20 @@ class RulesRunner(Runner):
             return []  # the last trade is still closing
         now, e, today = m.now, self.cfg.entry, m.now.date().isoformat()
         t, until = rules.hhmm(now), self._until()
-        why = self._skip_today(m)
+        forced = self.s.get("forced")
+        if forced and now - datetime.fromisoformat(forced) > FORCE_FOR:
+            self.s.pop("forced", None)
+            self.s["phase"] = "done"
+            self.note("manual_entry_failed", reason=self.s.get("waiting_reason") or "the entry could not be placed")
+            return []
+        why = None if forced else self._skip_today(m)
         if why:
             self.s["phase"] = "done"
             self.note(why, weekday=now.strftime("%A"))
             return []
-        if t < e.at:
+        if t < e.at and not forced:
             return []
-        if until is not None and t >= until:
+        if until is not None and t >= until and not forced:
             self.s["phase"] = "done"
             return []
         direction = "always"
@@ -470,6 +481,8 @@ class RulesRunner(Runner):
         self.s.pop("entered", None)
         self.s.pop("armed", None)
         self.s.pop("exit_retry_at", None)
+        if self.s.pop("forced", None):
+            self.note("manual_entry", reason="Enter now")
         self.s.update(phase="in", entries_day=today, entries=self._entries_today(m) + 1, final=final.isoformat(),
                       cycle_realized=self.realized, reentries={}, pending=[], sold={}, lock_floor=None,
                       direction=direction, tip_id=tip_id)  # fmt: skip
@@ -481,6 +494,16 @@ class RulesRunner(Runner):
         intents = _buy_first([self._enter(m, c, leg.action, leg.lots, leg.id, why_in) for leg, c in contracts])
         self.s["awaiting"] = [i.position_id for i in intents]
         return intents
+
+    def force_entry(self, m: Market) -> str | None:
+        """ "Enter now": start today's trade at once, outside the entry window. Returns why it cannot, or None."""
+        if self.cfg.entry.mode != "time":
+            return "only a strategy that enters at a time can be entered by hand"
+        if self.open_positions() or self.exiting or self.s.get("phase") == "in":
+            return "a trade is already open"
+        self.s.update(phase="waiting", forced=m.now.isoformat())
+        self.s.pop("waiting_reason", None)
+        return None
 
     # -- a tip traded as given ------------------------------------------------------------------------------------
     def _tip_contract(self, m: Market, tip: Tip) -> Contract | None:
@@ -1056,6 +1079,14 @@ class PlansRunner(Runner):
 
     def idle_positions(self) -> list[Position]:
         return [p for sub in self.subs.values() for p in sub.idle_positions()]
+
+    def force_entry(self, m: Market) -> str | None:
+        today = m.now.strftime("%a").upper()[:3]
+        plans = [pid for pid, keys in self.lanes.items() if today in self._days[keys[0]]]
+        if not plans:
+            return f"no plan trades on {m.now:%A}"
+        why = [r for pid in plans if (r := self.subs[self.lanes[pid][0]].force_entry(m)) is not None]
+        return why[0] if len(why) == len(plans) else None
 
     def late_entries(self, last: datetime) -> list[str]:
         return sorted({t for sub in self.subs.values() for t in sub.late_entries(last)})
