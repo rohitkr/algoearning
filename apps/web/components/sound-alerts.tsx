@@ -124,9 +124,13 @@ export function SoundAlerts() {
     };
     void tick();
     const t = setInterval(() => void tick(), POLL_MS);
+    // a background tab is checked about once a minute at most: check at once when it comes back to the front
+    const back = () => document.visibilityState === "visible" && void tick();
+    document.addEventListener("visibilitychange", back);
     return () => {
       alive = false;
       clearInterval(t);
+      document.removeEventListener("visibilitychange", back);
     };
   }, [on]);
 
