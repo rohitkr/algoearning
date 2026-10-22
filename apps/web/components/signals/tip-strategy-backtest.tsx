@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { NumberField, inputClass } from "@/components/builder/fields";
 import { BacktestResultView, type BacktestResultData } from "@/components/backtesting/result-view";
+import { DONE_SOUND, FAILED_SOUND, playAlert } from "@/components/sound-alerts";
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
 
 const FIRST_TIP = "2026-07-09"; // the channel's first trade message
@@ -71,7 +72,9 @@ export function TipStrategyBacktest({ source }: { source: SignalSource }) {
         getToken,
       );
       setOut({ res: r.result as unknown as BacktestResultData, name: chosen.name, from, to });
+      playAlert(DONE_SOUND);
     } catch (e) {
+      playAlert(FAILED_SOUND);
       const api = e instanceof ApiRequestError ? e : null;
       setError({ text: api?.message ?? (e as Error).message, upgrade: api?.body?.code === "plan_feature" });
     } finally {

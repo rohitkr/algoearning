@@ -21,6 +21,7 @@ type Activity = {
     side: string | null;
     ts: string;
   }[];
+  done?: { id: string; kind: string; name: string; ok: boolean; ts: string }[];
 };
 
 /** A short tone sequence: [frequency Hz, start s, length s][]. Web Audio, so no sound files to load. */
@@ -53,6 +54,29 @@ export const EXIT_SOUND: [number, number, number][] = [
   [784, 0, 0.15],
   [523, 0.17, 0.3],
 ]; // falling two-tone: a position closed
+export const DONE_SOUND: [number, number, number][] = [
+  [523, 0, 0.14],
+  [659, 0.14, 0.14],
+  [784, 0.28, 0.14],
+  [1047, 0.42, 0.35],
+]; // arpeggio: a backtest or a history download finished
+export const FAILED_SOUND: [number, number, number][] = [
+  [330, 0, 0.25],
+  [262, 0.28, 0.4],
+]; // low falling tones: it failed
+
+/** Play one of the alert sounds now, from a page action the user just clicked (a backtest run on the page): the
+ * click already allowed sound. Silent when the user muted alerts. */
+export function playAlert(notes: [number, number, number][]) {
+  try {
+    if (localStorage.getItem(KEY) === "off") return;
+  } catch {
+    /* not readable: play */
+  }
+  shared ??= new AudioContext();
+  void shared.resume().then(() => shared && play(shared, notes));
+}
+let shared: AudioContext | null = null;
 
 /** Plays a sound when a Telegram tip arrives or a strategy opens or closes a position (polls the API while any page
  * of the app is open). Browsers only allow sound after a click on the page, so the first click anywhere enables it. */
@@ -75,7 +99,8 @@ export function SoundAlerts() {
       }
     }, 0);
     const unlock = () => {
-      if (!ctx.current) ctx.current = new AudioContext();
+      shared ??= new AudioContext();
+      ctx.current = shared;
       void ctx.current.resume();
       setMissed(0);
     };
@@ -105,11 +130,13 @@ export function SoundAlerts() {
             return true;
           });
         const tips = fresh(a.signals, (x) => x.date);
+        const finished = fresh(a.done ?? [], (x) => x.ts);
         const trades = fresh(a.trades, (x) => x.ts);
         const audio = ctx.current;
         if (!on) return;
         if (!audio || audio.state !== "running") {
-          if (tips.length || trades.length) setMissed((n) => n + tips.length + trades.length);
+          const n = tips.length + trades.length + finished.length;
+          if (n) setMissed((m) => m + n);
           return;
         }
         if (tips.length) play(audio, TIP_SOUND);
@@ -118,6 +145,10 @@ export function SoundAlerts() {
         const delay = tips.length ? 900 : 0;
         if (entries) setTimeout(() => play(audio, ENTRY_SOUND), delay);
         if (exits) setTimeout(() => play(audio, EXIT_SOUND), delay + (entries ? 600 : 0));
+        if (finished.length) {
+          const later = delay + (entries ? 600 : 0) + (exits ? 600 : 0);
+          setTimeout(() => play(audio, finished.every((f) => f.ok) ? DONE_SOUND : FAILED_SOUND), later);
+        }
       } catch {
         /* the API is restarting or offline: try again on the next tick */
       }
@@ -143,7 +174,8 @@ export function SoundAlerts() {
       /* not remembered: fine */
     }
     if (next) {
-      if (!ctx.current) ctx.current = new AudioContext();
+      shared ??= new AudioContext();
+      ctx.current = shared;
       void ctx.current.resume().then(() => ctx.current && play(ctx.current, ENTRY_SOUND));
     }
   }

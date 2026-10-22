@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { BacktestResultView, type BacktestResultData } from "@/components/backtesting/result-view";
+import { DONE_SOUND, FAILED_SOUND, playAlert } from "@/components/sound-alerts";
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
 
 import { NumberField, inputClass } from "./fields";
@@ -74,7 +75,9 @@ export function StrategyTest({ config, blocked }: { config: StrategyConfig; bloc
         config: JSON.stringify(config),
         range: `${from} to ${to}`,
       });
+      playAlert(DONE_SOUND);
     } catch (e) {
+      playAlert(FAILED_SOUND);
       const api = e instanceof ApiRequestError ? e : null;
       setError({ text: api?.message ?? (e as Error).message, upgrade: api?.body?.code === "plan_feature" });
     } finally {

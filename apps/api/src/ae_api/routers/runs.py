@@ -19,8 +19,10 @@ from ae_core.strategy import (
 from ae_core.trading.model import IST
 from ae_db.enums import BrokerAccountStatus, RunStatus, StrategyStatus, TradingMode
 from ae_db.models import (
+    BacktestRun,
     BrokerAccount,
     BrokerSession,
+    DataSyncJob,
     Instrument,
     Order,
     SignalRow,
@@ -37,7 +39,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import audit
-from ..deps import CurrentUser, UserSession
+from ..deps import CurrentUser, DbDep, UserSession
 from ..entitlements import load_entitlements, require_feature, require_within
 from ..errors import Conflict, NotFound, PlanLimitReached, Unavailable
 from ..schemas import (
@@ -341,13 +343,15 @@ async def stop_all(user: CurrentUser, s: UserSession, request: Request) -> list[
 
 # -- risk settings -----------------------------------------------------------------------------------------------
 @router.get("/v1/me/activity")
-async def recent_activity(user: CurrentUser, s: UserSession, since: datetime | None = None) -> dict[str, Any]:
+async def recent_activity(
+    user: CurrentUser, s: UserSession, db: DbDep, since: datetime | None = None
+) -> dict[str, Any]:
     """What happened since `since` (for the web app's sound alerts): Telegram tips received and trades executed
     (entries and exits) of the user's strategies, oldest first. Without `since`: nothing, only the server's time to
     start from."""
     now = datetime.now(UTC)
     if since is None:
-        return {"now": now.isoformat(), "signals": [], "trades": []}
+        return {"now": now.isoformat(), "signals": [], "trades": [], "done": []}
     # a tab left open for days does not ring for all of it; and look back 2 minutes: an event is stamped when the
     # engine's transaction starts but only visible once it commits, so it can be older than the last poll (the page
     # drops the ones it has already played, by id)
@@ -366,8 +370,29 @@ async def recent_activity(user: CurrentUser, s: UserSession, since: datetime | N
             .limit(50)
         )
     ).all()  # fmt: skip
+    backtests = (
+        await s.execute(
+            select(BacktestRun).where(BacktestRun.finished_at > since, BacktestRun.status.in_(("done", "error")))
+        )
+    ).scalars().all()  # fmt: skip
+    async with db.system_session() as sys:  # history downloads are platform jobs: the ones this user asked for
+        syncs = (
+            await sys.execute(
+                select(DataSyncJob).where(DataSyncJob.requested_by == user.user_id, DataSyncJob.finished_at > since)
+            )
+        ).scalars().all()  # fmt: skip
+    done = [
+        {"id": f"bt:{b.id}", "kind": "backtest", "name": b.strategy_name, "ok": b.status == "done",
+         "ts": (b.finished_at or now).isoformat()}
+        for b in backtests
+    ] + [
+        {"id": f"sync:{j.id}", "kind": "data_sync", "name": j.underlying, "ok": j.status in ("done", "stopped"),
+         "ts": (j.finished_at or now).isoformat()}
+        for j in syncs
+    ]  # fmt: skip
     return {
         "now": now.isoformat(),
+        "done": done,
         "signals": [
             {
                 "id": f"{r.source_id}:{r.header_msg_id}",
