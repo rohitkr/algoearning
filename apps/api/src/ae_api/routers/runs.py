@@ -348,10 +348,13 @@ async def recent_activity(user: CurrentUser, s: UserSession, since: datetime | N
     now = datetime.now(UTC)
     if since is None:
         return {"now": now.isoformat(), "signals": [], "trades": []}
-    since = max(since, now - timedelta(hours=1))  # a tab left open for days does not ring for all of it
+    # a tab left open for days does not ring for all of it; and look back 2 minutes: an event is stamped when the
+    # engine's transaction starts but only visible once it commits, so it can be older than the last poll (the page
+    # drops the ones it has already played, by id)
+    since = max(since, now - timedelta(hours=1)) - timedelta(minutes=2)
     sigs = (
         await s.execute(
-            select(SignalRow).where(SignalRow.updated_at > since, SignalRow.date > since).order_by(SignalRow.date)
+            select(SignalRow).where(SignalRow.date > since).order_by(SignalRow.date)
         )
     ).scalars().all()  # fmt: skip
     evs = (
@@ -367,7 +370,7 @@ async def recent_activity(user: CurrentUser, s: UserSession, since: datetime | N
         "now": now.isoformat(),
         "signals": [
             {
-                "id": r.header_msg_id,
+                "id": f"{r.source_id}:{r.header_msg_id}",
                 "tip": f"{r.action} {r.index} {r.strike} {r.option_type}",
                 "date": r.date.isoformat(),
             }
@@ -375,6 +378,7 @@ async def recent_activity(user: CurrentUser, s: UserSession, since: datetime | N
         ],
         "trades": [
             {
+                "id": e.id,
                 "event": e.event,
                 "strategy": name,
                 "contract": e.detail.get("contract"),

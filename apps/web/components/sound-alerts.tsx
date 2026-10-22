@@ -12,8 +12,15 @@ const KEY = "ae_sound_alerts";
 
 type Activity = {
   now: string;
-  signals: { id: number; tip: string; date: string }[];
-  trades: { event: string; strategy: string; contract: string | null; side: string | null; ts: string }[];
+  signals: { id: string; tip: string; date: string }[];
+  trades: {
+    id: number;
+    event: string;
+    strategy: string;
+    contract: string | null;
+    side: string | null;
+    ts: string;
+  }[];
 };
 
 /** A short tone sequence: [frequency Hz, start s, length s][]. Web Audio, so no sound files to load. */
@@ -53,8 +60,11 @@ export function SoundAlerts() {
   const { getToken } = useAuth();
   const token = useRef(getToken);
   const [on, setOn] = useState(true);
+  const [missed, setMissed] = useState(0); // alerts that could not sound: the page has not been clicked yet
   const ctx = useRef<AudioContext | null>(null);
   const since = useRef<string | null>(null);
+  const opened = useRef<number | null>(null); // the server's time when the page started listening
+  const heard = useRef(new Set<string>()); // what was already played (the API looks back a little: no repeats)
 
   useEffect(() => {
     const remembered = setTimeout(() => {
@@ -67,6 +77,7 @@ export function SoundAlerts() {
     const unlock = () => {
       if (!ctx.current) ctx.current = new AudioContext();
       void ctx.current.resume();
+      setMissed(0);
     };
     window.addEventListener("pointerdown", unlock);
     window.addEventListener("keydown", unlock);
@@ -85,12 +96,26 @@ export function SoundAlerts() {
         const a = await apiRequest<Activity>("GET", `/v1/me/activity${q}`, undefined, token.current);
         if (!alive) return;
         since.current = a.now;
+        opened.current ??= Date.parse(a.now) - 5000;
+        const fresh = <T extends { id: string | number }>(items: T[], at: (x: T) => string) =>
+          items.filter((x) => {
+            const id = String(x.id);
+            if (heard.current.has(id) || Date.parse(at(x)) < (opened.current ?? 0)) return false;
+            heard.current.add(id);
+            return true;
+          });
+        const tips = fresh(a.signals, (x) => x.date);
+        const trades = fresh(a.trades, (x) => x.ts);
         const audio = ctx.current;
-        if (!on || !audio || audio.state !== "running") return;
-        if (a.signals.length) play(audio, TIP_SOUND);
-        const entries = a.trades.filter((t) => t.event === "entry").length;
-        const exits = a.trades.length - entries;
-        const delay = a.signals.length ? 900 : 0;
+        if (!on) return;
+        if (!audio || audio.state !== "running") {
+          if (tips.length || trades.length) setMissed((n) => n + tips.length + trades.length);
+          return;
+        }
+        if (tips.length) play(audio, TIP_SOUND);
+        const entries = trades.filter((t) => t.event === "entry").length;
+        const exits = trades.length - entries;
+        const delay = tips.length ? 900 : 0;
         if (entries) setTimeout(() => play(audio, ENTRY_SOUND), delay);
         if (exits) setTimeout(() => play(audio, EXIT_SOUND), delay + (entries ? 600 : 0));
       } catch {
@@ -120,18 +145,31 @@ export function SoundAlerts() {
   }
 
   return (
-    <Tooltip label={on ? "Sounds on: tips and trades (click to mute)" : "Sounds off (click to turn on)"}>
+    <Tooltip
+      label={
+        missed > 0
+          ? `${missed} alert(s) could not sound: click anywhere on the page to allow sound`
+          : on
+            ? "Sounds on: tips and trades (click to mute)"
+            : "Sounds off (click to turn on)"
+      }
+    >
       <button
         type="button"
         onClick={toggle}
         aria-label={on ? "Mute tip and trade sounds" : "Turn on tip and trade sounds"}
         aria-pressed={on}
-        className="rounded-lg p-2 text-muted hover:bg-surface-2"
+        className="relative rounded-lg p-2 text-muted hover:bg-surface-2"
       >
         {on ? (
           <Volume2 className="size-[18px]" aria-hidden />
         ) : (
           <VolumeX className="size-[18px]" aria-hidden />
+        )}
+        {missed > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 rounded-full bg-loss px-1 text-[10px] font-semibold text-white">
+            {missed}
+          </span>
         )}
       </button>
     </Tooltip>
