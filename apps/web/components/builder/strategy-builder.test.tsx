@@ -1,9 +1,13 @@
+import { ConfirmProvider } from "@algoearning/ui";
 import type { StrategyCatalog } from "@algoearning/api-types";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import fixture from "./catalog.fixture.json";
 import { StrategyBuilder } from "./strategy-builder";
+
+// the builder asks for confirmations (apply an edit to a running strategy): it needs the app's ConfirmProvider
+const renderUI = (ui: React.ReactElement) => render(ui, { wrapper: ConfirmProvider });
 
 // The catalog as GET /v1/strategies/catalog returns it (regenerate from a running API if presets change).
 const catalog = fixture as StrategyCatalog;
@@ -55,7 +59,7 @@ describe("StrategyBuilder save as", () => {
       status: "ready",
       version: 3,
     };
-    render(<StrategyBuilder catalog={catalog} strategy={strategy as never} />);
+    renderUI(<StrategyBuilder catalog={catalog} strategy={strategy as never} />);
     expect(screen.queryByRole("button", { name: /Save as/ })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Week v2" } });
     fireEvent.click(screen.getByRole("button", { name: /Save as/ }));
@@ -74,7 +78,7 @@ describe("StrategyBuilder save as", () => {
 
 describe("StrategyBuilder unsaved changes", () => {
   it("keeps Save off until something changes, then asks before leaving by a link", async () => {
-    render(
+    renderUI(
       <>
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a plain link is what the guard listens for */}
         <a href="/strategies">Strategies</a>
@@ -102,7 +106,7 @@ describe("StrategyBuilder unsaved changes", () => {
 
 describe("StrategyBuilder", () => {
   it("starts from a preset, edits legs and saves the config", async () => {
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     expect(screen.getByRole("heading", { name: "New strategy" })).toBeTruthy();
     expect(legs()).toHaveLength(1); // "Start from scratch"
 
@@ -140,7 +144,7 @@ describe("StrategyBuilder", () => {
   });
 
   it("moves legs to monthly expiries for monthly-only indices", () => {
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     fireEvent.change(screen.getByLabelText("Instrument"), { target: { value: "BANKNIFTY" } });
     expect((within(legs()[0]!).getByLabelText("Expiry") as HTMLSelectElement).value).toBe("current_month");
     expect(screen.getByText(/Lot size 30 · strikes every 100 · monthly expiries/)).toBeTruthy();
@@ -160,7 +164,7 @@ describe("StrategyBuilder", () => {
         },
       ],
     };
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     await flush();
     expect(screen.getAllByText("must be after the entry time")).toHaveLength(2); // inline + checks panel
     expect(screen.getByText("1 to fix")).toBeTruthy();
@@ -169,7 +173,7 @@ describe("StrategyBuilder", () => {
   });
 
   it("builds an overnight straddle by premium and saves its schedule", async () => {
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     fireEvent.click(screen.getByRole("radio", { name: /Overnight straddle/ }));
     expect(legs()).toHaveLength(2);
     expect(
@@ -209,7 +213,7 @@ describe("StrategyBuilder", () => {
   });
 
   it("builds a breakout from the opening range preset and edits its signals", async () => {
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     fireEvent.click(screen.getByRole("radio", { name: /Opening range breakout/ }));
     expect(legs()).toHaveLength(2);
     expect(
@@ -252,7 +256,7 @@ describe("StrategyBuilder", () => {
   });
 
   it("builds an indicator strategy and saves its settings", async () => {
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     fireEvent.click(screen.getByRole("radio", { name: /EMA 9\/21 crossover/ }));
     expect(
       screen.getByText(/EMA\(9\) crosses above EMA\(21\) \(5-minute candles\) and RSI\(14\) is above 50/),
@@ -278,7 +282,7 @@ describe("StrategyBuilder", () => {
   });
 
   it("trades the direction of a Telegram tip by selling the opposite side", async () => {
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     fireEvent.change(screen.getByLabelText("Enter"), { target: { value: "tip" } });
     expect(screen.getByRole("heading", { name: "Telegram tip" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Sell the opposite side (ATM)" }));
@@ -350,7 +354,7 @@ describe("StrategyBuilder", () => {
       status: "draft",
       version: 1,
     };
-    render(<StrategyBuilder catalog={catalog} strategy={strategy as never} />);
+    renderUI(<StrategyBuilder catalog={catalog} strategy={strategy as never} />);
     expect(
       screen.getByText(/Monday · NIFTY: Enter at 09:30, Mon; exit at 15:00 the same day\./),
     ).toBeTruthy();
@@ -360,7 +364,7 @@ describe("StrategyBuilder", () => {
   });
 
   it("adds a plan for the days nobody trades, with its own instrument, entry and legs", async () => {
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     fireEvent.click(screen.getByRole("radio", { name: /Short strangle/ }));
     const week = within(screen.getByLabelText("Week at a glance"));
     expect(week.getAllByText("Short strangle")).toHaveLength(5); // the one plan trades every weekday
@@ -407,7 +411,7 @@ describe("StrategyBuilder", () => {
   });
 
   it("duplicates and removes plans", () => {
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     fireEvent.click(screen.getByRole("radio", { name: /Short strangle/ }));
     fireEvent.click(screen.getByRole("button", { name: /Duplicate plan/ }));
     expect(screen.getAllByRole("tab")).toHaveLength(2);
@@ -418,7 +422,7 @@ describe("StrategyBuilder", () => {
   });
 
   it("keeps the numbers of a setting that is switched off and on again", () => {
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     fireEvent.click(screen.getByLabelText("Lock profit (and trail it)"));
     fireEvent.change(screen.getByLabelText("When profit reaches"), { target: { value: "7000" } });
     fireEvent.change(screen.getByLabelText("Keep at least"), { target: { value: "6500" } });
@@ -437,7 +441,7 @@ describe("StrategyBuilder", () => {
   });
 
   it("shows the proven strategies' parameters instead of legs", () => {
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     fireEvent.click(screen.getByRole("radio", { name: /2h range breakout/ }));
     expect(legs()).toHaveLength(0);
     expect((screen.getByLabelText("Range until") as HTMLInputElement).value).toBe("11:15");
@@ -446,7 +450,7 @@ describe("StrategyBuilder", () => {
   });
 
   it("edits the SMC scalper's settings and saves them", async () => {
-    render(<StrategyBuilder catalog={catalog} />);
+    renderUI(<StrategyBuilder catalog={catalog} />);
     fireEvent.click(screen.getByRole("radio", { name: /SMC options scalper \(NIFTY\)/ }));
     expect(legs()).toHaveLength(0);
     expect(screen.getByRole("heading", { name: "Timeframes" })).toBeTruthy();

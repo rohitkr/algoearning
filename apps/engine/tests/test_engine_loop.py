@@ -464,3 +464,19 @@ async def test_exit_now_squares_off_and_keeps_the_run_running(env: Any) -> None:
         ).scalar_one().status.value == "running"
         reasons = [t.exit_reason for t in (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars()]
     assert reasons == ["exited by hand (Exit now)"]
+
+
+async def test_an_edited_strategy_applied_to_a_run_rebuilds_its_runner_keeping_positions(env: Any) -> None:
+    db, hub, ids = env
+    rid = await add_run(db, ids)
+    clock = [at("09:20")]
+    eng = Engine(db, hub, now=lambda: clock[0])
+    await prices(hub, clock[0], 25010, 100.0)
+    await eng.tick()
+    await eng.tick()
+    before = eng.runners[rid]
+    assert before.open_positions()
+    await hub.r.set(f"ae:reload:{rid}", "1")
+    await eng.tick()
+    after = eng.runners[rid]
+    assert after is not before and [p.id for p in after.open_positions()] == [p.id for p in before.open_positions()]

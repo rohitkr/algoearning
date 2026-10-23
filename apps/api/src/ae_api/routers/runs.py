@@ -331,6 +331,48 @@ async def _set_paused(run_id: uuid.UUID, paused: bool, user: Any, s: AsyncSessio
     return run_out(run, (await _open_counts(s, [run.id])).get(run.id, 0))
 
 
+RELOAD_KEY = "ae:reload:{}"  # the engine's RELOAD_KEY: rebuild this run's runner from its (new) config
+
+
+@router.post("/v1/strategies/{strategy_id}/apply-to-runs", response_model=list[RunOut])
+async def apply_to_runs(strategy_id: uuid.UUID, user: CurrentUser, s: UserSession, request: Request) -> list[RunOut]:
+    """Make the strategy's running deployments trade its saved settings now (a deployment otherwise keeps the
+    settings it was started with). Each run takes the part for its instrument; open positions stay open and are
+    managed by the new settings from the engine's next step."""
+    strat = await StrategyRepo(s, user.user_id).get(strategy_id)
+    if strat is None:
+        raise NotFound("strategy not found")
+    config = parse(dict(strat.config))
+    issues = check(config, await _instruments(s))
+    if issues:
+        raise Conflict(f"the strategy does not pass its checks: {issues[0].msg}", {"reason": "invalid"})
+    runs = list(
+        (
+            await s.execute(
+                select(StrategyRun).where(StrategyRun.strategy_id == strategy_id, StrategyRun.status.in_(ACTIVE))
+            )
+        ).scalars()
+    )
+    if not runs:
+        raise Conflict("the strategy is not running", {"reason": "not_running"})
+    parts = dict(split_by_instrument(config))
+    redis = getattr(request.app.state, "redis", None)
+    if redis is None:
+        raise Unavailable("the trading engine cannot be reached")
+    for run in runs:
+        u = str(run.config_snapshot.get("underlying", config.underlying))
+        part = parts.get(u) if len(parts) > 1 else config
+        if part is None:
+            continue  # this instrument is no longer in the strategy: the run keeps its settings
+        run.config_snapshot = part.model_dump(mode="json")
+        run.schema_version = strat.schema_version
+        await redis.set(RELOAD_KEY.format(run.id), "1", ex=3600)
+    await s.flush()
+    await audit(s, request, "strategy.apply_to_runs", user.user_id, "strategy", strat.id, runs=len(runs))
+    counts = await _open_counts(s, [r.id for r in runs])
+    return [run_out(r, counts.get(r.id, 0)) for r in runs]
+
+
 EXIT_NOW_KEY = "ae:exit_now:{}"  # the engine's EXIT_KEY
 
 

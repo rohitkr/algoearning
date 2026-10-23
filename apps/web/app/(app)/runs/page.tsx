@@ -63,7 +63,10 @@ export default async function RunsPage() {
                   </div>
                   <p className="mt-1 text-xs text-muted">
                     {r.underlying} · ×{r.multiplier} · {r.open_positions} open · since{" "}
-                    {fmt(r.started_at ?? r.created_at)}
+                    {fmt(r.started_at ?? r.created_at)} ·{" "}
+                    <Link href={`/builder/${r.strategy_id}`} className="text-primary-text underline">
+                      Edit strategy
+                    </Link>
                   </p>
                 </div>
                 <div className="text-right">

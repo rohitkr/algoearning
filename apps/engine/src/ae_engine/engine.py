@@ -61,13 +61,13 @@ log = structlog.get_logger("ae_engine")
 ACTIVE = (RunStatus.PENDING, RunStatus.RUNNING, RunStatus.STOPPING)
 STALE = timedelta(minutes=2)
 HOLIDAYS = frozenset(calendar_holidays())  # NSE's trading holidays (ae_marketdata/holidays.toml)
-FORCE_KEY = "ae:enter_now:{}"
-EXIT_KEY = "ae:exit_now:{}"  # set by the API's "Exit now", read and removed by the engine
-EXIT_NOW_REASON = "exited by hand (Exit now)"  # set by the API's "Enter now" (a run id), read and removed by the engine
-FEED_GRACE = timedelta(minutes=2)
-NO_FEED = (
-    "No live prices: strategies cannot trade"  # the feed may reconnect on its own: tell only after this long without it
-)
+# requests the API leaves in Redis (a run id each), read and removed by the engine on its next step
+FORCE_KEY = "ae:enter_now:{}"  # "Enter now"
+EXIT_KEY = "ae:exit_now:{}"  # "Exit now"
+RELOAD_KEY = "ae:reload:{}"  # an edited strategy applied to its running deployment
+EXIT_NOW_REASON = "exited by hand (Exit now)"
+FEED_GRACE = timedelta(minutes=2)  # the feed may reconnect on its own: tell only after this long without it
+NO_FEED = "No live prices: strategies cannot trade"
 
 
 def closing_price(tick_ts: datetime, now: datetime) -> bool:
@@ -196,6 +196,12 @@ class Engine:
             )
         for rid in set(self.runners) - {r.id for r in runs}:
             del self.runners[rid]  # stopped elsewhere or deleted
+        for r in runs:
+            # the user applied an edit of the strategy to this run: its runner is built again from the new config
+            # (and the run's saved state: open positions carry on) when it is next needed
+            if r.id in self.runners and await self.hub.r.getdel(RELOAD_KEY.format(r.id)):
+                del self.runners[r.id]
+                log.info("run reloaded with the edited strategy", run_id=str(r.id))
         if any(r.mode == TradingMode.LIVE for r in runs):
             await self._ensure_book(now.date())
         by_user: dict[uuid.UUID, list[StrategyRun]] = defaultdict(list)

@@ -3,13 +3,14 @@
 import type {
   ConfigValidation,
   RangeBreakoutConfig,
+  Run,
   SmcScalpConfig,
   Strategy,
   StrategyCatalog,
   StrategyConfig,
   ZeroDteConfig,
 } from "@algoearning/api-types";
-import { Button, Card, CardTitle, StatusPill, Switch, cn } from "@algoearning/ui";
+import { Button, Card, CardTitle, StatusPill, Switch, cn, useConfirm } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
 import { ArrowLeft, CopyPlus, Save } from "lucide-react";
 import Link from "next/link";
@@ -131,6 +132,7 @@ function ProvenParams<C extends Proven>({
 export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalog; strategy?: Strategy }) {
   const { getToken } = useAuth();
   const router = useRouter();
+  const confirm = useConfirm();
   const presets = catalog.presets;
   const [presetId, setPresetId] = useState<string | null>(strategy ? null : (presets[0]?.id ?? null));
   const [name, setName] = useState(strategy?.name ?? "");
@@ -228,6 +230,39 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
     if (!name || presets.some((x) => x.name === name)) setName(p.id === "blank" ? "" : p.name);
   }
 
+  /** After saving a strategy that is running: ask whether its running deployment should trade the edit now (it
+   * otherwise keeps the settings it was started with). Returns the note to show. */
+  async function applyToRunning(id: string): Promise<string> {
+    let runs: Run[] = [];
+    try {
+      runs = (await apiRequest<Run[]>("GET", "/v1/runs", undefined, getToken)).filter(
+        (r) => r.strategy_id === id,
+      );
+    } catch {
+      return "Saved.";
+    }
+    if (!runs.length) return "Saved.";
+    const live = runs.some((r) => r.mode === "live" && !r.dry_run);
+    const ok = await confirm({
+      title: "Apply this change to the running strategy now?",
+      message:
+        `This strategy is running${live ? " LIVE" : ""} (${runs.length} deployment${runs.length === 1 ? "" : "s"}). ` +
+        "Apply now: from the next moment it trades the new settings; positions already open stay open and follow " +
+        "the new stop-loss, target and exit rules. Not now: the running one keeps its old settings until you stop " +
+        "it and deploy again.",
+      confirmLabel: "Apply now",
+      cancelLabel: "Not now",
+      tone: live ? "danger" : undefined,
+    });
+    if (!ok) return "Saved. The running deployment keeps its old settings until you deploy again.";
+    try {
+      await apiRequest("POST", `/v1/strategies/${id}/apply-to-runs`, undefined, getToken);
+      return "Saved and applied to the running strategy.";
+    } catch (e) {
+      return `Saved, but not applied to the running strategy: ${(e as Error).message}`;
+    }
+  }
+
   /** Saves; true when it worked. `then`: where to go afterwards (a new strategy otherwise opens its own page). */
   async function save(then?: string): Promise<boolean> {
     if (!name.trim()) {
@@ -248,7 +283,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
           getToken,
         );
         setBaseline(at);
-        setNote({ tone: "success", text: "Saved." });
+        setNote({ tone: "success", text: await applyToRunning(strategy.id) });
         if (then) router.push(then);
         else router.refresh();
       } else {
