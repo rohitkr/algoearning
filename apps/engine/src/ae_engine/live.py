@@ -210,14 +210,28 @@ class LiveAccount:
         out: list[Outcome] = []
         opened: list[tuple[Intent, list[Fill]]] = []
         failed: str | None = None
+        held = await self._held() if any(i.kind == "exit" for i in b.intents) else None
         for i in b.intents:
             if i.kind == "entry" and (refused or failed):
                 out.append(Outcome(i, False, None, refused or f"not placed: {failed}"))
                 continue
+            qty = i.qty
             try:
                 c = self.book.get(i.contract.key)
+                if i.kind == "exit" and held is not None:
+                    # never close more than Zerodha holds: what was squared off by hand in Kite is not sold again
+                    # (23 Oct 2026: a leg closed in Kite was sold once more by the strategy, leaving a short)
+                    net = held.get(c.tradingsymbol, 0)
+                    have = max(0, net if i.side == "SELL" else -net)
+                    qty = min(i.qty, have // c.lot_size * c.lot_size)
+                    held[c.tradingsymbol] = net - qty if i.side == "SELL" else net + qty
+                    if qty == 0:
+                        px = self.price(i.contract.key)
+                        out.append(Outcome(i, True, px if px is not None else 0.0,
+                                           "already closed in Zerodha: no order sent", 0))  # fmt: skip
+                        continue
                 fills = await self.om.execute(
-                    i.contract.key, c, i.side, i.qty, b.product, tag_for(i.position_id), b.freeze
+                    i.contract.key, c, i.side, qty, b.product, tag_for(i.position_id), b.freeze
                 )
             except (OrderFailed, BrokerError, ValueError) as exc:
                 part = exc.fills if isinstance(exc, OrderFailed) else []
@@ -236,11 +250,22 @@ class LiveAccount:
                 continue
             if i.kind == "entry":
                 opened.append((i, fills))
-            out.append(Outcome(i, True, avg_price(fills), "filled", sum(f.quantity for f in fills),
+            note = "filled" if qty == i.qty else f"filled: only {qty} of {i.qty} were left in Zerodha"
+            out.append(Outcome(i, True, avg_price(fills), note, sum(f.quantity for f in fills),
                                order_ids=[f.order_id for f in fills]))  # fmt: skip
         if failed and opened:
             out = await self._unwind(opened, out, b, failed)
         return out
+
+    async def _held(self) -> dict[str, int] | None:
+        """Zerodha's net quantity per tradingsymbol right now, or None when it cannot be read (exits then go as
+        asked: better a refused order than a position left open)."""
+        assert self.client is not None
+        try:
+            return dict(await self.client.positions())
+        except BrokerError as exc:
+            log.warning("positions not readable before an exit: sending it as asked", error=exc.message)
+            return None
 
     async def _margin_refusal(self, entries: list[Intent], product: str) -> str | None:
         assert self.client is not None

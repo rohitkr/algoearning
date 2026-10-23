@@ -721,6 +721,27 @@ class Engine:
         self.recover.discard(r.id)
         return []
 
+    async def _closed_outside(
+        self,
+        s: AsyncSession,
+        r: StrategyRun,
+        p: Position,
+        runners: dict[uuid.UUID, Runner],
+        markets: dict[str, Market],
+        now: datetime,
+        sym: str,
+    ) -> None:
+        """Book a position closed that Zerodha no longer holds (squared off by hand in Kite), at the current price."""
+        rn, m = runners[r.id], markets.get(self._underlying(r))
+        px = (m.price(p.contract) if m else None) or p.entry_price
+        intent = Intent("exit", "SELL" if p.side == "BUY" else "BUY", p.contract, p.lots, p.qty,
+                        "closed outside AlgoEarning", p.leg, position_id=p.id)  # fmt: skip
+        pos = rn.fill(intent, px, now, m) if m else None
+        if pos is not None and m is not None:
+            await self._record(s, r, pos, intent, px, Inst(m.underlying, "", m.lot_size, m.strike_step, []), now)
+        self._event(s, r, "position_closed_outside", level="WARNING", symbol=sym, qty=p.qty, leg=p.leg)
+        r.state = {**rn.state(), **{k: v for k, v in r.state.items() if k.startswith("_")}}
+
     async def _reconcile(
         self,
         s: AsyncSession,
@@ -765,19 +786,22 @@ class Engine:
             self.mismatch[key] += 1
             if self.mismatch[key] < 2:
                 continue
-            if want and not have:
+            shrink = []
+            if want and have and (want > 0) == (have > 0) and abs(have) < abs(want):
+                # part of it was squared off by hand in Kite: the positions that would leave last (a tip's final
+                # quarter, then its TP3 quarter, ...) are booked closed until what is left matches Zerodha
+                left = abs(want) - abs(have)
+                for r, p in sorted(owners[sym], key=lambda rp: rp[1].leg, reverse=True):
+                    if 0 < p.qty <= left:
+                        shrink.append((r, p))
+                        left -= p.qty
+            if shrink:
+                for r, p in shrink:
+                    await self._closed_outside(s, r, p, runners, markets, now, sym)
+                self.mismatch.pop(key, None)
+            elif want and not have:
                 for r, p in owners[sym]:
-                    rn, m = runners[r.id], markets.get(self._underlying(r))
-                    px = (m.price(p.contract) if m else None) or p.entry_price
-                    intent = Intent("exit", "SELL" if p.side == "BUY" else "BUY", p.contract, p.lots, p.qty,
-                                    "closed outside AlgoEarning", p.leg, position_id=p.id)  # fmt: skip
-                    pos = rn.fill(intent, px, now, m) if m else None
-                    if pos is not None and m is not None:
-                        await self._record(
-                            s, r, pos, intent, px, Inst(m.underlying, "", m.lot_size, m.strike_step, []), now
-                        )
-                    self._event(s, r, "position_closed_outside", level="WARNING", symbol=sym, qty=p.qty)
-                    r.state = {**rn.state(), **{k: v for k, v in r.state.items() if k.startswith("_")}}
+                    await self._closed_outside(s, r, p, runners, markets, now, sym)
             elif self.mismatch[key] == 2:  # report once
                 for r in runs[:1] if not owners[sym] else [owners[sym][0][0]]:
                     self._event(s, r, "position_mismatch", level="WARNING", symbol=sym, expected=want, at_zerodha=have,

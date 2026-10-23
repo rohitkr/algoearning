@@ -73,6 +73,7 @@ async def test_a_failed_short_unwinds_its_hedge() -> None:
 
 async def test_repricing_then_cancel() -> None:
     k = FakeKite(prices={"NIFTY26O0625000CE": 100.0}, never_fill={"NIFTY26O0625000CE"})
+    k.net = {"NIFTY26O0625000CE": -130}  # the short being closed
     (o,) = await account(k, {SHORT.key: 100.0}).process(
         Batch(__import__("uuid").uuid4(), [Intent("exit", "BUY", SHORT, 2, 130, "stop-loss", "L1")], "MIS", False, 1800)
     )
@@ -114,3 +115,22 @@ async def test_recover_in_flight_order_by_tag() -> None:
     assert await recover_by_tag(acct.client, i) == (130, 100.0)
     other = entry(SHORT, "SELL")
     assert await recover_by_tag(acct.client, other) == (0, 0.0)
+
+
+async def test_an_exit_never_sells_more_than_zerodha_holds() -> None:
+    """23 Oct 2026: the last leg was closed by hand in Kite, then the strategy sold it again: a short was left."""
+    k = FakeKite(prices={"NIFTY26O0625000CE": 100.0})
+    k.net = {}  # squared off in Kite already
+    acct = account(k, {SHORT.key: 100.0})
+    (o,) = await acct.process(
+        Batch(__import__("uuid").uuid4(), [Intent("exit", "SELL", SHORT, 1, 65, "target 3", "T4")], "MIS", False, 1800)
+    )
+    assert o.ok and "already closed in Zerodha" in o.message and k.log == []  # nothing sent: no short
+    k.net = {"NIFTY26O0625000CE": 65}  # 1 lot of 2 left after a partial manual exit
+    two = [
+        Intent("exit", "SELL", SHORT, 1, 65, "target 2", "T2"),
+        Intent("exit", "SELL", SHORT, 1, 65, "target 3", "T3"),
+    ]
+    out = await acct.process(Batch(__import__("uuid").uuid4(), two, "MIS", False, 1800))
+    assert [o.ok for o in out] == [True, True] and k.net["NIFTY26O0625000CE"] == 0  # one lot sold, never two
+    assert "already closed" in out[1].message

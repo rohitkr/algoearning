@@ -63,7 +63,8 @@ async def env(db: Database) -> AsyncIterator[tuple[Database, Hub, dict[str, Any]
 async def add_run(db: Database, ids: dict[str, Any], **kw: Any) -> Any:
     async with db.system_session() as s:
         run = StrategyRun(user_id=ids["user"], strategy_id=ids["strategy"], mode=kw.pop("mode", "paper"),
-                          config_snapshot=CONFIG, strategy_name="S", kind="time_based", **kw)  # fmt: skip
+                          config_snapshot=kw.pop("config", CONFIG), strategy_name="S", kind="time_based",
+                          **kw)  # fmt: skip
         s.add(run)
         await s.flush()
         return run.id
@@ -480,3 +481,35 @@ async def test_an_edited_strategy_applied_to_a_run_rebuilds_its_runner_keeping_p
     await eng.tick()
     after = eng.runners[rid]
     assert after is not before and [p.id for p in after.open_positions()] == [p.id for p in before.open_positions()]
+
+
+async def test_a_partial_exit_in_kite_shrinks_the_strategys_positions(env: Any) -> None:
+    """Two legs on the same option, one lot each; one lot is bought back by hand in Kite: the strategy books its
+    last-leaving leg closed and keeps the other, so its own exit later never buys back more than is short."""
+    from datetime import timedelta
+
+    from ae_brokers.fake_kite import FakeKite
+
+    db, hub, ids = env
+    box = a_box()
+    acc_id = await live_setup(db, ids, box)
+    legs = [{"id": "L1", "action": "SELL", "option_type": "CE", "lots": 1},
+            {"id": "L2", "action": "SELL", "option_type": "CE", "lots": 1}]  # fmt: skip
+    rid = await add_run(db, ids, mode="live", broker_account_id=acc_id, config={**CONFIG, "legs": legs})
+    kite = FakeKite(prices={"NIFTY2610625000CE": 100.0})
+    clock = [at("09:20")]
+    eng = live_engine(db, hub, clock, box, kite)
+    await prices(hub, clock[0], 25010, 100.0)
+    await eng.tick()
+    await settle()
+    await eng.tick()
+    assert kite.net == {"NIFTY2610625000CE": -130}
+    kite.net = {"NIFTY2610625000CE": -65}  # one lot bought back in Kite
+    for step in range(3):
+        clock[0] = at("09:22") + timedelta(minutes=step)
+        await prices(hub, clock[0], 25010, 99.0)
+        await eng.tick()
+    async with db.system_session() as s:
+        trades = {t.rules["leg"]: t for t in (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars()}
+    assert trades["L2"].status == "closed" and trades["L2"].exit_reason == "closed outside AlgoEarning"
+    assert trades["L1"].status == "open"
