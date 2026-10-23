@@ -15,6 +15,7 @@ const dayOf = (t: string | null | undefined) => (t ? ist.format(new Date(t)) : n
 
 type Filter = "current" | "open" | "all";
 const RUNNING_ONLY_KEY = "ae_positions_running_only";
+const RANGE_KEY = "ae_positions_range";
 
 /** A position belongs in "current" while it is open (a trade held overnight included) or when it was opened or
  * closed today; earlier days' closed trades are one click away under "All". */
@@ -221,17 +222,37 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
   const [from, setFrom] = useState(""); // "" = today
   const [to, setTo] = useState("");
   const [filter, setFilter] = useState<Filter>("current");
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    // the choice survives a page refresh (kept in this browser only)
+    // the choices survive a page refresh (kept in this browser only); a date range picked on an earlier day is not
+    // carried into a new day: the page opens on today's trades again
     const t = setTimeout(() => {
       try {
         if (localStorage.getItem(RUNNING_ONLY_KEY) === "1") setFilter("open");
+        const saved = JSON.parse(localStorage.getItem(RANGE_KEY) ?? "null") as {
+          day: string;
+          from: string;
+          to: string;
+        } | null;
+        if (saved && saved.day === ist.format(new Date())) {
+          setFrom(saved.from);
+          setTo(saved.to);
+        }
       } catch {
         /* storage unavailable: today's trades */
       }
+      setLoaded(true);
     }, 0);
     return () => clearTimeout(t);
   }, []);
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      localStorage.setItem(RANGE_KEY, JSON.stringify({ day: ist.format(new Date()), from, to }));
+    } catch {
+      /* not remembered: fine */
+    }
+  }, [from, to, loaded]);
   const choose = (runningOnly: boolean) => {
     setFilter(runningOnly ? "open" : "current");
     try {
