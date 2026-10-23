@@ -2,7 +2,7 @@
 
 import type { RunDetail } from "@algoearning/api-types";
 import { formatNumber } from "@algoearning/shared";
-import { Card, CardTitle, Pnl, StatusPill, cn } from "@algoearning/ui";
+import { Card, CardTitle, Pnl, StatusPill } from "@algoearning/ui";
 import { useState } from "react";
 
 type Position = RunDetail["positions"][number];
@@ -14,7 +14,6 @@ const ist = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }); // y
 const dayOf = (t: string | null | undefined) => (t ? ist.format(new Date(t)) : null);
 
 type Filter = "current" | "open" | "all";
-const LABEL: Record<Filter, string> = { current: "Open + today's", open: "Open only", all: "All" };
 
 /** A position belongs in "current" while it is open (a trade held overnight included) or when it was opened or
  * closed today; earlier days' closed trades are one click away under "All". */
@@ -46,26 +45,23 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 pb-2">
         <CardTitle>Positions</CardTitle>
         {positions.length > 0 && (
-          <div
-            role="radiogroup"
-            aria-label="Show positions"
-            className="inline-flex rounded-lg border border-border p-0.5"
-          >
-            {(Object.keys(LABEL) as Filter[]).map((f) => (
-              <button
-                key={f}
-                type="button"
-                role="radio"
-                aria-checked={filter === f}
-                onClick={() => setFilter(f)}
-                className={cn(
-                  "cursor-pointer rounded-md px-2.5 py-1 text-xs font-semibold transition-colors",
-                  filter === f ? "bg-primary text-primary-foreground" : "text-muted hover:text-foreground",
-                )}
-              >
-                {LABEL[f]} ({currentPositions(positions, f).length})
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={filter === "open"}
+                onChange={(e) => setFilter(e.target.checked ? "open" : "current")}
+              />
+              Running trades only ({currentPositions(positions, "open").length})
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-muted">
+              <input
+                type="checkbox"
+                checked={filter === "all"}
+                onChange={(e) => setFilter(e.target.checked ? "all" : "current")}
+              />
+              Earlier days too ({positions.length})
+            </label>
           </div>
         )}
       </div>
@@ -143,8 +139,8 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
       )}
       {filter === "current" && hidden > 0 && (
         <p className="px-5 pb-4 text-xs text-muted">
-          {hidden} closed position{hidden === 1 ? "" : "s"} from earlier days hidden: choose &quot;All&quot;
-          to see them.
+          {hidden} closed position{hidden === 1 ? "" : "s"} from earlier days hidden: tick &quot;Earlier days
+          too&quot; to see them.
         </p>
       )}
     </Card>
