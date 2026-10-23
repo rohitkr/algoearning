@@ -3,7 +3,7 @@
 import type { RunDetail } from "@algoearning/api-types";
 import { formatNumber } from "@algoearning/shared";
 import { Card, CardTitle, Pnl, StatusPill } from "@algoearning/ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Position = RunDetail["positions"][number];
 
@@ -14,6 +14,7 @@ const ist = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }); // y
 const dayOf = (t: string | null | undefined) => (t ? ist.format(new Date(t)) : null);
 
 type Filter = "current" | "open" | "all";
+const RUNNING_ONLY_KEY = "ae_positions_running_only";
 
 /** A position belongs in "current" while it is open (a trade held overnight included) or when it was opened or
  * closed today; earlier days' closed trades are one click away under "All". */
@@ -38,6 +39,25 @@ export function totalPnl(positions: readonly Position[]): number {
 
 export function PositionsTable({ positions }: { positions: Position[] }) {
   const [filter, setFilter] = useState<Filter>("current");
+  useEffect(() => {
+    // the choice survives a page refresh (kept in this browser only)
+    const t = setTimeout(() => {
+      try {
+        if (localStorage.getItem(RUNNING_ONLY_KEY) === "1") setFilter("open");
+      } catch {
+        /* storage unavailable: today's trades */
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+  const choose = (runningOnly: boolean) => {
+    setFilter(runningOnly ? "open" : "current");
+    try {
+      localStorage.setItem(RUNNING_ONLY_KEY, runningOnly ? "1" : "0");
+    } catch {
+      /* not remembered: fine */
+    }
+  };
   const shown = currentPositions(positions, filter);
   return (
     <Card className="p-0">
@@ -46,11 +66,7 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
         {positions.length > 0 && (
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={filter === "open"}
-                onChange={(e) => setFilter(e.target.checked ? "open" : "current")}
-              />
+              <input type="checkbox" checked={filter === "open"} onChange={(e) => choose(e.target.checked)} />
               Running trades only ({currentPositions(positions, "open").length})
             </label>
           </div>
