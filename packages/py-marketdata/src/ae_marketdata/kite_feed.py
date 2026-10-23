@@ -20,6 +20,7 @@ import asyncio
 import contextlib
 import json
 import struct
+import time as clock
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
@@ -204,11 +205,13 @@ class KiteSource:
         http: Callable[[], httpx.AsyncClient] = httpx.AsyncClient,
         now: Callable[[], datetime] | None = None,
         retry_s: float = 2.0,
+        silence_s: float = 30.0,
     ) -> None:
         self.api_key, self.access_token, self.codes = api_key, access_token, codes
         self.connect, self.http = connect, http
         self.now = now or (lambda: datetime.now(IST))
         self.retry_s = retry_s
+        self.silence_s = silence_s  # no message (not even Kite's 1-second heartbeat) for this long: reconnect
         self.book = TokenBook()
         self.book_tried: datetime | None = None
         self.book_loaded: datetime | None = None
@@ -296,9 +299,17 @@ class KiteSource:
                     self.ws, self.sent, self.error, failures = ws, set(), None, 0
                     log.info("kite connected")
                     await self._push()
-                    async for msg in ws:
-                        self._handle(msg)
-                self.error = "Kite closed the connection"
+                    # Kite sends a heartbeat every second: silence this long means a dead connection that was never
+                    # closed (23 Oct 2026: no tick for 21 minutes while "connected"), so close it and reconnect
+                    heard = [clock.monotonic()]
+                    watch = asyncio.create_task(self._watch_silence(ws, heard))
+                    try:
+                        async for msg in ws:
+                            heard[0] = clock.monotonic()
+                            self._handle(msg)
+                    finally:
+                        watch.cancel()
+                self.error = "Kite closed the connection or went silent"
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -313,6 +324,16 @@ class KiteSource:
             self.ws, self.sent = None, set()
             failures += 1
             await asyncio.sleep(min(self.retry_s * 2 ** (failures - 1), 30.0))
+
+    async def _watch_silence(self, ws: Any, heard: list[float]) -> None:
+        while True:
+            await asyncio.sleep(min(5.0, self.silence_s / 2))
+            if clock.monotonic() - heard[0] > self.silence_s:
+                log.warning("kite silent: reconnecting", seconds=self.silence_s)
+                close = getattr(ws, "close", None)
+                if close is not None:
+                    await close()
+                return
 
     def _handle(self, msg: bytes | str) -> None:
         if isinstance(msg, str):  # text: errors and order updates (we only care about errors)

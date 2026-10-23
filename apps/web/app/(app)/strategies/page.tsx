@@ -1,4 +1,4 @@
-import type { StrategyPage } from "@algoearning/api-types";
+import type { Run, StrategyPage } from "@algoearning/api-types";
 import { Button, Card, StatusPill, cn } from "@algoearning/ui";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
@@ -29,7 +29,11 @@ export default async function StrategiesPage({
   for (const s of tab.statuses) qs.append("status", s);
   if (q) qs.set("q", q);
   if (sp.cursor) qs.set("cursor", sp.cursor);
-  const page = await apiGet<StrategyPage>(`/v1/strategies?${qs}`);
+  const [page, runs] = await Promise.all([
+    apiGet<StrategyPage>(`/v1/strategies?${qs}`),
+    apiGet<Run[]>("/v1/runs"), // the active deployments, to mark the strategies running now
+  ]);
+  const running = runs.ok ? runs.data : [];
   const link = (over: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
     const merged = { tab: tab.id === "active" ? undefined : tab.id, q: q || undefined, ...over };
@@ -104,7 +108,7 @@ export default async function StrategiesPage({
         ) : (
           <ul className="flex flex-col gap-2">
             {page.data.items.map((s) => (
-              <StrategyRow key={s.id} strategy={s} />
+              <StrategyRow key={s.id} strategy={s} runs={running.filter((r) => r.strategy_id === s.id)} />
             ))}
           </ul>
         )}

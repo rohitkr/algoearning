@@ -1,6 +1,6 @@
 "use client";
 
-import type { Strategy } from "@algoearning/api-types";
+import type { Run, Strategy } from "@algoearning/api-types";
 import { Button, StatusPill, cn, useConfirm } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
 import {
@@ -29,7 +29,7 @@ const STATUS = {
 } as const;
 const updated = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" });
 
-export function StrategyRow({ strategy: s }: { strategy: Strategy }) {
+export function StrategyRow({ strategy: s, runs = [] }: { strategy: Strategy; runs?: Run[] }) {
   const { getToken } = useAuth();
   const router = useRouter();
   const confirm = useConfirm();
@@ -75,6 +75,30 @@ export function StrategyRow({ strategy: s }: { strategy: Strategy }) {
             </Link>
             <StatusPill tone={st.tone}>{st.label}</StatusPill>
             <StatusPill tone="info">{KIND_LABEL[s.kind]}</StatusPill>
+            {runs.map((r) => {
+              const live = r.mode === "live" && !r.dry_run;
+              return (
+                <Link
+                  key={r.id}
+                  href={`/runs/${r.id}`}
+                  title="Open the running deployment"
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                    live ? "bg-loss text-white" : "bg-primary/15 text-primary-text",
+                  )}
+                >
+                  <span
+                    className={cn("size-1.5 rounded-full", live ? "animate-pulse bg-white" : "bg-current")}
+                    aria-hidden
+                  />
+                  {live ? "LIVE" : r.mode === "live" ? "Dry run" : "Paper"}
+                  {r.paused ? " · paused" : " · running"}
+                  {runs.length > 1 && r.strategy_name.includes(" · ")
+                    ? ` · ${r.strategy_name.split(" · ").pop()}`
+                    : ""}
+                </Link>
+              );
+            })}
           </div>
           <p className="mt-1 text-sm text-muted">{configSummary(s.config)}</p>
           <p className="text-xs text-muted">

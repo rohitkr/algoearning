@@ -107,6 +107,9 @@ class FakeSocket:
     async def send(self, m: str) -> None:
         self.sent.append(json.loads(m))
 
+    async def close(self) -> None:
+        self.inbox.put_nowait(None)
+
     def __aiter__(self) -> FakeSocket:
         return self
 
@@ -330,3 +333,17 @@ async def test_kite_reloads_an_instrument_list_loaded_before_zerodha_publishes_t
     assert await src._ensure_book() and len(loads) == 8  # the day's list
     clock[0] = clock[0].replace(hour=14)
     assert await src._ensure_book() and len(loads) == 8
+
+
+async def test_kite_reconnects_when_the_socket_goes_silent(source: Any) -> None:
+    """23 Oct 2026: the socket stayed "connected" with no message for 21 minutes; silence means reconnect."""
+    src, kite, token, _ = source
+    src.silence_s = 0.1
+    token[0] = "tok-1"
+    await src.sync({InstrumentKey("NIFTY")})
+    await settle()
+    for _ in range(40):
+        if len(kite.sockets) >= 2:
+            break
+        await asyncio.sleep(0.05)
+    assert len(kite.sockets) >= 2 and kite.sockets[1].sent[0] == {"a": "subscribe", "v": [NIFTY_T]}
