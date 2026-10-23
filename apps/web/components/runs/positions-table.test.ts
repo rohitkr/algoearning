@@ -1,7 +1,7 @@
 import type { RunDetail } from "@algoearning/api-types";
 import { describe, expect, it } from "vitest";
 
-import { currentPositions } from "./positions-table";
+import { currentPositions, totalPnl } from "./positions-table";
 
 type P = RunDetail["positions"][number];
 const pos = (id: string, status: string, entry: string, exit: string | null): P =>
@@ -29,5 +29,12 @@ describe("which positions the run page shows", () => {
   it("counts a trade closed just after midnight IST as today's", () => {
     const late = pos("late", "closed", "2026-10-14T09:40:00Z", "2026-10-14T19:00:00Z"); // 00:30 IST on the 15th
     expect(currentPositions([late], "current", now)).toHaveLength(1);
+  });
+});
+
+describe("the total under the positions", () => {
+  it("adds the P&L of the positions shown, booked and open", () => {
+    const ps = [{ pnl: -21762 }, { pnl: 7059 }, { pnl: 10413 }, { pnl: -3159 }, { pnl: null }] as P[];
+    expect(totalPnl(ps)).toBe(-7449);
   });
 });

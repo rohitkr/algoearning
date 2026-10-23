@@ -32,6 +32,11 @@ export function currentPositions(
   );
 }
 
+/** The P&L of the positions shown, booked and open together. */
+export function totalPnl(positions: readonly Position[]): number {
+  return Math.round(positions.reduce((sum, p) => sum + (p.pnl ?? 0), 0) * 100) / 100;
+}
+
 export function PositionsTable({ positions }: { positions: Position[] }) {
   const [filter, setFilter] = useState<Filter>("current");
   const shown = currentPositions(positions, filter);
@@ -118,6 +123,21 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-border font-semibold">
+                <td className={td} colSpan={7}>
+                  Total P&amp;L{" "}
+                  <span className="text-xs font-normal text-muted">
+                    ({shown.length} position{shown.length === 1 ? "" : "s"}
+                    {filter === "current" ? ": open and today's" : filter === "open" ? ": open" : ""})
+                  </span>
+                </td>
+                <td className={td}>
+                  <Pnl value={totalPnl(shown)} />
+                </td>
+                <td className={td} />
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
