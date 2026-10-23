@@ -61,7 +61,9 @@ log = structlog.get_logger("ae_engine")
 ACTIVE = (RunStatus.PENDING, RunStatus.RUNNING, RunStatus.STOPPING)
 STALE = timedelta(minutes=2)
 HOLIDAYS = frozenset(calendar_holidays())  # NSE's trading holidays (ae_marketdata/holidays.toml)
-FORCE_KEY = "ae:enter_now:{}"  # set by the API's "Enter now" (a run id), read and removed by the engine
+FORCE_KEY = "ae:enter_now:{}"
+EXIT_KEY = "ae:exit_now:{}"  # set by the API's "Exit now", read and removed by the engine
+EXIT_NOW_REASON = "exited by hand (Exit now)"  # set by the API's "Enter now" (a run id), read and removed by the engine
 FEED_GRACE = timedelta(minutes=2)
 NO_FEED = (
     "No live prices: strategies cannot trade"  # the feed may reconnect on its own: tell only after this long without it
@@ -446,6 +448,16 @@ class Engine:
             rn.reject(i, "the strategy is paused")
         return [i for i in intents if i.kind != "entry"]
 
+    async def _exit_now(self, s: AsyncSession, r: StrategyRun, rn: Runner) -> bool:
+        """The user pressed "Exit now": square off what is open, once; unlike Stop the run keeps running."""
+        if not await self.hub.r.getdel(EXIT_KEY.format(r.id)):
+            return False
+        if not rn.open_positions():
+            self._event(s, r, "manual_exit_refused", level="WARNING", reason="nothing is open")
+            return False
+        self._event(s, r, "manual_exit_requested", reason="Exit now: the open positions are squared off")
+        return True
+
     async def _enter_now(self, s: AsyncSession, r: StrategyRun, rn: Runner, m: Market) -> None:
         """The user pressed "Enter now" (the API leaves the request in Redis): start today's trade at once, once."""
         if not await self.hub.r.getdel(FORCE_KEY.format(r.id)):
@@ -486,6 +498,8 @@ class Engine:
                 r.status, r.stop_reason = RunStatus.STOPPING, stop_all
                 self._event(s, r, "risk_limit", level="WARNING", reason=stop_all)
             intents = rn.exit_all(reason, m)
+        elif await self._exit_now(s, r, rn):
+            intents = rn.exit_all(EXIT_NOW_REASON, m)  # the run carries on: its next entry comes as usual
         else:
             await self._enter_now(s, r, rn, m)
             intents = self._step_unless_paused(r, rn, m)
@@ -592,6 +606,8 @@ class Engine:
                 r.status, r.stop_reason = RunStatus.STOPPING, stop_all
                 self._event(s, r, "risk_limit", level="WARNING", reason=stop_all)
             intents = rn.exit_all(reason, m)
+        elif await self._exit_now(s, r, rn):
+            intents = rn.exit_all(EXIT_NOW_REASON, m)  # the run carries on: its next entry comes as usual
         else:
             await self._enter_now(s, r, rn, m)
             intents = self._step_unless_paused(r, rn, m)

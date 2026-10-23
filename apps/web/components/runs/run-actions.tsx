@@ -3,7 +3,7 @@
 import type { RiskSettings } from "@algoearning/api-types";
 import { Button, Card, CardTitle, Switch, cn, useConfirm } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
-import { OctagonX, Pause, Play, Square } from "lucide-react";
+import { LogOut, OctagonX, Pause, Play, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -82,6 +82,37 @@ export function EnterNowButton({ runId, name, live }: { runId: string; name: str
         }}
       >
         <Play className="size-3.5" aria-hidden /> Enter now
+      </Button>
+      {note && <span className={cn("text-xs", note.ok ? "text-muted" : "text-loss")}>{note.text}</span>}
+    </span>
+  );
+}
+
+/** "Exit now": square off the open positions at once; the strategy keeps running (Stop also stops it). */
+export function ExitNowButton({ runId, name, live }: { runId: string; name: string; live: boolean }) {
+  const { call, busy, note } = useCall();
+  const confirm = useConfirm();
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={busy}
+        onClick={async () => {
+          const ok = await confirm({
+            title: `Exit ${name}'s open positions now?`,
+            message:
+              "Every open position of this strategy is squared off right away. The strategy keeps running and " +
+              "takes its next trade as usual (Stop would also stop it)." +
+              (live ? " This is a live run: real orders go to your broker." : ""),
+            confirmLabel: "Exit now",
+            tone: "danger",
+          });
+          if (ok)
+            await call("POST", `/v1/runs/${runId}/exit-now`, undefined, "Asked the engine to exit now.");
+        }}
+      >
+        <LogOut className="size-3.5" aria-hidden /> Exit now
       </Button>
       {note && <span className={cn("text-xs", note.ok ? "text-muted" : "text-loss")}>{note.text}</span>}
     </span>

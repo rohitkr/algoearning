@@ -442,3 +442,25 @@ async def test_enter_now_works_on_a_paused_run(env: Any) -> None:
         await eng.tick()
     async with db.system_session() as s:
         assert (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars().first() is not None
+
+
+async def test_exit_now_squares_off_and_keeps_the_run_running(env: Any) -> None:
+    db, hub, ids = env
+    rid = await add_run(db, ids)
+    clock = [at("09:20")]
+    eng = Engine(db, hub, now=lambda: clock[0])
+    await prices(hub, clock[0], 25010, 100.0)
+    await eng.tick()
+    await eng.tick()
+    async with db.system_session() as s:
+        assert (await s.execute(select(Trade).where(Trade.run_id == rid, Trade.status == "open"))).scalars().first()
+    await hub.r.set(f"ae:exit_now:{rid}", "user", ex=120)
+    await eng.tick()
+    await eng.tick()
+    async with db.system_session() as s:
+        assert not (await s.execute(select(Trade).where(Trade.run_id == rid, Trade.status == "open"))).scalars().all()
+        assert (
+            await s.execute(select(StrategyRun).where(StrategyRun.id == rid))
+        ).scalar_one().status.value == "running"
+        reasons = [t.exit_reason for t in (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars()]
+    assert reasons == ["exited by hand (Exit now)"]

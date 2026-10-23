@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 
 import { AutoRefresh } from "@/components/runs/auto-refresh";
 import { PositionsTable } from "@/components/runs/positions-table";
-import { EnterNowButton, PauseRunButton, StopRunButton } from "@/components/runs/run-actions";
+import { EnterNowButton, ExitNowButton, PauseRunButton, StopRunButton } from "@/components/runs/run-actions";
 import { ModePill, PricesAsOf, RunStatusPill, StalePricesNotice, fmt } from "@/components/runs/run-bits";
 import { SignalCard, type SmcSignal, isSmcSignal } from "@/components/smc/signal-card";
 import { apiGet } from "@/lib/api";
@@ -73,6 +73,9 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         </div>
         {run.status === "running" && (
           <EnterNowButton runId={run.id} name={run.strategy_name} live={run.mode === "live"} />
+        )}
+        {run.status === "running" && run.open_positions > 0 && (
+          <ExitNowButton runId={run.id} name={run.strategy_name} live={run.mode === "live"} />
         )}
         {(run.status === "running" || run.status === "pending") && (
           <PauseRunButton runId={run.id} name={run.strategy_name} paused={run.paused ?? false} />

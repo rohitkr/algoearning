@@ -331,6 +331,32 @@ async def _set_paused(run_id: uuid.UUID, paused: bool, user: Any, s: AsyncSessio
     return run_out(run, (await _open_counts(s, [run.id])).get(run.id, 0))
 
 
+EXIT_NOW_KEY = "ae:exit_now:{}"  # the engine's EXIT_KEY
+
+
+@router.post("/v1/runs/{run_id}/exit-now", response_model=RunOut)
+async def exit_now(run_id: uuid.UUID, user: CurrentUser, s: UserSession, request: Request) -> RunOut:
+    """Square off the run's open positions now, keeping the run running (Stop also stops it): the engine sends the
+    exits on its next step, while the exchange is open. Live runs place real orders."""
+    run = await _own_run(s, run_id)
+    if run.status != RunStatus.RUNNING:
+        raise Conflict("the strategy is not running")
+    if not (await _open_counts(s, [run.id])).get(run.id, 0):
+        raise Conflict("nothing is open", {"reason": "nothing_open"})
+    inst = (
+        await s.execute(select(Instrument).where(Instrument.code == run.config_snapshot.get("underlying", "NIFTY")))
+    ).scalar_one_or_none()
+    now = datetime.now(IST)
+    if inst is None or now.weekday() >= 5 or not (inst.session_open <= f"{now:%H:%M}" < inst.session_close):
+        raise Conflict("the market is closed: Exit now works while the exchange is open", {"reason": "closed"})
+    redis = getattr(request.app.state, "redis", None)
+    if redis is None:
+        raise Unavailable("the trading engine cannot be reached")
+    await redis.set(EXIT_NOW_KEY.format(run.id), str(user.user_id), ex=120)
+    await audit(s, request, "run.exit_now", user.user_id, "strategy_run", run.id)
+    return run_out(run, (await _open_counts(s, [run.id])).get(run.id, 0))
+
+
 ENTER_NOW_KEY = "ae:enter_now:{}"  # the engine's FORCE_KEY: it takes the request on its next step
 
 
