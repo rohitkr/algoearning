@@ -59,3 +59,24 @@ describe("a Telegram tip's quarters", () => {
     expect(groups.map((g) => g.map((p) => p.id))).toEqual([["b", "a", "c"], ["x"], ["d"]]);
   });
 });
+
+describe("positions between two days", () => {
+  const now = new Date("2026-10-23T10:00:00Z"); // 15:30 IST on the 23rd
+  const list = [
+    pos("open", "open", "2026-10-22T09:40:00Z", null),
+    pos("today", "closed", "2026-10-23T04:00:00Z", "2026-10-23T05:00:00Z"),
+    pos("monday", "closed", "2026-10-19T09:40:00Z", "2026-10-21T07:00:00Z"),
+    pos("old", "closed", "2026-10-01T09:40:00Z", "2026-10-02T07:00:00Z"),
+  ];
+  it("shows today's by default, any range when picked", async () => {
+    const { positionsBetween } = await import("./positions-table");
+    expect(positionsBetween(list, "", "", now).map((p) => p.id)).toEqual(["open", "today"]);
+    expect(positionsBetween(list, "2026-10-19", "2026-10-21", now).map((p) => p.id)).toEqual(["monday"]);
+    expect(positionsBetween(list, "2026-10-01", "", now).map((p) => p.id)).toEqual([
+      "open",
+      "today",
+      "monday",
+      "old",
+    ]);
+  });
+});

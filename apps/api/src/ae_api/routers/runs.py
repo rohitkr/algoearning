@@ -227,7 +227,7 @@ async def get_run(run_id: uuid.UUID, user: CurrentUser, s: UserSession) -> RunDe
                 select(Trade)
                 .where(Trade.run_id == run.id)
                 .order_by(Trade.entry_time.desc(), Trade.tradingsymbol, Trade.id)
-                .limit(200)
+                .limit(2000)  # history picked by date on the page
             )
         ).scalars()
     )

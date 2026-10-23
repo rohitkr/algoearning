@@ -3,7 +3,6 @@
 import type { RunDetail } from "@algoearning/api-types";
 import { formatNumber } from "@algoearning/shared";
 import { Card, CardTitle, Pnl, StatusPill, cn } from "@algoearning/ui";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Position = RunDetail["positions"][number];
@@ -30,6 +29,28 @@ export function currentPositions(
   if (filter === "open") return open;
   return positions.filter(
     (p) => p.status === "open" || dayOf(p.exit_time) === today || dayOf(p.entry_time) === today,
+  );
+}
+
+/** The positions of the days `from`..`to` (yyyy-mm-dd, IST; "" = today): opened or closed in that range, plus the
+ * open ones when the range reaches today (a trade held overnight is still today's business). */
+export function positionsBetween(
+  positions: readonly Position[],
+  from: string,
+  to: string,
+  now = new Date(),
+): Position[] {
+  const today = ist.format(now);
+  const a = from || today;
+  const b = to || today;
+  const lo = a <= b ? a : b;
+  const hi = a <= b ? b : a;
+  const inRange = (t: string | null | undefined) => {
+    const d = dayOf(t);
+    return d !== null && d >= lo && d <= hi;
+  };
+  return positions.filter(
+    (p) => (p.status === "open" && hi >= today) || inRange(p.entry_time) || inRange(p.exit_time),
   );
 }
 
@@ -196,7 +217,9 @@ export function totalPnl(positions: readonly Position[]): number {
   return Math.round(positions.reduce((sum, p) => sum + (p.pnl ?? 0), 0) * 100) / 100;
 }
 
-export function PositionsTable({ positions, historyHref }: { positions: Position[]; historyHref?: string }) {
+export function PositionsTable({ positions }: { positions: Position[] }) {
+  const [from, setFrom] = useState(""); // "" = today
+  const [to, setTo] = useState("");
   const [filter, setFilter] = useState<Filter>("current");
   useEffect(() => {
     // the choice survives a page refresh (kept in this browser only)
@@ -217,7 +240,9 @@ export function PositionsTable({ positions, historyHref }: { positions: Position
       /* not remembered: fine */
     }
   };
-  const shown = currentPositions(positions, filter);
+  const runningOnly = filter === "open";
+  const shown = runningOnly ? currentPositions(positions, "open") : positionsBetween(positions, from, to);
+  const todayOnly = !from && !to;
   return (
     <Card className="p-0">
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 pb-2">
@@ -226,11 +251,11 @@ export function PositionsTable({ positions, historyHref }: { positions: Position
           {shown.length > 0 && (
             <span className="text-xs text-muted">
               ({shown.length} position{shown.length === 1 ? "" : "s"}
-              {filter === "open" ? ", running" : ", today's"})
+              {runningOnly ? ", running" : todayOnly ? ", today's" : ""})
             </span>
           )}
         </div>
-        {(positions.length > 0 || historyHref) && (
+        {positions.length > 0 && (
           <div className="flex flex-wrap items-center gap-6 text-sm">
             {shown.length > 0 && (
               <span className="text-muted">
@@ -240,10 +265,36 @@ export function PositionsTable({ positions, historyHref }: { positions: Position
                 </span>
               </span>
             )}
-            {historyHref && (
-              <Link href={historyHref} className="text-primary-text underline">
-                Past trades
-              </Link>
+            {!runningOnly && (
+              <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                <input
+                  type="date"
+                  aria-label="Trades from"
+                  className="h-8 rounded border border-border bg-surface px-1.5 text-xs text-foreground"
+                  value={from || ist.format(new Date())}
+                  onChange={(e) => setFrom(e.target.value)}
+                />
+                to
+                <input
+                  type="date"
+                  aria-label="Trades to"
+                  className="h-8 rounded border border-border bg-surface px-1.5 text-xs text-foreground"
+                  value={to || ist.format(new Date())}
+                  onChange={(e) => setTo(e.target.value)}
+                />
+                {!todayOnly && (
+                  <button
+                    type="button"
+                    className="text-primary-text underline"
+                    onClick={() => {
+                      setFrom("");
+                      setTo("");
+                    }}
+                  >
+                    Today
+                  </button>
+                )}
+              </span>
             )}
             <label className="flex cursor-pointer items-center gap-2">
               <input type="checkbox" checked={filter === "open"} onChange={(e) => choose(e.target.checked)} />
@@ -257,7 +308,13 @@ export function PositionsTable({ positions, historyHref }: { positions: Position
           No positions yet. The strategy enters at its entry time.
         </p>
       ) : shown.length === 0 ? (
-        <p className="px-5 pb-5 text-sm text-muted">Nothing open or traded today.</p>
+        <p className="px-5 pb-5 text-sm text-muted">
+          {runningOnly
+            ? "No trade is running."
+            : todayOnly
+              ? "Nothing open or traded today."
+              : "No trades in these days."}
+        </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[48rem] text-left text-sm">

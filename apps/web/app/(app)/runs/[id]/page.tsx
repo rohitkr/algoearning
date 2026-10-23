@@ -84,7 +84,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         {active && run.status !== "stopping" && <StopRunButton runId={run.id} name={run.strategy_name} />}
       </Card>
 
-      <PositionsTable positions={positions} historyHref={`/reports?strategy_id=${run.strategy_id}`} />
+      <PositionsTable positions={positions} />
 
       {signals.length > 0 && (
         <Card className="flex flex-col gap-3">
