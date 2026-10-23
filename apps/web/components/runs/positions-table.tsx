@@ -39,7 +39,6 @@ export function totalPnl(positions: readonly Position[]): number {
 export function PositionsTable({ positions }: { positions: Position[] }) {
   const [filter, setFilter] = useState<Filter>("current");
   const shown = currentPositions(positions, filter);
-  const hidden = positions.length - currentPositions(positions, "current").length;
   return (
     <Card className="p-0">
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 pb-2">
@@ -53,14 +52,6 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
                 onChange={(e) => setFilter(e.target.checked ? "open" : "current")}
               />
               Running trades only ({currentPositions(positions, "open").length})
-            </label>
-            <label className="flex cursor-pointer items-center gap-2 text-muted">
-              <input
-                type="checkbox"
-                checked={filter === "all"}
-                onChange={(e) => setFilter(e.target.checked ? "all" : "current")}
-              />
-              Earlier days too ({positions.length})
             </label>
           </div>
         )}
@@ -136,12 +127,6 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
             </tfoot>
           </table>
         </div>
-      )}
-      {filter === "current" && hidden > 0 && (
-        <p className="px-5 pb-4 text-xs text-muted">
-          {hidden} closed position{hidden === 1 ? "" : "s"} from earlier days hidden: tick &quot;Earlier days
-          too&quot; to see them.
-        </p>
       )}
     </Card>
   );
