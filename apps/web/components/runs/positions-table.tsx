@@ -3,6 +3,7 @@
 import type { RunDetail } from "@algoearning/api-types";
 import { formatNumber } from "@algoearning/shared";
 import { Card, CardTitle, Pnl, StatusPill, cn } from "@algoearning/ui";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Position = RunDetail["positions"][number];
@@ -195,7 +196,7 @@ export function totalPnl(positions: readonly Position[]): number {
   return Math.round(positions.reduce((sum, p) => sum + (p.pnl ?? 0), 0) * 100) / 100;
 }
 
-export function PositionsTable({ positions }: { positions: Position[] }) {
+export function PositionsTable({ positions, historyHref }: { positions: Position[]; historyHref?: string }) {
   const [filter, setFilter] = useState<Filter>("current");
   useEffect(() => {
     // the choice survives a page refresh (kept in this browser only)
@@ -229,7 +230,7 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
             </span>
           )}
         </div>
-        {positions.length > 0 && (
+        {(positions.length > 0 || historyHref) && (
           <div className="flex flex-wrap items-center gap-6 text-sm">
             {shown.length > 0 && (
               <span className="text-muted">
@@ -238,6 +239,11 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
                   <Pnl value={totalPnl(shown)} />
                 </span>
               </span>
+            )}
+            {historyHref && (
+              <Link href={historyHref} className="text-primary-text underline">
+                Past trades
+              </Link>
             )}
             <label className="flex cursor-pointer items-center gap-2">
               <input type="checkbox" checked={filter === "open"} onChange={(e) => choose(e.target.checked)} />
