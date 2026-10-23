@@ -71,12 +71,13 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
             <Pnl value={run.realized_pnl + run.unrealized_pnl} className="text-lg font-semibold" />
           </div>
         </div>
-        {run.status === "running" && (
-          <EnterNowButton runId={run.id} name={run.strategy_name} live={run.mode === "live"} />
-        )}
-        {run.status === "running" && run.open_positions > 0 && (
-          <ExitNowButton runId={run.id} name={run.strategy_name} live={run.mode === "live"} />
-        )}
+        {/* one button: Exit now while a trade is open, Enter now when none is */}
+        {run.status === "running" &&
+          (run.open_positions > 0 ? (
+            <ExitNowButton runId={run.id} name={run.strategy_name} live={run.mode === "live"} />
+          ) : (
+            <EnterNowButton runId={run.id} name={run.strategy_name} live={run.mode === "live"} />
+          ))}
         {(run.status === "running" || run.status === "pending") && (
           <PauseRunButton runId={run.id} name={run.strategy_name} paused={run.paused ?? false} />
         )}
