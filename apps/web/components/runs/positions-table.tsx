@@ -62,7 +62,21 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
   return (
     <Card className="p-0">
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 pb-2">
-        <CardTitle>Positions</CardTitle>
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <CardTitle>Positions</CardTitle>
+          {shown.length > 0 && (
+            <span className="text-sm text-muted">
+              Total P&amp;L{" "}
+              <span className="text-base font-semibold">
+                <Pnl value={totalPnl(shown)} />
+              </span>{" "}
+              <span className="text-xs">
+                ({shown.length} position{shown.length === 1 ? "" : "s"}
+                {filter === "open" ? ", running" : ", today's"})
+              </span>
+            </span>
+          )}
+        </div>
         {positions.length > 0 && (
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <label className="flex cursor-pointer items-center gap-2">
@@ -126,21 +140,6 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
                 </tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-border font-semibold">
-                <td className={td} colSpan={7}>
-                  Total P&amp;L{" "}
-                  <span className="text-xs font-normal text-muted">
-                    ({shown.length} position{shown.length === 1 ? "" : "s"}
-                    {filter === "current" ? ": open and today's" : filter === "open" ? ": open" : ""})
-                  </span>
-                </td>
-                <td className={td}>
-                  <Pnl value={totalPnl(shown)} />
-                </td>
-                <td className={td} />
-              </tr>
-            </tfoot>
           </table>
         </div>
       )}
