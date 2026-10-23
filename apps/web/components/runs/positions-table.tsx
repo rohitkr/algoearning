@@ -62,23 +62,25 @@ export function PositionsTable({ positions }: { positions: Position[] }) {
   return (
     <Card className="p-0">
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 pb-2">
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <CardTitle>Positions</CardTitle>
           {shown.length > 0 && (
-            <span className="text-sm text-muted">
-              Total P&amp;L{" "}
-              <span className="text-base font-semibold">
-                <Pnl value={totalPnl(shown)} />
-              </span>{" "}
-              <span className="text-xs">
-                ({shown.length} position{shown.length === 1 ? "" : "s"}
-                {filter === "open" ? ", running" : ", today's"})
-              </span>
+            <span className="text-xs text-muted">
+              ({shown.length} position{shown.length === 1 ? "" : "s"}
+              {filter === "open" ? ", running" : ", today's"})
             </span>
           )}
         </div>
         {positions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-4 text-sm">
+          <div className="flex flex-wrap items-center gap-6 text-sm">
+            {shown.length > 0 && (
+              <span className="text-muted">
+                Total P&amp;L{" "}
+                <span className="text-lg font-semibold">
+                  <Pnl value={totalPnl(shown)} />
+                </span>
+              </span>
+            )}
             <label className="flex cursor-pointer items-center gap-2">
               <input type="checkbox" checked={filter === "open"} onChange={(e) => choose(e.target.checked)} />
               Running trades only ({currentPositions(positions, "open").length})
