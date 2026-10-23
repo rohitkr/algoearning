@@ -779,6 +779,7 @@ class LiveStatus(BaseModel):
 
 class RunOut(BaseModel):
     dry_run: bool = False
+    paused: bool = False  # no new entries; open positions are still managed
     id: uuid.UUID
     strategy_id: uuid.UUID
     strategy_name: str

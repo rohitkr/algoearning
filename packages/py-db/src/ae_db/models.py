@@ -391,6 +391,7 @@ class StrategyRun(UUIDPk, Timestamps, Base):
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     stop_reason: Mapped[str | None] = mapped_column(Text)
     dry_run: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # live: log, never send
+    paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # no new entries
 
 
 class UserRiskSettings(UUIDPk, Timestamps, Base):

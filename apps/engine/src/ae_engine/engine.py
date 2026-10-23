@@ -426,6 +426,18 @@ class Engine:
         )[:500]
         self._event(s, r, "cannot_read_strategy", level="ERROR", error=why)
 
+    def _step_unless_paused(self, r: StrategyRun, rn: Runner, m: Market) -> list[Intent]:
+        """The runner's step; a paused run takes no new trade: with nothing open it is not stepped at all (so no entry
+        is even prepared), with positions open they are still managed but no entry is sent (a re-entry, say)."""
+        if not r.paused:
+            return rn.step(m)
+        if not rn.open_positions() and not rn.exiting:
+            return []
+        intents = rn.step(m)
+        for i in [i for i in intents if i.kind == "entry"]:
+            rn.reject(i, "the strategy is paused")
+        return [i for i in intents if i.kind != "entry"]
+
     async def _enter_now(self, s: AsyncSession, r: StrategyRun, rn: Runner, m: Market) -> None:
         """The user pressed "Enter now" (the API leaves the request in Redis): start today's trade at once, once."""
         if not await self.hub.r.getdel(FORCE_KEY.format(r.id)):
@@ -467,7 +479,7 @@ class Engine:
             intents = rn.exit_all(reason, m)
         else:
             await self._enter_now(s, r, rn, m)
-            intents = rn.step(m)
+            intents = self._step_unless_paused(r, rn, m)
         for intent in intents:
             refused = check_entry(intent, ctx())
             if refused:
@@ -573,7 +585,7 @@ class Engine:
             intents = rn.exit_all(reason, m)
         else:
             await self._enter_now(s, r, rn, m)
-            intents = rn.step(m)
+            intents = self._step_unless_paused(r, rn, m)
         for pid, due in list(retry.items()):
             pos = rn.position(pid)
             if pos is None or not pos.open:

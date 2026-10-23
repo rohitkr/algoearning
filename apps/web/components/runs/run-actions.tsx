@@ -3,7 +3,7 @@
 import type { RiskSettings } from "@algoearning/api-types";
 import { Button, Card, CardTitle, Switch, cn, useConfirm } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
-import { OctagonX, Play, Square } from "lucide-react";
+import { OctagonX, Pause, Play, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -84,6 +84,39 @@ export function EnterNowButton({ runId, name, live }: { runId: string; name: str
         <Play className="size-3.5" aria-hidden /> Enter now
       </Button>
       {note && <span className={cn("text-xs", note.ok ? "text-muted" : "text-loss")}>{note.text}</span>}
+    </span>
+  );
+}
+
+/** Pause: no new trade until resumed; open positions keep their stop-losses, targets, limits and exit time. */
+export function PauseRunButton({ runId, name, paused }: { runId: string; name: string; paused: boolean }) {
+  const { call, busy, note } = useCall();
+  const confirm = useConfirm();
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={busy}
+        onClick={async () => {
+          if (paused) {
+            await call("POST", `/v1/runs/${runId}/resume`);
+            return;
+          }
+          const ok = await confirm({
+            title: `Pause ${name}?`,
+            message:
+              "It takes no new trade until you resume it. Positions already open stay open and keep their " +
+              "stop-losses, targets, limits and exit time (use Stop to square them off).",
+            confirmLabel: "Pause",
+          });
+          if (ok) await call("POST", `/v1/runs/${runId}/pause`);
+        }}
+      >
+        {paused ? <Play className="size-3.5" aria-hidden /> : <Pause className="size-3.5" aria-hidden />}{" "}
+        {paused ? "Resume" : "Pause"}
+      </Button>
+      {note && !note.ok && <span className="text-xs text-loss">{note.text}</span>}
     </span>
   );
 }

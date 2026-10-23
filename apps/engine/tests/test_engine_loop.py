@@ -407,3 +407,22 @@ async def test_enter_now_is_taken_from_redis_once(env: Any) -> None:
     # taken once; this intraday strategy's exit (15:15) has passed, so the runner says why it cannot enter
     assert kinds.count("manual_entry_requested") == 1
     assert any(e.event == "waiting_to_enter" and "has passed" in e.detail["reason"] for e in evs)
+
+
+async def test_a_paused_run_takes_no_new_trade_until_resumed(env: Any) -> None:
+    db, hub, ids = env
+    rid = await add_run(db, ids)
+    async with db.system_session() as s:
+        (await s.execute(select(StrategyRun).where(StrategyRun.id == rid))).scalar_one().paused = True
+    clock = [at("09:20")]
+    eng = Engine(db, hub, now=lambda: clock[0])
+    await prices(hub, clock[0], 25010, 100.0)
+    await eng.tick()
+    await eng.tick()
+    async with db.system_session() as s:
+        assert (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars().first() is None
+        (await s.execute(select(StrategyRun).where(StrategyRun.id == rid))).scalar_one().paused = False
+    await eng.tick()
+    await eng.tick()
+    async with db.system_session() as s:
+        assert (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars().first() is not None

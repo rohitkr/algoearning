@@ -81,6 +81,7 @@ async def _open_counts(s: AsyncSession, run_ids: list[uuid.UUID]) -> dict[uuid.U
 def run_out(r: StrategyRun, open_positions: int = 0) -> RunOut:
     return RunOut(
         dry_run=r.dry_run,
+        paused=r.paused,
         id=r.id,
         strategy_id=r.strategy_id,
         strategy_name=r.strategy_name,
@@ -305,6 +306,28 @@ async def stop_run(run_id: uuid.UUID, user: CurrentUser, s: UserSession, request
         raise Conflict("the run has already stopped")
     await _stop(s, run, "stopped by you")
     await audit(s, request, "run.stop", user.user_id, "strategy_run", run.id)
+    return run_out(run, (await _open_counts(s, [run.id])).get(run.id, 0))
+
+
+@router.post("/v1/runs/{run_id}/pause", response_model=RunOut)
+async def pause_run(run_id: uuid.UUID, user: CurrentUser, s: UserSession, request: Request) -> RunOut:
+    """Pause: the strategy takes no new trade until resumed. Open positions keep their stop-losses, targets, limits and
+    exit time (Stop squares them off)."""
+    return await _set_paused(run_id, True, user, s, request)
+
+
+@router.post("/v1/runs/{run_id}/resume", response_model=RunOut)
+async def resume_run(run_id: uuid.UUID, user: CurrentUser, s: UserSession, request: Request) -> RunOut:
+    return await _set_paused(run_id, False, user, s, request)
+
+
+async def _set_paused(run_id: uuid.UUID, paused: bool, user: Any, s: AsyncSession, request: Request) -> RunOut:
+    run = await _own_run(s, run_id)
+    if run.status not in (RunStatus.PENDING, RunStatus.RUNNING):
+        raise Conflict("the strategy is not running")
+    run.paused = paused
+    await s.flush()
+    await audit(s, request, "run.pause" if paused else "run.resume", user.user_id, "strategy_run", run.id)
     return run_out(run, (await _open_counts(s, [run.id])).get(run.id, 0))
 
 

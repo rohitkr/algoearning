@@ -34,8 +34,10 @@ export function StalePricesNotice({ run }: { run: Pick<Run, "prices_stale" | "pr
   );
 }
 
-export function RunStatusPill({ run }: { run: Pick<Run, "status" | "engine_stale"> }) {
+export function RunStatusPill({ run }: { run: Pick<Run, "status" | "engine_stale"> & { paused?: boolean } }) {
   if (run.engine_stale) return <StatusPill tone="warning">Engine not responding</StatusPill>;
+  if (run.paused && (run.status === "running" || run.status === "pending"))
+    return <StatusPill tone="warning">Paused: no new trades</StatusPill>;
   const map = {
     pending: { tone: "info", text: "Starting" },
     running: { tone: "success", text: "Running" },
