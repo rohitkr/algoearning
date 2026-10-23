@@ -71,7 +71,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
             <Pnl value={run.realized_pnl + run.unrealized_pnl} className="text-lg font-semibold" />
           </div>
         </div>
-        {run.status === "running" && !run.paused && (
+        {run.status === "running" && (
           <EnterNowButton runId={run.id} name={run.strategy_name} live={run.mode === "live"} />
         )}
         {(run.status === "running" || run.status === "pending") && (

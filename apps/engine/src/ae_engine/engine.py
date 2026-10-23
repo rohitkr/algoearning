@@ -159,6 +159,7 @@ class Engine:
         self.kite_transport, self.sleep = kite_transport, sleep
         self.accounts: dict[uuid.UUID | None, LiveAccount] = {}  # None: the dry-run account (no broker)
         self.account_token: dict[uuid.UUID, bytes | None] = {}
+        self.forced: dict[uuid.UUID, datetime] = {}  # runs where "Enter now" was pressed (a paused one included)
         self.feed_down_since: datetime | None = None
         self.feed_alerted: date | None = None
         self.prices: dict[str, float] = {}  # latest feed prices, for live limit pricing between steps
@@ -429,8 +430,15 @@ class Engine:
     def _step_unless_paused(self, r: StrategyRun, rn: Runner, m: Market) -> list[Intent]:
         """The runner's step; a paused run takes no new trade: with nothing open it is not stepped at all (so no entry
         is even prepared), with positions open they are still managed but no entry is sent (a re-entry, say)."""
-        if not r.paused:
-            return rn.step(m)
+        forced = self.forced.get(r.id)
+        if forced is not None and m.now - forced > timedelta(minutes=2):
+            self.forced.pop(r.id, None)
+            forced = None
+        if not r.paused or forced is not None:  # "Enter now" works on a paused run too: the user asked for it
+            intents: list[Intent] = rn.step(m)
+            if any(i.kind == "entry" for i in intents):
+                self.forced.pop(r.id, None)
+            return intents
         if not rn.open_positions() and not rn.exiting:
             return []
         intents = rn.step(m)
@@ -446,6 +454,7 @@ class Engine:
         if why:
             self._event(s, r, "manual_entry_refused", level="WARNING", reason=why)
         else:
+            self.forced[r.id] = m.now
             self._event(s, r, "manual_entry_requested", reason="Enter now: today's trade is entered now")
 
     def _runner(self, r: StrategyRun) -> Runner:

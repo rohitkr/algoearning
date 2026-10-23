@@ -426,3 +426,19 @@ async def test_a_paused_run_takes_no_new_trade_until_resumed(env: Any) -> None:
     await eng.tick()
     async with db.system_session() as s:
         assert (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars().first() is not None
+
+
+async def test_enter_now_works_on_a_paused_run(env: Any) -> None:
+    db, hub, ids = env
+    rid = await add_run(db, ids)
+    async with db.system_session() as s:
+        (await s.execute(select(StrategyRun).where(StrategyRun.id == rid))).scalar_one().paused = True
+    clock = [at("10:00")]
+    eng = Engine(db, hub, now=lambda: clock[0])
+    await prices(hub, clock[0], 25010, 100.0)
+    await eng.tick()
+    await hub.r.set(f"ae:enter_now:{rid}", "user", ex=120)
+    for _ in range(3):
+        await eng.tick()
+    async with db.system_session() as s:
+        assert (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars().first() is not None
