@@ -1,7 +1,7 @@
 import type { RunDetail } from "@algoearning/api-types";
 import { describe, expect, it } from "vitest";
 
-import { currentPositions, totalPnl } from "./positions-table";
+import { currentPositions, groupTipTrades, totalPnl } from "./positions-table";
 
 type P = RunDetail["positions"][number];
 const pos = (id: string, status: string, entry: string, exit: string | null): P =>
@@ -36,5 +36,26 @@ describe("the total under the positions", () => {
   it("adds the P&L of the positions shown, booked and open", () => {
     const ps = [{ pnl: -21762 }, { pnl: 7059 }, { pnl: 10413 }, { pnl: -3159 }, { pnl: null }] as P[];
     expect(totalPnl(ps)).toBe(-7449);
+  });
+});
+
+describe("a Telegram tip's quarters", () => {
+  it("are one trade, other positions stay on their own", () => {
+    const q = (id: string, leg: string, at: string) =>
+      ({ id, leg, tradingsymbol: "NIFTY26O2722750PE", side: "BUY", entry_time: at }) as P;
+    const groups = groupTipTrades([
+      q("a", "T2", "2026-10-23T05:00:03Z"),
+      q("b", "T1", "2026-10-23T05:00:01Z"),
+      q("c", "T3", "2026-10-23T05:00:04Z"),
+      {
+        id: "x",
+        leg: "L1",
+        tradingsymbol: "NIFTY26O2722750PE",
+        side: "BUY",
+        entry_time: "2026-10-23T05:00:02Z",
+      } as P,
+      q("d", "T1", "2026-10-23T07:30:00Z"), // a later tip on the same option: its own trade
+    ]);
+    expect(groups.map((g) => g.map((p) => p.id))).toEqual([["b", "a", "c"], ["x"], ["d"]]);
   });
 });
