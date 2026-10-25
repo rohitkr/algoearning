@@ -13,6 +13,7 @@ are reconciled with Zerodha every minute."""
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -466,9 +467,17 @@ class Engine:
 
     async def _enter_now(self, s: AsyncSession, r: StrategyRun, rn: Runner, m: Market) -> None:
         """The user pressed "Enter now" (the API leaves the request in Redis): start today's trade at once, once."""
-        if not await self.hub.r.getdel(FORCE_KEY.format(r.id)):
+        raw = await self.hub.r.getdel(FORCE_KEY.format(r.id))
+        if not raw:
             return
-        why = rn.force_entry(m)
+        text = raw.decode() if isinstance(raw, bytes) else str(raw)
+        try:  # the strikes shown on the page, when the user entered from the preview: {plan id or "": {leg: key}}
+            chosen = json.loads(text).get("contracts") if text.startswith("{") else None
+        except ValueError:
+            chosen = None
+        if isinstance(chosen, dict) and set(chosen) == {""}:
+            chosen = chosen[""]  # a strategy of one rules set: by leg id directly
+        why = rn.force_entry(m, chosen if isinstance(chosen, dict) else None)
         if why:
             self._event(s, r, "manual_entry_refused", level="WARNING", reason=why)
         else:

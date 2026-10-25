@@ -2,9 +2,10 @@
 
 import type { PreviewSet, StrategyConfig } from "@algoearning/api-types";
 import { formatNumber } from "@algoearning/shared";
-import { Button, Card, CardTitle, Pnl, StatusPill, cn } from "@algoearning/ui";
+import { Button, Card, CardTitle, Pnl, StatusPill, cn, useConfirm } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
-import { RefreshCw } from "lucide-react";
+import { Play, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
@@ -16,14 +17,28 @@ const DIR_LABEL: Record<string, string> = { always: "", up: "On an up signal", d
 
 /** "What it would trade now": the contracts the strategy's legs pick at this moment (live index and option prices,
  * the engine's own choice) with their payoff at expiry and today. Telegram tips traded as given have none. */
-export function LegsPreview({ config, multiplier = 1 }: { config: StrategyConfig; multiplier?: number }) {
+export function LegsPreview({
+  config,
+  multiplier = 1,
+  runId,
+  live = false,
+}: {
+  config: StrategyConfig;
+  multiplier?: number;
+  runId?: string; // on a run's page: "Enter now" trades exactly the legs shown
+  live?: boolean;
+}) {
   const { getToken } = useAuth();
   const token = useRef(getToken);
+  const router = useRouter();
+  const confirm = useConfirm();
   const [sets, setSets] = useState<PreviewSet[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState(0);
-  const body = useMemo(() => JSON.stringify({ config, multiplier }), [config, multiplier]);
+  const [strikes, setStrikes] = useState<Record<string, Record<string, number>>>({}); // moved by hand
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const body = useMemo(() => JSON.stringify({ config, multiplier, strikes }), [config, multiplier, strikes]);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -60,7 +75,17 @@ export function LegsPreview({ config, multiplier = 1 }: { config: StrategyConfig
             changes as the market moves; the real entry is chosen at the entry time.
           </p>
         </div>
-        <Button size="sm" variant="secondary" onClick={() => void load()} disabled={busy}>
+        <Button
+          size="sm"
+          variant="secondary"
+          title="Pick the strikes again from the latest prices (undoes strikes moved by hand)"
+          onClick={() => {
+            if (Object.keys(strikes).length)
+              setStrikes({}); // reloads through the body change
+            else void load();
+          }}
+          disabled={busy}
+        >
           <RefreshCw className={cn("size-3.5", busy && "animate-spin")} aria-hidden /> Refresh
         </Button>
       </div>
@@ -89,13 +114,77 @@ export function LegsPreview({ config, multiplier = 1 }: { config: StrategyConfig
       ) : set.reason ? (
         <p className="text-sm text-muted">Cannot pick the strikes right now: {set.reason}.</p>
       ) : (
-        <PreviewBody set={set} />
+        <>
+          <p className="text-sm">
+            <span className="font-medium">{set.entry_note}</span>
+          </p>
+          <PreviewBody
+            set={set}
+            move={(leg, by) => {
+              const l = set.legs.find((x) => x.leg === leg);
+              if (!l) return;
+              setStrikes((cur) => ({
+                ...cur,
+                [set.plan_id]: { ...(cur[set.plan_id] ?? {}), [leg]: l.strike + by * set.strike_step },
+              }));
+            }}
+          />
+          {runId && set.legs.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+              <Button
+                variant={live ? "danger" : "primary"}
+                disabled={busy}
+                onClick={async () => {
+                  const age = set.prices_at ? (Date.now() - Date.parse(set.prices_at)) / 1000 : Infinity;
+                  const stale = age > 60;
+                  const moved = set.legs.some((l) => l.strike !== l.algo_strike);
+                  const ok = await confirm({
+                    title: "Enter this trade now?",
+                    message:
+                      set.legs.map((l) => `${l.action} ${l.lots} lot ${l.tradingsymbol_hint}`).join(", ") +
+                      "." +
+                      (moved ? " Some strikes were moved by hand." : "") +
+                      (stale
+                        ? ` WARNING: these prices are ${Number.isFinite(age) ? `${Math.round(age / 60)} min` : "of unknown age"} old (market closed or no live feed): press Refresh first, or the orders may fill far from them.`
+                        : "") +
+                      (live ? " This is a live run: real orders go to your broker." : ""),
+                    confirmLabel: "Enter now",
+                    tone: live || stale ? "danger" : undefined,
+                  });
+                  if (!ok) return;
+                  try {
+                    await apiRequest(
+                      "POST",
+                      `/v1/runs/${runId}/enter-now`,
+                      {
+                        contracts: { [set.plan_id]: Object.fromEntries(set.legs.map((l) => [l.leg, l.key])) },
+                      },
+                      token.current,
+                    );
+                    setNote({ ok: true, text: "Asked the engine to enter these legs now." });
+                    router.refresh();
+                  } catch (e) {
+                    setNote({
+                      ok: false,
+                      text: e instanceof ApiRequestError ? e.message : (e as Error).message,
+                    });
+                  }
+                }}
+              >
+                <Play className="size-4" aria-hidden /> Enter now with these legs
+              </Button>
+              {note && (
+                <span className={cn("text-sm", note.ok ? "text-muted" : "text-loss")}>{note.text}</span>
+              )}
+            </div>
+          )}
+        </>
       )}
     </Card>
   );
 }
 
-function PreviewBody({ set }: { set: PreviewSet }) {
+function PreviewBody({ set, move }: { set: PreviewSet; move: (leg: string, by: number) => void }) {
   const spot = set.spot ?? 0;
   const priced = set.legs.every((l) => l.price != null);
   const a = useMemo(() => {
@@ -146,7 +235,34 @@ function PreviewBody({ set }: { set: PreviewSet }) {
                     </StatusPill>
                   </td>
                   <td className="px-2 py-2">{l.expiry}</td>
-                  <td className="px-2 py-2 font-semibold">{l.strike}</td>
+                  <td className="px-2 py-2">
+                    <span className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label={`Lower the ${l.leg} strike`}
+                        className="rounded border border-border px-1.5 text-muted hover:text-foreground"
+                        onClick={() => move(l.leg, -1)}
+                      >
+                        −
+                      </button>
+                      <span
+                        className={cn(
+                          "min-w-14 text-center font-semibold",
+                          l.strike !== l.algo_strike && "text-warning",
+                        )}
+                      >
+                        {l.strike}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Raise the ${l.leg} strike`}
+                        className="rounded border border-border px-1.5 text-muted hover:text-foreground"
+                        onClick={() => move(l.leg, 1)}
+                      >
+                        +
+                      </button>
+                    </span>
+                  </td>
                   <td className="px-2 py-2">{l.option_type}</td>
                   <td className="px-2 py-2">
                     {l.lots} <span className="text-xs text-muted">({l.qty})</span>

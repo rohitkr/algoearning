@@ -79,8 +79,9 @@ class Runner:
         self.on_exit(pos, m)
         return pos
 
-    def force_entry(self, m: Market) -> str | None:
-        """ "Enter now" (rules and plans runners): start today's trade at once. Returns why it cannot, or None."""
+    def force_entry(self, m: Market, chosen: Mapping[str, Any] | None = None) -> str | None:
+        """ "Enter now" (rules and plans runners): start today's trade at once. Returns why it cannot, or None.
+        `chosen`: the contracts the user saw and kept (or moved) on the page, by leg id (plans: by plan id)."""
         return "this kind of strategy cannot be entered by hand"
 
     def idle_positions(self) -> list[Position]:
@@ -229,6 +230,7 @@ class RulesRunner(Runner):
     def wanted(self, m: Market) -> set[str]:
         keys = super().wanted(m)
         keys |= {p["contract"] for p in self.s.get("pending", [])}
+        keys |= set(self.s.get("forced_contracts", {}).values())  # Enter now with strikes picked on the page
         e = self.cfg.entry
         if self.s.get("phase", "waiting") == "waiting" and e.mode == "tip" and e.tip_trade == "as_given":
             seen = set(self.s.get("tips_seen", [])) - {(self.s.get("armed") or {}).get("tip")}
@@ -474,6 +476,10 @@ class RulesRunner(Runner):
                 self.note("waiting_to_enter", reason=resolved)
             return []
         contracts = resolved
+        if self.s.get("forced") and self.s.get("forced_contracts"):
+            # Enter now with the strikes the user saw on the page (moved by hand with + / -): those, not a new choice
+            given = self.s["forced_contracts"]
+            contracts = [(leg, Contract.from_key(given[leg.id]) if leg.id in given else c) for leg, c in contracts]
         assert isinstance(final, datetime)
         expiring = next(((leg, c) for leg, c in contracts if c.expiry < final.date()), None)
         if expiring:
@@ -493,6 +499,7 @@ class RulesRunner(Runner):
         self.s.pop("armed", None)
         self.s.pop("exit_retry_at", None)
         manual = bool(self.s.pop("forced", None))
+        self.s.pop("forced_contracts", None)
         if manual:
             self.note("manual_entry", reason="Enter now")
         self.s.update(phase="in", entries_day=today, entries=self._entries_today(m) + 1, final=final.isoformat(),
@@ -508,13 +515,17 @@ class RulesRunner(Runner):
         self.s["awaiting"] = [i.position_id for i in intents]
         return intents
 
-    def force_entry(self, m: Market) -> str | None:
-        """ "Enter now": start today's trade at once, outside the entry window. Returns why it cannot, or None."""
+    def force_entry(self, m: Market, chosen: Mapping[str, Any] | None = None) -> str | None:
+        """ "Enter now": start today's trade at once, outside the entry window. Returns why it cannot, or None.
+        `chosen`: leg id -> contract key, the strikes shown on the page (moved by hand or not) to trade instead of
+        choosing again."""
         if self.cfg.entry.mode != "time":
             return "only a strategy that enters at a time can be entered by hand"
         if self.open_positions() or self.exiting or self.s.get("phase") == "in":
             return "a trade is already open"
         self.s.update(phase="waiting", forced=m.now.isoformat())
+        if chosen:
+            self.s["forced_contracts"] = {str(k): str(v) for k, v in chosen.items()}
         self.s.pop("waiting_reason", None)
         return None
 
@@ -1117,12 +1128,13 @@ class PlansRunner(Runner):
     def idle_positions(self) -> list[Position]:
         return [p for sub in self.subs.values() for p in sub.idle_positions()]
 
-    def force_entry(self, m: Market) -> str | None:
+    def force_entry(self, m: Market, chosen: Mapping[str, Any] | None = None) -> str | None:
         today = m.now.strftime("%a").upper()[:3]
         plans = [pid for pid, keys in self.lanes.items() if today in self._days[keys[0]]]
         if not plans:
             return f"no plan trades on {m.now:%A}"
-        why = [r for pid in plans if (r := self.subs[self.lanes[pid][0]].force_entry(m)) is not None]
+        picks = chosen or {}
+        why = [r for pid in plans if (r := self.subs[self.lanes[pid][0]].force_entry(m, picks.get(pid))) is not None]
         return why[0] if len(why) == len(plans) else None
 
     def late_entries(self, last: datetime) -> list[str]:

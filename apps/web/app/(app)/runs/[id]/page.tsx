@@ -80,7 +80,10 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           (run.open_positions > 0 ? (
             <ExitNowButton runId={run.id} name={run.strategy_name} live={run.mode === "live"} />
           ) : (
-            <EnterNowButton runId={run.id} name={run.strategy_name} live={run.mode === "live"} />
+            // with the legs preview below, Enter now lives there and trades exactly the legs shown
+            !strat?.ok && (
+              <EnterNowButton runId={run.id} name={run.strategy_name} live={run.mode === "live"} />
+            )
           ))}
         {(run.status === "running" || run.status === "pending") && (
           <PauseRunButton runId={run.id} name={run.strategy_name} paused={run.paused ?? false} />
@@ -89,7 +92,14 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
       </Card>
 
       <PositionsTable positions={positions} />
-      {strat?.ok && <LegsPreview config={strat.data.config} multiplier={run.multiplier} />}
+      {strat?.ok && (
+        <LegsPreview
+          config={strat.data.config}
+          multiplier={run.multiplier}
+          runId={run.status === "running" ? run.id : undefined}
+          live={run.mode === "live" && !run.dry_run}
+        />
+      )}
 
       {signals.length > 0 && (
         <Card className="flex flex-col gap-3">

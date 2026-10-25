@@ -68,3 +68,24 @@ def test_an_iron_fly_previews_its_strikes_and_prices(api: TestClient, clean_db: 
     assert got["L1"] == ("SELL", "CE", 25000, 150.0, 2) and got["L2"] == ("SELL", "PE", 25000, 150.0, 2)
     assert got["L3"][2] == 25350 and got["L4"][2] == 24650  # ~₹60 hedges: 150 - 360/4 = 60
     assert one["spot"] == 25010.0 and one["reason"] is None
+
+
+def test_a_strike_moved_by_hand_is_priced_and_the_entry_window_is_said(api: TestClient, clean_db: str) -> None:
+    from datetime import date, timedelta
+
+    expiry = (date.today() + timedelta(days=9)).isoformat()
+    e = create_engine(clean_db)
+    with e.begin() as c:
+        c.execute(
+            text("UPDATE instruments SET expiries = CAST(:x AS jsonb) WHERE code='NIFTY'"), {"x": f'["{expiry}"]'}
+        )
+    e.dispose()
+    publish({"NIFTY": 25010.0, f"NIFTY:{expiry}:25000:CE": 150.0, f"NIFTY:{expiry}:25100:CE": 110.0})
+    config = {"kind": "rules", "underlying": "NIFTY", "entry": {"at": "09:15"},
+              "holding": {"mode": "intraday", "exit": "15:29"},
+              "legs": [{"id": "L1", "action": "SELL", "option_type": "CE"}]}  # fmt: skip
+    r = api.post("/v1/strategies/preview-legs", json={"config": config, "strikes": {"": {"L1": 25100}}}, headers=A)
+    (one,) = r.json()
+    (leg,) = one["legs"]
+    assert (leg["strike"], leg["algo_strike"], leg["price"]) == (25100, 25000, 110.0)
+    assert leg["key"] == f"NIFTY:{expiry}:25100:CE" and one["entry_note"] and one["strike_step"] == 50

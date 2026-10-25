@@ -30,6 +30,8 @@ class LegPreviewIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     config: StrategyConfig
     multiplier: int = Field(default=1, ge=1, le=100)
+    # strikes moved by hand with + / -: plan id ("" for a single rules set) -> leg -> strike (same expiry and type)
+    strikes: dict[str, dict[str, int]] = Field(default_factory=dict)
 
 
 class PreviewLeg(BaseModel):
@@ -42,10 +44,15 @@ class PreviewLeg(BaseModel):
     qty: int
     price: float | None
     tradingsymbol_hint: str  # e.g. NIFTY 27 Oct 22600 CE
+    key: str  # the contract key (what Enter now trades)
+    algo_strike: int  # what the strategy itself chose (the strike differs when moved by hand)
 
 
 class PreviewSet(BaseModel):
     plan: str  # the plan's name ("" for a single-plan rules strategy)
+    plan_id: str  # "" for a single rules set
+    entry_note: str  # when it enters: "Will enter at 15:00", "Waits for its entry conditions", ...
+    strike_step: int
     direction: str  # always | up | down (legs chosen by a signal's direction)
     underlying: str
     spot: float | None
@@ -55,12 +62,30 @@ class PreviewSet(BaseModel):
     prices_at: datetime | None = None
 
 
-def _plans(config: Any) -> list[tuple[str, RulesConfig]]:
+def _plans(config: Any) -> list[tuple[str, str, RulesConfig]]:
     if isinstance(config, PlansConfig):
-        return [(p.name, r) for p, r in config.rules()]
+        return [(p.id, p.name, r) for p, r in config.rules()]
     if isinstance(config, RulesConfig):
-        return [("", config)]
+        return [("", "", config)]
     return []
+
+
+def entry_note(rules: RulesConfig, now: datetime) -> str:
+    """When this strategy enters, said for today."""
+    e = rules.entry
+    if e.mode == "conditions":
+        return "Waits for its entry conditions" + (f" (from {e.at})" if e.at else "")
+    if e.mode == "tip":
+        return "Waits for a Telegram tip"
+    day = now.strftime("%a").upper()[:3]
+    if day not in e.days:
+        return f"Not a trading day for this plan ({now:%A}); it enters at {e.at} on {', '.join(e.days)}"
+    t = f"{now:%H:%M}"
+    if t < e.at:
+        return f"Will enter at {e.at} today"
+    if e.until and t >= e.until:
+        return f"Today's entry time ({e.at}-{e.until}) has passed: next entry at {e.at} on the next trading day"
+    return f"Entry time now ({e.at}{'-' + e.until if e.until else ''}): enters as soon as prices allow"
 
 
 @router.post("/v1/strategies/preview-legs", response_model=list[PreviewSet])
@@ -77,7 +102,7 @@ async def preview_legs(body: LegPreviewIn, user: CurrentUser, s: UserSession, re
     now = datetime.now(IST)
     holidays = frozenset(calendar_holidays())
     out: list[PreviewSet] = []
-    for name, rules in _plans(config):
+    for plan_id, name, rules in _plans(config):
         e = rules.entry
         if e.mode == "tip" and e.tip_trade == "as_given":
             continue
@@ -111,6 +136,7 @@ async def preview_legs(body: LegPreviewIn, user: CurrentUser, s: UserSession, re
                 ticks = await hub.last(keys)
                 if len(ticks) == len(keys):
                     break
+        moved = body.strikes.get(plan_id, {})
         m.prices = {k: t.ltp for k, t in ticks.items()}
         stamps = [t.ts for t in ticks.values()] + ([spot_tick.ts] if spot_tick else [])
         for d in dirs:
@@ -118,12 +144,25 @@ async def preview_legs(body: LegPreviewIn, user: CurrentUser, s: UserSession, re
             got = runner.contracts_for(m, chosen) if m.spot is not None else "no index price yet"
             rows = []
             if not isinstance(got, str):
-                for leg, c in got:
+                picks = [(leg, c, Contract(u, c.expiry, moved[leg.id], c.right) if leg.id in moved else c)
+                         for leg, c in got]  # fmt: skip
+                extra = {x.key for _, _, x in picks if m.price(x) is None}
+                if extra:  # strikes moved by hand: ask for their prices too
+                    await hub.want(extra)
+                    for _ in range(int(WAIT_S / 0.25)):
+                        more = await hub.last(extra)
+                        if len(more) == len(extra):
+                            break
+                        await asyncio.sleep(0.25)
+                    m.prices |= {k: t.ltp for k, t in more.items()}
+                for leg, algo, c in picks:
                     lots = leg.lots * body.multiplier
                     rows.append(PreviewLeg(leg=leg.id, action=leg.action, option_type=c.right, strike=c.strike,
                                            expiry=c.expiry, lots=lots, qty=lots * inst.lot_size, price=m.price(c),
-                                           tradingsymbol_hint=c.label))  # fmt: skip
-            out.append(PreviewSet(plan=name, direction=d, underlying=u, spot=m.spot, lot_size=inst.lot_size,
+                                           tradingsymbol_hint=c.label, key=c.key, algo_strike=algo.strike))  # fmt: skip
+            out.append(PreviewSet(plan=name, plan_id=plan_id, entry_note=entry_note(rules, now),
+                                  strike_step=inst.strike_step, direction=d, underlying=u, spot=m.spot,
+                                  lot_size=inst.lot_size,
                                   legs=rows, reason=got if isinstance(got, str) else None,
                                   prices_at=min(stamps) if stamps else None))  # fmt: skip
     return out

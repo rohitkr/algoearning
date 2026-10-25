@@ -2011,6 +2011,31 @@
         "title": "EngineStatus",
         "type": "object"
       },
+      "EnterNowIn": {
+        "additionalProperties": false,
+        "description": "The strikes shown on the page, kept or moved with + / - (plan id, \"\" for a single rules set -> leg -> contract\nkey): traded instead of a fresh choice. Without it the engine chooses as at a normal entry.",
+        "properties": {
+          "contracts": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contracts"
+          }
+        },
+        "title": "EnterNowIn",
+        "type": "object"
+      },
       "EntitlementsOut": {
         "properties": {
           "catalog": {
@@ -2893,6 +2918,16 @@
             "minimum": 1.0,
             "title": "Multiplier",
             "type": "integer"
+          },
+          "strikes": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "title": "Strikes",
+            "type": "object"
           }
         },
         "required": [
@@ -4756,9 +4791,17 @@
             "title": "Action",
             "type": "string"
           },
+          "algo_strike": {
+            "title": "Algo Strike",
+            "type": "integer"
+          },
           "expiry": {
             "format": "date",
             "title": "Expiry",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
             "type": "string"
           },
           "leg": {
@@ -4806,7 +4849,9 @@
           "lots",
           "qty",
           "price",
-          "tradingsymbol_hint"
+          "tradingsymbol_hint",
+          "key",
+          "algo_strike"
         ],
         "title": "PreviewLeg",
         "type": "object"
@@ -4815,6 +4860,10 @@
         "properties": {
           "direction": {
             "title": "Direction",
+            "type": "string"
+          },
+          "entry_note": {
+            "title": "Entry Note",
             "type": "string"
           },
           "legs": {
@@ -4830,6 +4879,10 @@
           },
           "plan": {
             "title": "Plan",
+            "type": "string"
+          },
+          "plan_id": {
+            "title": "Plan Id",
             "type": "string"
           },
           "prices_at": {
@@ -4866,6 +4919,10 @@
             ],
             "title": "Spot"
           },
+          "strike_step": {
+            "title": "Strike Step",
+            "type": "integer"
+          },
           "underlying": {
             "title": "Underlying",
             "type": "string"
@@ -4873,6 +4930,9 @@
         },
         "required": [
           "plan",
+          "plan_id",
+          "entry_note",
+          "strike_step",
           "direction",
           "underlying",
           "spot",
@@ -15749,6 +15809,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/EnterNowIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

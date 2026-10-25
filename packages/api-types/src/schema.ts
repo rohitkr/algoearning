@@ -2439,6 +2439,19 @@ export interface components {
             /** Trading Halted */
             trading_halted: boolean;
         };
+        /**
+         * EnterNowIn
+         * @description The strikes shown on the page, kept or moved with + / - (plan id, "" for a single rules set -> leg -> contract
+         *     key): traded instead of a fresh choice. Without it the engine chooses as at a normal entry.
+         */
+        EnterNowIn: {
+            /** Contracts */
+            contracts?: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            } | null;
+        };
         /** EntitlementsOut */
         EntitlementsOut: {
             /** Catalog */
@@ -2737,6 +2750,12 @@ export interface components {
              * @default 1
              */
             multiplier: number;
+            /** Strikes */
+            strikes?: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
         };
         /** LiveBroker */
         LiveBroker: {
@@ -3378,11 +3397,15 @@ export interface components {
         PreviewLeg: {
             /** Action */
             action: string;
+            /** Algo Strike */
+            algo_strike: number;
             /**
              * Expiry
              * Format: date
              */
             expiry: string;
+            /** Key */
+            key: string;
             /** Leg */
             leg: string;
             /** Lots */
@@ -3402,18 +3425,24 @@ export interface components {
         PreviewSet: {
             /** Direction */
             direction: string;
+            /** Entry Note */
+            entry_note: string;
             /** Legs */
             legs: components["schemas"]["PreviewLeg"][];
             /** Lot Size */
             lot_size: number;
             /** Plan */
             plan: string;
+            /** Plan Id */
+            plan_id: string;
             /** Prices At */
             prices_at?: string | null;
             /** Reason */
             reason?: string | null;
             /** Spot */
             spot: number | null;
+            /** Strike Step */
+            strike_step: number;
             /** Underlying */
             underlying: string;
         };
@@ -10267,7 +10296,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EnterNowIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

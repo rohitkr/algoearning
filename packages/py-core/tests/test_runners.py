@@ -896,3 +896,14 @@ def test_an_overnight_exit_skips_an_exchange_holiday() -> None:
     assert sim.at("09:15") == [] and sim.at("13:29") == []
     (ex,) = sim.at("13:30")
     assert ex.reason == "exit time 13:30"
+
+
+def test_enter_now_trades_the_strikes_chosen_on_the_page() -> None:
+    sim = Sim(rr(entry={"at": "15:00", "until": "15:20"}), day=THU)
+    moved = c(25100, "CE", WEEK2)
+    sim.prices = {c(25000, "CE", WEEK2): 100.0, moved: 80.0}
+    assert sim.at("15:21") == []
+    assert sim.r.force_entry(sim.market("15:25"), {"L1": moved}) is None
+    assert moved in sim.r.wanted(sim.market("15:25"))
+    (entry,) = sim.at("15:25")
+    assert entry.contract.key == moved and "forced_contracts" not in sim.r.s

@@ -3,6 +3,7 @@ settings. Always scoped to the signed-in user (row-level security applies)."""
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -16,7 +17,7 @@ from ae_core.strategy import (
     tip_source_ids,
     uses_tips,
 )
-from ae_core.trading.model import IST
+from ae_core.trading.model import IST, Contract
 from ae_db.enums import BrokerAccountStatus, RunStatus, StrategyStatus, TradingMode
 from ae_db.models import (
     BacktestRun,
@@ -35,13 +36,14 @@ from ae_db.models import (
 )
 from ae_db.repositories import BrokerAccountRepo, StrategyRepo
 from fastapi import APIRouter, Query, Request, status
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import audit
 from ..deps import CurrentUser, DbDep, UserSession
 from ..entitlements import load_entitlements, require_feature, require_within
-from ..errors import Conflict, NotFound, PlanLimitReached, Unavailable
+from ..errors import AppError, Conflict, NotFound, PlanLimitReached, Unavailable
 from ..schemas import (
     ERROR_RESPONSES,
     DeployIn,
@@ -402,8 +404,18 @@ async def exit_now(run_id: uuid.UUID, user: CurrentUser, s: UserSession, request
 ENTER_NOW_KEY = "ae:enter_now:{}"  # the engine's FORCE_KEY: it takes the request on its next step
 
 
+class EnterNowIn(BaseModel):
+    """The strikes shown on the page, kept or moved with + / - (plan id, "" for a single rules set -> leg -> contract
+    key): traded instead of a fresh choice. Without it the engine chooses as at a normal entry."""
+
+    model_config = ConfigDict(extra="forbid")
+    contracts: dict[str, dict[str, str]] | None = None
+
+
 @router.post("/v1/runs/{run_id}/enter-now", response_model=RunOut)
-async def enter_now(run_id: uuid.UUID, user: CurrentUser, s: UserSession, request: Request) -> RunOut:
+async def enter_now(
+    run_id: uuid.UUID, user: CurrentUser, s: UserSession, request: Request, body: EnterNowIn | None = None
+) -> RunOut:
     """Start today's trade now, outside the entry window (e.g. the entry time was missed): the engine enters it on its
     next step with the usual legs, lots and risk checks, while the exchange is open. Live runs place real orders."""
     run = await _own_run(s, run_id)
@@ -418,7 +430,15 @@ async def enter_now(run_id: uuid.UUID, user: CurrentUser, s: UserSession, reques
     redis = getattr(request.app.state, "redis", None)
     if redis is None:
         raise Unavailable("the trading engine cannot be reached")
-    await redis.set(ENTER_NOW_KEY.format(run.id), str(user.user_id), ex=120)
+    contracts = (body.contracts if body else None) or {}
+    for legs in contracts.values():
+        for key in legs.values():
+            try:
+                Contract.from_key(key)
+            except (ValueError, IndexError) as exc:
+                raise AppError(f"not a contract: {key}") from exc
+    payload = json.dumps({"by": str(user.user_id), "contracts": contracts or None})
+    await redis.set(ENTER_NOW_KEY.format(run.id), payload, ex=120)
     await audit(s, request, "run.enter_now", user.user_id, "strategy_run", run.id)
     return run_out(run, (await _open_counts(s, [run.id])).get(run.id, 0))
 
