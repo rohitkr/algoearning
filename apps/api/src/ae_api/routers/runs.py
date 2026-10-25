@@ -243,7 +243,7 @@ async def get_run(run_id: uuid.UUID, user: CurrentUser, s: UserSession) -> RunDe
             )
         ).scalars()
     )
-    eq = select(TradeEvent).where(TradeEvent.run_id == run.id).order_by(TradeEvent.id.desc()).limit(200)
+    eq = select(TradeEvent).where(TradeEvent.run_id == run.id).order_by(TradeEvent.id.desc()).limit(3000)
     events: list[TradeEvent] = list((await s.execute(eq)).scalars())
     # legs entered together keep one order on every refresh: newest trade first, then by leg (L1, L2, ...)
     trades.sort(key=lambda t: (str((t.rules or {}).get("leg") or ""), t.tradingsymbol))

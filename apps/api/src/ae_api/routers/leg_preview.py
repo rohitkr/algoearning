@@ -23,7 +23,7 @@ from ..errors import Unavailable
 from ..schemas import ERROR_RESPONSES
 
 router = APIRouter(tags=["strategies"], responses=ERROR_RESPONSES)
-WAIT_S = 2.5  # contracts the feed was not streaming yet are asked for: their first prices come within a second or two
+WAIT_S = 1.2  # contracts the feed was not streaming yet are asked for: their first prices come within about a second
 
 
 class LegPreviewIn(BaseModel):
@@ -101,6 +101,8 @@ async def preview_legs(body: LegPreviewIn, user: CurrentUser, s: UserSession, re
     insts = {i.code: i for i in (await s.execute(select(Instrument))).scalars()}
     now = datetime.now(IST)
     holidays = frozenset(calendar_holidays())
+    health = await hub.health()
+    streaming = bool(health.get("connected")) and not health.get("error")
     out: list[PreviewSet] = []
     for plan_id, name, rules in _plans(config):
         e = rules.entry
@@ -129,10 +131,14 @@ async def preview_legs(body: LegPreviewIn, user: CurrentUser, s: UserSession, re
             elif isinstance(r := options.pick(m, leg.option_type, leg.strike, expiry), Contract):
                 keys.add(r.key)
         ticks = await hub.last(keys)
+        # wait for prices only when the feed can bring them (open market, logged in): otherwise answer at once with
+        # what is stored
+        live = streaming and now.weekday() < 5 and inst.session_open <= f"{now:%H:%M}" <= inst.session_close
         if keys and len(ticks) < len(keys):
             await hub.want(keys)
-            for _ in range(int(WAIT_S / 0.25)):
-                await asyncio.sleep(0.25)
+        if live and keys and len(ticks) < len(keys):
+            for _ in range(int(WAIT_S / 0.1)):
+                await asyncio.sleep(0.1)
                 ticks = await hub.last(keys)
                 if len(ticks) == len(keys):
                     break
@@ -149,11 +155,12 @@ async def preview_legs(body: LegPreviewIn, user: CurrentUser, s: UserSession, re
                 extra = {x.key for _, _, x in picks if m.price(x) is None}
                 if extra:  # strikes moved by hand: ask for their prices too
                     await hub.want(extra)
-                    for _ in range(int(WAIT_S / 0.25)):
-                        more = await hub.last(extra)
+                    more = await hub.last(extra)
+                    for _ in range(int(WAIT_S / 0.1) if live else 0):
                         if len(more) == len(extra):
                             break
-                        await asyncio.sleep(0.25)
+                        await asyncio.sleep(0.1)
+                        more = await hub.last(extra)
                     m.prices |= {k: t.ltp for k, t in more.items()}
                 for leg, algo, c in picks:
                     lots = leg.lots * body.multiplier

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AutoRefresh } from "@/components/runs/auto-refresh";
+import { EventsLog } from "@/components/runs/events-log";
 import { PositionsTable } from "@/components/runs/positions-table";
 import { LegsPreview } from "@/components/strategies/legs-preview";
 import { EnterNowButton, ExitNowButton, PauseRunButton, StopRunButton } from "@/components/runs/run-actions";
@@ -14,14 +15,6 @@ import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
 
 export const metadata = { title: "Run" };
-
-function describe(detail: Record<string, unknown>): string {
-  const skip = new Set(["trade_id", "setup", "reason_steps"]);
-  return Object.entries(detail)
-    .filter(([k, v]) => !skip.has(k) && v != null && v !== "")
-    .map(([k, v]) => `${k.replaceAll("_", " ")}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`)
-    .join(" · ");
-}
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
@@ -110,34 +103,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         </Card>
       )}
 
-      <Card className="p-0">
-        <div className="px-5 pt-4 pb-2">
-          <CardTitle>What happened</CardTitle>
-        </div>
-        {events.length === 0 ? (
-          <p className="px-5 pb-5 text-sm text-muted">Nothing yet.</p>
-        ) : (
-          <ul className="divide-y divide-border px-5 pb-3 text-sm">
-            {events.map((e) => (
-              <li key={e.id} className="flex flex-wrap gap-x-3 gap-y-0.5 py-2">
-                <span className="text-xs whitespace-nowrap text-muted tabular-nums">{fmt(e.ts)}</span>
-                <span
-                  className={
-                    e.level === "ERROR"
-                      ? "font-medium text-loss"
-                      : e.level === "WARNING"
-                        ? "font-medium text-warning"
-                        : "font-medium"
-                  }
-                >
-                  {e.event.replaceAll("_", " ")}
-                </span>
-                <span className="min-w-0 text-muted">{describe(e.detail)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+      <EventsLog events={events} />
     </div>
   );
 }

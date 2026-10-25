@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
-import { analyse, type PayoffLeg } from "@/lib/payoff";
+import { analyse, bs, impliedVol, type PayoffLeg, yearsTo } from "@/lib/payoff";
 
 const money = (v: number) => `₹${formatNumber(Math.round(v))}`;
 const pct = (v: number, base: number) => `${v >= 0 ? "+" : ""}${((v / base) * 100).toFixed(1)}%`;
@@ -59,7 +59,7 @@ export function LegsPreview({
   }, [body]);
 
   useEffect(() => {
-    const t = setTimeout(() => void load(), 600); // after edits settle
+    const t = setTimeout(() => void load(), 250); // after quick clicks settle
     return () => clearTimeout(t);
   }, [load]);
 
@@ -123,9 +123,13 @@ export function LegsPreview({
             move={(leg, by) => {
               const l = set.legs.find((x) => x.leg === leg);
               if (!l) return;
+              const strike = l.strike + by * set.strike_step;
+              // at once on screen: the new strike priced from the leg's own implied volatility, until the live price
+              // arrives a moment later
+              setSets((cur) => (cur ? cur.map((x) => (x === set ? reprice(x, leg, strike) : x)) : cur));
               setStrikes((cur) => ({
                 ...cur,
-                [set.plan_id]: { ...(cur[set.plan_id] ?? {}), [leg]: l.strike + by * set.strike_step },
+                [set.plan_id]: { ...(cur[set.plan_id] ?? {}), [leg]: strike },
               }));
             }}
           />
@@ -182,6 +186,24 @@ export function LegsPreview({
       )}
     </Card>
   );
+}
+
+/** The set with one leg moved to `strike`, its price estimated (Black-Scholes at the leg's implied volatility). */
+function reprice(set: PreviewSet, leg: string, strike: number): PreviewSet {
+  const spot = set.spot ?? 0;
+  return {
+    ...set,
+    legs: set.legs.map((l) => {
+      if (l.leg !== leg) return l;
+      const right = l.option_type as "CE" | "PE";
+      const t = yearsTo(l.expiry, new Date());
+      const price =
+        l.price != null && spot
+          ? Math.round(bs(right, spot, strike, t, impliedVol(right, spot, l.strike, t, l.price)) * 20) / 20
+          : null;
+      return { ...l, strike, price, key: l.key.replace(/:\d+:(CE|PE)$/, `:${strike}:$1`) };
+    }),
+  };
 }
 
 function PreviewBody({ set, move }: { set: PreviewSet; move: (leg: string, by: number) => void }) {
