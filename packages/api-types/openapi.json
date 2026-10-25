@@ -2850,6 +2850,57 @@
         "title": "Leg",
         "type": "object"
       },
+      "LegPreviewIn": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "discriminator": {
+              "mapping": {
+                "plans": "#/components/schemas/PlansConfig",
+                "range_breakout": "#/components/schemas/RangeBreakoutConfig",
+                "rules": "#/components/schemas/RulesConfig",
+                "smc_scalp": "#/components/schemas/SmcScalpConfig",
+                "time_based": "#/components/schemas/TimeBasedConfig",
+                "zero_dte": "#/components/schemas/ZeroDteConfig"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PlansConfig"
+              },
+              {
+                "$ref": "#/components/schemas/RulesConfig"
+              },
+              {
+                "$ref": "#/components/schemas/TimeBasedConfig"
+              },
+              {
+                "$ref": "#/components/schemas/RangeBreakoutConfig"
+              },
+              {
+                "$ref": "#/components/schemas/ZeroDteConfig"
+              },
+              {
+                "$ref": "#/components/schemas/SmcScalpConfig"
+              }
+            ],
+            "title": "Config"
+          },
+          "multiplier": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Multiplier",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "LegPreviewIn",
+        "type": "object"
+      },
       "LiveBroker": {
         "properties": {
           "client_id": {
@@ -4697,6 +4748,138 @@
           "config"
         ],
         "title": "PresetOut",
+        "type": "object"
+      },
+      "PreviewLeg": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "expiry": {
+            "format": "date",
+            "title": "Expiry",
+            "type": "string"
+          },
+          "leg": {
+            "title": "Leg",
+            "type": "string"
+          },
+          "lots": {
+            "title": "Lots",
+            "type": "integer"
+          },
+          "option_type": {
+            "title": "Option Type",
+            "type": "string"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "qty": {
+            "title": "Qty",
+            "type": "integer"
+          },
+          "strike": {
+            "title": "Strike",
+            "type": "integer"
+          },
+          "tradingsymbol_hint": {
+            "title": "Tradingsymbol Hint",
+            "type": "string"
+          }
+        },
+        "required": [
+          "leg",
+          "action",
+          "option_type",
+          "strike",
+          "expiry",
+          "lots",
+          "qty",
+          "price",
+          "tradingsymbol_hint"
+        ],
+        "title": "PreviewLeg",
+        "type": "object"
+      },
+      "PreviewSet": {
+        "properties": {
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "legs": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewLeg"
+            },
+            "title": "Legs",
+            "type": "array"
+          },
+          "lot_size": {
+            "title": "Lot Size",
+            "type": "integer"
+          },
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          },
+          "prices_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prices At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "spot": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spot"
+          },
+          "underlying": {
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan",
+          "direction",
+          "underlying",
+          "spot",
+          "lot_size",
+          "legs"
+        ],
+        "title": "PreviewSet",
         "type": "object"
       },
       "PurchaseOut": {
@@ -15644,6 +15827,100 @@
         ]
       }
     },
+    "/v1/runs/{run_id}/exit-now": {
+      "post": {
+        "description": "Square off the run's open positions now, keeping the run running (Stop also stops it): the engine sends the\nexits on its next step, while the exchange is open. Live runs place real orders.",
+        "operationId": "exit_now_v1_runs__run_id__exit_now_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Exit Now",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
     "/v1/runs/{run_id}/pause": {
       "post": {
         "description": "Pause: the strategy takes no new trade until resumed. Open positions keep their stop-losses, targets, limits and\nexit time (Stop squares them off).",
@@ -18012,6 +18289,102 @@
         ]
       }
     },
+    "/v1/strategies/preview-legs": {
+      "post": {
+        "description": "For every plan: the contracts its legs would trade now (ATM from the live index, premium-based legs from the\nlive option prices, a premium hedge always beyond the strike it hedges) and their prices. Signal strategies get\none set per direction; a Telegram tip traded as given has no legs of its own, so it gets none.",
+        "operationId": "preview_legs_v1_strategies_preview_legs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegPreviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PreviewSet"
+                  },
+                  "title": "Response Preview Legs V1 Strategies Preview Legs Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Preview Legs",
+        "tags": [
+          "strategies"
+        ]
+      }
+    },
     "/v1/strategies/validate": {
       "post": {
         "description": "Check a config without saving it: field-level errors (block saving) and plan warnings (block deploying).",
@@ -18391,6 +18764,104 @@
         "summary": "Update Strategy",
         "tags": [
           "strategies"
+        ]
+      }
+    },
+    "/v1/strategies/{strategy_id}/apply-to-runs": {
+      "post": {
+        "description": "Make the strategy's running deployments trade its saved settings now (a deployment otherwise keeps the\nsettings it was started with). Each run takes the part for its instrument; open positions stay open and are\nmanaged by the new settings from the engine's next step.",
+        "operationId": "apply_to_runs_v1_strategies__strategy_id__apply_to_runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "strategy_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RunOut"
+                  },
+                  "title": "Response Apply To Runs V1 Strategies  Strategy Id  Apply To Runs Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Apply To Runs",
+        "tags": [
+          "runs"
         ]
       }
     },

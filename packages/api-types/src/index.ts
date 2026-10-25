@@ -106,3 +106,5 @@ export type SmcOverlay = Schemas["SmcOverlay"];
 export type SmcBox = Schemas["SmcBox"];
 export type SmcLine = Schemas["SmcLine"];
 export type SmcLevel = Schemas["SmcLevel"];
+export type PreviewSet = Schemas["PreviewSet"];
+export type PreviewLeg = Schemas["PreviewLeg"];

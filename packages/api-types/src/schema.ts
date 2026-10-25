@@ -1149,6 +1149,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runs/{run_id}/exit-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exit Now
+         * @description Square off the run's open positions now, keeping the run running (Stop also stops it): the engine sends the
+         *     exits on its next step, while the exchange is open. Live runs place real orders.
+         */
+        post: operations["exit_now_v1_runs__run_id__exit_now_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}/pause": {
         parameters: {
             query?: never;
@@ -1519,6 +1540,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/strategies/preview-legs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Legs
+         * @description For every plan: the contracts its legs would trade now (ATM from the live index, premium-based legs from the
+         *     live option prices, a premium hedge always beyond the strike it hedges) and their prices. Signal strategies get
+         *     one set per direction; a Telegram tip traded as given has no legs of its own, so it gets none.
+         */
+        post: operations["preview_legs_v1_strategies_preview_legs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/strategies/validate": {
         parameters: {
             query?: never;
@@ -1556,6 +1599,28 @@ export interface paths {
         head?: never;
         /** Update Strategy */
         patch: operations["update_strategy_v1_strategies__strategy_id__patch"];
+        trace?: never;
+    };
+    "/v1/strategies/{strategy_id}/apply-to-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply To Runs
+         * @description Make the strategy's running deployments trade its saved settings now (a deployment otherwise keeps the
+         *     settings it was started with). Each run takes the part for its instrument; open positions stay open and are
+         *     managed by the new settings from the engine's next step.
+         */
+        post: operations["apply_to_runs_v1_strategies__strategy_id__apply_to_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/strategies/{strategy_id}/deploy": {
@@ -2663,6 +2728,16 @@ export interface components {
             target?: components["schemas"]["Threshold"] | null;
             trailing?: components["schemas"]["Trailing"] | null;
         };
+        /** LegPreviewIn */
+        LegPreviewIn: {
+            /** Config */
+            config: components["schemas"]["PlansConfig"] | components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
+            /**
+             * Multiplier
+             * @default 1
+             */
+            multiplier: number;
+        };
         /** LiveBroker */
         LiveBroker: {
             /** Client Id */
@@ -3298,6 +3373,49 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+        };
+        /** PreviewLeg */
+        PreviewLeg: {
+            /** Action */
+            action: string;
+            /**
+             * Expiry
+             * Format: date
+             */
+            expiry: string;
+            /** Leg */
+            leg: string;
+            /** Lots */
+            lots: number;
+            /** Option Type */
+            option_type: string;
+            /** Price */
+            price: number | null;
+            /** Qty */
+            qty: number;
+            /** Strike */
+            strike: number;
+            /** Tradingsymbol Hint */
+            tradingsymbol_hint: string;
+        };
+        /** PreviewSet */
+        PreviewSet: {
+            /** Direction */
+            direction: string;
+            /** Legs */
+            legs: components["schemas"]["PreviewLeg"][];
+            /** Lot Size */
+            lot_size: number;
+            /** Plan */
+            plan: string;
+            /** Prices At */
+            prices_at?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Spot */
+            spot: number | null;
+            /** Underlying */
+            underlying: string;
         };
         /** PurchaseOut */
         PurchaseOut: {
@@ -10216,6 +10334,82 @@ export interface operations {
             };
         };
     };
+    exit_now_v1_runs__run_id__exit_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     pause_run_v1_runs__run_id__pause_post: {
         parameters: {
             query?: never;
@@ -11933,6 +12127,84 @@ export interface operations {
             };
         };
     };
+    preview_legs_v1_strategies_preview_legs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LegPreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewSet"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     validate_config_v1_strategies_validate_post: {
         parameters: {
             query?: never;
@@ -12186,6 +12458,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StrategyOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    apply_to_runs_v1_strategies__strategy_id__apply_to_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                strategy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"][];
                 };
             };
             /** @description Bad request */

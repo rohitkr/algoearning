@@ -7,7 +7,7 @@ history. Their state is plain JSON (`state()`), stored on the run after every st
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -467,32 +467,14 @@ class RulesRunner(Runner):
         final = self._final(m)
         if isinstance(final, datetime) and final <= now:
             final = f"the exit ({final:%a %d %b} {self.cfg.holding.exit}) has passed"
-        contracts: list[tuple[Leg, Contract]] = []
-        for leg in legs:
-            r = final if isinstance(final, str) else self._resolve(m, leg)
-            if isinstance(r, str):
-                if self.s.get("waiting_reason") != r:
-                    self.s["waiting_reason"] = r
-                    self.note("waiting_to_enter", reason=r)
-                return []
-            contracts.append((leg, r))
+        resolved = final if isinstance(final, str) else self.contracts_for(m, legs)
+        if isinstance(resolved, str):
+            if self.s.get("waiting_reason") != resolved:
+                self.s["waiting_reason"] = resolved
+                self.note("waiting_to_enter", reason=resolved)
+            return []
+        contracts = resolved
         assert isinstance(final, datetime)
-        # a hedge bought by premium never sits at or inside the strike it hedges: close to expiry the at-the-money
-        # option itself costs about the premium asked (12 Oct 2026: the ~₹60 call was the sold ATM call)
-        for i, (leg, c) in enumerate(contracts):
-            if leg.action != "BUY" or leg.strike.mode not in PREMIUM_MODES:
-                continue
-            short = next((c2 for l2, c2 in contracts if l2.action == "SELL" and (c2.right, c2.expiry) == (c.right,
-                          c.expiry)), None)  # fmt: skip
-            if short is None or (c.strike > short.strike if c.right == "CE" else c.strike < short.strike):
-                continue
-            moved = options.pick(m, c.right, leg.strike, c.expiry, beyond=short.strike)
-            if isinstance(moved, str):
-                if self.s.get("waiting_reason") != moved:
-                    self.s["waiting_reason"] = moved
-                    self.note("waiting_to_enter", reason=moved)
-                return []
-            contracts[i] = (leg, moved)
         expiring = next(((leg, c) for leg, c in contracts if c.expiry < final.date()), None)
         if expiring:
             self.s["phase"] = "done"
@@ -535,6 +517,30 @@ class RulesRunner(Runner):
         self.s.update(phase="waiting", forced=m.now.isoformat())
         self.s.pop("waiting_reason", None)
         return None
+
+    def contracts_for(self, m: Market, legs: Sequence[Leg]) -> list[tuple[Leg, Contract]] | str:
+        """The contract each leg would trade right now, or why one cannot be chosen yet: the entry's own choice (also
+        what the strategy page previews)."""
+        contracts: list[tuple[Leg, Contract]] = []
+        for leg in legs:
+            r = self._resolve(m, leg)
+            if isinstance(r, str):
+                return r
+            contracts.append((leg, r))
+        # a hedge bought by premium never sits at or inside the strike it hedges: close to expiry the at-the-money
+        # option itself costs about the premium asked (12 Oct 2026: the ~₹60 call was the sold ATM call)
+        for i, (leg, c) in enumerate(contracts):
+            if leg.action != "BUY" or leg.strike.mode not in PREMIUM_MODES:
+                continue
+            short = next((c2 for l2, c2 in contracts if l2.action == "SELL" and (c2.right, c2.expiry) == (c.right,
+                          c.expiry)), None)  # fmt: skip
+            if short is None or (c.strike > short.strike if c.right == "CE" else c.strike < short.strike):
+                continue
+            moved = options.pick(m, c.right, leg.strike, c.expiry, beyond=short.strike)
+            if isinstance(moved, str):
+                return moved
+            contracts[i] = (leg, moved)
+        return contracts
 
     # -- a tip traded as given ------------------------------------------------------------------------------------
     def _tip_contract(self, m: Market, tip: Tip) -> Contract | None:

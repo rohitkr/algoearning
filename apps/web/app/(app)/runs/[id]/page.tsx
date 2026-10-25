@@ -1,4 +1,4 @@
-import type { RunDetail } from "@algoearning/api-types";
+import type { RunDetail, Strategy } from "@algoearning/api-types";
 import { Card, CardTitle, Pnl, StatusPill } from "@algoearning/ui";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 
 import { AutoRefresh } from "@/components/runs/auto-refresh";
 import { PositionsTable } from "@/components/runs/positions-table";
+import { LegsPreview } from "@/components/strategies/legs-preview";
 import { EnterNowButton, ExitNowButton, PauseRunButton, StopRunButton } from "@/components/runs/run-actions";
 import { ModePill, PricesAsOf, RunStatusPill, StalePricesNotice, fmt } from "@/components/runs/run-bits";
 import { SignalCard, type SmcSignal, isSmcSignal } from "@/components/smc/signal-card";
@@ -32,6 +33,9 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const { run, positions, events } = r.data;
   const active = ["pending", "running", "stopping"].includes(run.status);
   const signals = events.filter((e) => isSmcSignal(e.event));
+  // with no trade open, the legs it would trade now (from the saved strategy, at this run's multiplier)
+  const strat =
+    active && run.open_positions === 0 ? await apiGet<Strategy>(`/v1/strategies/${run.strategy_id}`) : null;
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
       {active && <AutoRefresh />}
@@ -85,6 +89,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
       </Card>
 
       <PositionsTable positions={positions} />
+      {strat?.ok && <LegsPreview config={strat.data.config} multiplier={run.multiplier} />}
 
       {signals.length > 0 && (
         <Card className="flex flex-col gap-3">

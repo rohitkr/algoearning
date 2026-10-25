@@ -16,6 +16,8 @@ import { ArrowLeft, CopyPlus, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LegsPreview } from "@/components/strategies/legs-preview";
+
 import { SaveAsDialog } from "./save-as-dialog";
 import { UnsavedDialog } from "./unsaved-dialog";
 import { createPortal } from "react-dom";
@@ -614,6 +616,7 @@ export function StrategyBuilder({ catalog, strategy }: { catalog: StrategyCatalo
           </Card>
         </aside>
       </div>
+      {allErrors.length === 0 && <LegsPreview config={config} />}
       <StrategyTest config={config} blocked={check == null || allErrors.length > 0} />
     </div>
   );
