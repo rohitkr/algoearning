@@ -199,6 +199,7 @@ Never run these, or `make dev`, while production runs on the same Mac: they shar
 
 ```bash
 scripts/home-host.sh deploy          # build the web app, restart api, web, feed, worker (also: npm run deploy)
+scripts/home-host.sh wake            # after the Mac wakes or starts: reconnect the tunnel and price feed now
 scripts/home-host.sh status          # what runs
 scripts/home-host.sh logs [service]  # follow logs (.data/logs/<service>.log)
 scripts/home-host.sh restart engine  # the engine is not restarted by deploy: outside market hours only

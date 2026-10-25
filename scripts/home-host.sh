@@ -9,6 +9,7 @@
 #   scripts/home-host.sh install            # register and start every service (stop `make dev` first)
 #   scripts/home-host.sh deploy             # after a git pull: build, then restart everything but the engine
 #   scripts/home-host.sh status             # what runs, local and public health checks, the server IP
+#   scripts/home-host.sh wake               # after the Mac wakes or starts: reconnect the tunnel and feed now, check
 #   scripts/home-host.sh start|stop|restart [service]
 #   scripts/home-host.sh logs [service]     # follow the logs (all services when none given)
 #   scripts/home-host.sh uninstall          # stop and remove every service (back to `make dev`)
@@ -310,6 +311,19 @@ cmd_status() {
   echo "    $(curl -s -4 --max-time 5 https://1.1.1.1/cdn-cgi/trace | sed -n 's/^ip=//p')"
 }
 
+cmd_wake() {
+  # after sleep the tunnel and the price feed reconnect by themselves, but with growing waits between tries (minutes
+  # after a long sleep): restart them now so the site and prices are back at once, then check
+  step "Reconnecting after wake-up"
+  cmd_restart tunnel feed
+  local i
+  for i in $(seq 1 30); do # until the public API answers through the tunnel (530 while it registers)
+    [[ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "https://api.$DOMAIN/health" || true)" == 200 ]] && break
+    sleep 1
+  done
+  cmd_status
+}
+
 cmd_logs() {
   mkdir -p "$LOGS"
   local files=() s
@@ -320,7 +334,7 @@ cmd_logs() {
 cmd="${1:-help}"
 shift || true
 case "$cmd" in
-  setup | tunnel | build | install | uninstall | start | stop | restart | deploy | status | logs) "cmd_$cmd" "$@" ;;
-  -h | --help | help) sed -n '2,17p' "$0" ;;
+  setup | tunnel | build | install | uninstall | start | stop | restart | deploy | status | logs | wake) "cmd_$cmd" "$@" ;;
+  -h | --help | help) sed -n '2,18p' "$0" ;;
   *) die "unknown command: $cmd (see scripts/home-host.sh help)" ;;
 esac

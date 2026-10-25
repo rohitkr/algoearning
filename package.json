@@ -20,6 +20,7 @@
     "host:install": "scripts/home-host.sh install",
     "host:deploy": "scripts/home-host.sh deploy",
     "host:status": "scripts/home-host.sh status",
+    "host:wake": "scripts/home-host.sh wake",
     "host:start": "scripts/home-host.sh start",
     "host:stop": "scripts/home-host.sh stop",
     "host:restart": "scripts/home-host.sh restart",
