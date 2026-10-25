@@ -157,14 +157,7 @@ export function LegsPreview({
                   const moved = set.legs.some((l) => l.strike !== l.algo_strike);
                   const ok = await confirm({
                     title: "Enter this trade now?",
-                    message:
-                      set.legs.map((l) => `${l.action} ${l.lots} lot ${l.tradingsymbol_hint}`).join(", ") +
-                      "." +
-                      (moved ? " Some strikes were moved by hand." : "") +
-                      (stale
-                        ? ` WARNING: these prices are ${Number.isFinite(age) ? `${Math.round(age / 60)} min` : "of unknown age"} old (market closed or no live feed): press Refresh first, or the orders may fill far from them.`
-                        : "") +
-                      (live ? " This is a live run: real orders go to your broker." : ""),
+                    message: <EntrySummary set={set} age={age} stale={stale} moved={moved} live={live} />,
                     confirmLabel: "Enter now",
                     tone: live || stale ? "danger" : undefined,
                   });
@@ -198,6 +191,67 @@ export function LegsPreview({
         </>
       )}
     </Card>
+  );
+}
+
+/** How old prices are, said for people: "45 seconds", "12 minutes", "3 hours", "2 days". */
+export function ageText(seconds: number): string {
+  if (!Number.isFinite(seconds)) return "of unknown age";
+  if (seconds < 90) return `${Math.round(seconds)} seconds old`;
+  if (seconds < 5400) return `${Math.round(seconds / 60)} minutes old`;
+  if (seconds < 172800) return `${Math.round(seconds / 3600)} hours old`;
+  return `${Math.round(seconds / 86400)} days old`;
+}
+
+/** What Enter now will send, as a short table, then the warnings that apply. */
+function EntrySummary({
+  set,
+  age,
+  stale,
+  moved,
+  live,
+}: {
+  set: PreviewSet;
+  age: number;
+  stale: boolean;
+  moved: boolean;
+  live: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <table className="w-full text-sm tabular-nums">
+        <tbody>
+          {displayOrder(set.legs).map((l) => (
+            <tr key={l.leg}>
+              <td className="py-1 pr-3">
+                <StatusPill tone={l.action === "BUY" ? "success" : "danger"}>{l.action}</StatusPill>
+              </td>
+              <td className="py-1 pr-3 text-foreground">
+                {set.underlying} <span className="font-semibold">{l.strike}</span> {l.option_type}
+                {l.strike !== l.algo_strike && <span className="ml-1 text-xs text-warning">(moved)</span>}
+              </td>
+              <td className="py-1 pr-3 text-muted">{l.lots} lots</td>
+              <td className="py-1 text-right text-muted">
+                {l.price == null ? "–" : `₹${formatNumber(l.price)}`}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-xs text-muted">
+        Expiry {set.legs[0]?.expiry}. Orders go hedge first: buy PE, sell PE, buy CE, sell CE.
+      </p>
+      {moved && <p className="text-sm">Some strikes were moved by hand.</p>}
+      {stale && (
+        <p className="rounded-lg border border-loss/40 bg-loss/10 px-3 py-2 text-sm text-loss">
+          <span className="font-semibold">These prices are {ageText(age)}</span> (market closed or no live
+          feed). Press Refresh first, or the orders may fill far from them.
+        </p>
+      )}
+      {live && (
+        <p className="text-sm font-medium text-foreground">Live run: real orders go to your broker.</p>
+      )}
+    </div>
   );
 }
 
