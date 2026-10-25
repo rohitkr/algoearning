@@ -91,6 +91,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           multiplier={run.multiplier}
           runId={run.status === "running" ? run.id : undefined}
           live={run.mode === "live" && !run.dry_run}
+          brokerAccountId={run.broker_account_id}
         />
       )}
 

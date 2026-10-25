@@ -177,8 +177,9 @@ FORCE_FOR = timedelta(minutes=2)  # "Enter now" keeps trying this long (prices m
 
 
 def _buy_first(intents: list[Intent]) -> list[Intent]:
-    """Hedge first: buy legs go before sells so the margin benefit exists when the short is placed."""
-    return sorted(intents, key=lambda i: i.side != "BUY")
+    """Hedge first, one option type at a time: buy PE, sell PE, then buy CE, sell CE. Each short goes in right after
+    the hedge that lowers its margin (the owner's rule: never every buy first and then every sell)."""
+    return sorted(intents, key=lambda i: (i.contract.right != "PE", i.side != "BUY"))
 
 
 # -- rules (the builder, ADR 0022) ------------------------------------------------------------------------------------

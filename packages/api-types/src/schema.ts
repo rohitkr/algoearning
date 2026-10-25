@@ -2743,6 +2743,8 @@ export interface components {
         };
         /** LegPreviewIn */
         LegPreviewIn: {
+            /** Broker Account Id */
+            broker_account_id?: string | null;
             /** Config */
             config: components["schemas"]["PlansConfig"] | components["schemas"]["RulesConfig"] | components["schemas"]["TimeBasedConfig"] | components["schemas"]["RangeBreakoutConfig"] | components["schemas"]["ZeroDteConfig"] | components["schemas"]["SmcScalpConfig"];
             /**
@@ -3427,10 +3429,16 @@ export interface components {
             direction: string;
             /** Entry Note */
             entry_note: string;
+            /** Funds Available */
+            funds_available?: number | null;
             /** Legs */
             legs: components["schemas"]["PreviewLeg"][];
             /** Lot Size */
             lot_size: number;
+            /** Margin Needed */
+            margin_needed?: number | null;
+            /** Margin Note */
+            margin_note?: string | null;
             /** Plan */
             plan: string;
             /** Plan Id */

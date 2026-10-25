@@ -22,11 +22,13 @@ export function LegsPreview({
   multiplier = 1,
   runId,
   live = false,
+  brokerAccountId = null,
 }: {
   config: StrategyConfig;
   multiplier?: number;
   runId?: string; // on a run's page: "Enter now" trades exactly the legs shown
   live?: boolean;
+  brokerAccountId?: string | null; // whose margin and funds to check (the run's account)
 }) {
   const { getToken } = useAuth();
   const token = useRef(getToken);
@@ -38,7 +40,10 @@ export function LegsPreview({
   const [pick, setPick] = useState(0);
   const [strikes, setStrikes] = useState<Record<string, Record<string, number>>>({}); // moved by hand
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
-  const body = useMemo(() => JSON.stringify({ config, multiplier, strikes }), [config, multiplier, strikes]);
+  const body = useMemo(
+    () => JSON.stringify({ config, multiplier, strikes, broker_account_id: brokerAccountId }),
+    [config, multiplier, strikes, brokerAccountId],
+  );
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -139,6 +144,14 @@ export function LegsPreview({
                 variant={live ? "danger" : "primary"}
                 disabled={busy}
                 onClick={async () => {
+                  const short =
+                    set.margin_needed != null &&
+                    set.funds_available != null &&
+                    set.margin_needed * 1.1 > set.funds_available;
+                  if (short) {
+                    setNote({ ok: false, text: set.margin_note ?? "Not enough funds for these legs." });
+                    return;
+                  }
                   const age = set.prices_at ? (Date.now() - Date.parse(set.prices_at)) / 1000 : Infinity;
                   const stale = age > 60;
                   const moved = set.legs.some((l) => l.strike !== l.algo_strike);
@@ -186,6 +199,24 @@ export function LegsPreview({
       )}
     </Card>
   );
+}
+
+/** The order the owner reads an iron fly in: buy PE, sell PE, sell CE, buy CE (strikes rising left to right). The
+ * orders themselves go hedge first, one side at a time (buy PE, sell PE, buy CE, sell CE). */
+export function displayOrder<T extends { action: string; option_type: string; strike: number }>(
+  legs: T[],
+): T[] {
+  const rank = (l: T) =>
+    l.option_type === "PE"
+      ? l.action === "BUY"
+        ? 0
+        : 1
+      : l.option_type === "CE"
+        ? l.action === "SELL"
+          ? 2
+          : 3
+        : 4;
+  return [...legs].sort((a, b) => rank(a) - rank(b) || a.strike - b.strike);
 }
 
 /** The set with one leg moved to `strike`, its price estimated (Black-Scholes at the leg's implied volatility). */
@@ -249,7 +280,7 @@ function PreviewBody({ set, move }: { set: PreviewSet; move: (leg: string, by: n
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {set.legs.map((l) => (
+              {displayOrder(set.legs).map((l) => (
                 <tr key={l.leg}>
                   <td className="px-2 py-2">
                     <StatusPill tone={l.action === "BUY" ? "success" : "danger"}>
@@ -312,10 +343,32 @@ function PreviewBody({ set, move }: { set: PreviewSet; move: (leg: string, by: n
               label={a.premium >= 0 ? "Premium received" : "Premium paid"}
               value={money(Math.abs(a.premium))}
             />
+            {set.margin_needed != null && (
+              <Stat
+                label="Margin needed"
+                value={money(set.margin_needed)}
+                bad={set.funds_available != null && set.margin_needed * 1.1 > set.funds_available}
+              />
+            )}
+            {set.funds_available != null && (
+              <Stat label="Funds available" value={money(set.funds_available)} />
+            )}
           </div>
         )}
         {!priced && (
           <p className="text-xs text-muted">Some legs have no live price yet: refresh in a moment.</p>
+        )}
+        {set.margin_note && (
+          <p
+            className={cn(
+              "text-sm",
+              set.margin_needed != null && set.funds_available != null
+                ? "font-medium text-loss"
+                : "text-muted",
+            )}
+          >
+            {set.margin_note}
+          </p>
         )}
       </div>
       {a && <PayoffChart a={a} spot={spot} capital={capital} />}

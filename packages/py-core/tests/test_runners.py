@@ -907,3 +907,18 @@ def test_enter_now_trades_the_strikes_chosen_on_the_page() -> None:
     assert moved in sim.r.wanted(sim.market("15:25"))
     (entry,) = sim.at("15:25")
     assert entry.contract.key == moved and "forced_contracts" not in sim.r.s
+
+
+def test_an_iron_fly_is_entered_hedge_then_short_one_side_at_a_time() -> None:
+    """The owner's order: buy PE, sell PE, buy CE, sell CE (never every buy first, then every sell)."""
+    legs = [
+        {"id": "L1", "action": "SELL", "option_type": "CE"},
+        {"id": "L2", "action": "SELL", "option_type": "PE"},
+        {"id": "L3", "action": "BUY", "option_type": "CE", "strike": {"mode": "atm", "offset": 4}},
+        {"id": "L4", "action": "BUY", "option_type": "PE", "strike": {"mode": "atm", "offset": 4}},
+    ]
+    sim = Sim(rr(legs=legs), day=THU)
+    for k in (c(25000, "CE", WEEK2), c(25000, "PE", WEEK2), c(25200, "CE", WEEK2), c(24800, "PE", WEEK2)):
+        sim.prices[k] = 100.0
+    out = sim.at("15:00")
+    assert [(i.side, i.contract.right) for i in out] == [("BUY", "PE"), ("SELL", "PE"), ("BUY", "CE"), ("SELL", "CE")]

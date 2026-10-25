@@ -4,9 +4,11 @@ own strike choice (RulesRunner.contracts_for) on the feed's live prices. Nothing
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime
+import uuid
+from datetime import UTC, date, datetime
 from typing import Any
 
+import httpx
 from ae_core.strategy import PREMIUM_MODES, PlansConfig, RulesConfig, StrategyConfig, parse
 from ae_core.trading import options
 from ae_core.trading.model import IST, Contract, Market
@@ -32,6 +34,7 @@ class LegPreviewIn(BaseModel):
     multiplier: int = Field(default=1, ge=1, le=100)
     # strikes moved by hand with + / -: plan id ("" for a single rules set) -> leg -> strike (same expiry and type)
     strikes: dict[str, dict[str, int]] = Field(default_factory=dict)
+    broker_account_id: uuid.UUID | None = None  # whose margin and funds to check (default: a logged-in account)
 
 
 class PreviewLeg(BaseModel):
@@ -60,6 +63,9 @@ class PreviewSet(BaseModel):
     legs: list[PreviewLeg]
     reason: str | None = None  # why the legs cannot be chosen right now
     prices_at: datetime | None = None
+    margin_needed: float | None = None  # Zerodha's basket margin for these legs (hedges counted)
+    funds_available: float | None = None
+    margin_note: str | None = None  # why the margin is not shown, or a shortfall
 
 
 def _plans(config: Any) -> list[tuple[str, str, RulesConfig]]:
@@ -172,4 +178,77 @@ async def preview_legs(body: LegPreviewIn, user: CurrentUser, s: UserSession, re
                                   lot_size=inst.lot_size,
                                   legs=rows, reason=got if isinstance(got, str) else None,
                                   prices_at=min(stamps) if stamps else None))  # fmt: skip
+    await _add_margins(s, request, user.user_id, body.broker_account_id, config, out)
     return out
+
+
+MARGIN_BUFFER = 1.10  # the engine refuses an entry unless funds cover the margin + 10% (LiveConfig.margin_buffer_pct)
+
+
+async def _add_margins(
+    s: Any, request: Request, user_id: uuid.UUID, account_id: uuid.UUID | None, config: Any, sets: list[PreviewSet]
+) -> None:
+    """Zerodha's margin for each set of legs and the account's available funds, when a Zerodha login of today exists."""
+    from ae_brokers.base import BrokerError
+    from ae_brokers.kite import ContractBook, KiteClient, OrderRequest
+    from ae_db.models import BrokerAccount, BrokerSession
+
+    priced = [x for x in sets if x.legs and all(leg.price is not None for leg in x.legs)]
+    if not priced:
+        return
+    q = select(BrokerAccount, BrokerSession).join(BrokerSession, BrokerSession.broker_account_id == BrokerAccount.id)
+    q = q.where(BrokerAccount.user_id == user_id, BrokerSession.expires_at > datetime.now(UTC))
+    if account_id is not None:
+        q = q.where(BrokerAccount.id == account_id)
+    row = (await s.execute(q.order_by(BrokerAccount.created_at))).first()
+    box = getattr(request.app.state, "secretbox", None)
+    if row is None or box is None or row[0].api_key_enc is None:
+        for x in priced:
+            x.margin_note = "Log in to Zerodha on the Broker page to see the margin and your funds"
+        return
+    acc, sess = row
+    book: ContractBook | None = getattr(request.app.state, "contract_book", None)
+    today = datetime.now(IST).date()
+    if book is None or book.day != today:
+        book = ContractBook()
+        try:
+            async with httpx.AsyncClient() as c:
+                await book.load(["NFO", "BFO"], c, today)
+        except Exception:  # the instrument list cannot be read: no margin this time
+            for x in priced:
+                x.margin_note = "Zerodha's contract list could not be read: margin not shown"
+            return
+        request.app.state.contract_book = book
+    client = KiteClient(
+        box.decrypt(acc.api_key_enc, f"broker_account:{acc.id}:api_key"),
+        box.decrypt(sess.access_token_enc, f"broker_session:{acc.id}:access_token"),
+    )
+    try:
+        funds = await client.available_margin()
+        for x in priced:
+            product = "NRML" if _holds_overnight(config, x.plan_id) else "MIS"
+            reqs = []
+            for leg in x.legs:
+                kc = book.get(leg.key)
+                reqs.append(
+                    OrderRequest(kc.tradingsymbol, leg.action, leg.qty, kc.exchange, product, "LIMIT", leg.price)
+                )
+            x.margin_needed = round(await client.basket_margin(reqs), 2)
+            x.funds_available = round(funds, 2)
+            if x.margin_needed * MARGIN_BUFFER > funds:
+                x.margin_note = (
+                    f"Not enough funds: ₹{x.margin_needed * MARGIN_BUFFER:,.0f} needed with the 10% buffer, "
+                    f"₹{funds:,.0f} available. The entry would be refused; lower the lots or add funds."
+                )
+    except BrokerError as exc:
+        for x in priced:
+            x.margin_note = f"Margin not available: {exc.message}"
+    finally:
+        await client.aclose()
+
+
+def _holds_overnight(config: Any, plan_id: str) -> bool:
+    for pid, _, rules in _plans(config):
+        if pid == plan_id:
+            return rules.holding.mode != "intraday"
+    return False

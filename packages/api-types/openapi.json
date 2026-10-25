@@ -2878,6 +2878,18 @@
       "LegPreviewIn": {
         "additionalProperties": false,
         "properties": {
+          "broker_account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broker Account Id"
+          },
           "config": {
             "discriminator": {
               "mapping": {
@@ -4866,6 +4878,17 @@
             "title": "Entry Note",
             "type": "string"
           },
+          "funds_available": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Funds Available"
+          },
           "legs": {
             "items": {
               "$ref": "#/components/schemas/PreviewLeg"
@@ -4876,6 +4899,28 @@
           "lot_size": {
             "title": "Lot Size",
             "type": "integer"
+          },
+          "margin_needed": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Needed"
+          },
+          "margin_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Note"
           },
           "plan": {
             "title": "Plan",
