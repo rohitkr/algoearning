@@ -443,6 +443,24 @@ async def enter_now(
     return run_out(run, (await _open_counts(s, [run.id])).get(run.id, 0))
 
 
+RELEASE_KEY = "ae:release:{}"  # the engine's RELEASE_KEY
+
+
+@router.post("/v1/runs/{run_id}/release", response_model=RunOut)
+async def release_run(run_id: uuid.UUID, user: CurrentUser, s: UserSession, request: Request) -> RunOut:
+    """Stop without squaring off: the run stops and its open legs stay in Zerodha for the user to manage by hand (the
+    app books them closed at the current price; no order is sent). Also ends a square-off that is still trying."""
+    run = await _own_run(s, run_id)
+    if run.status not in ACTIVE:
+        raise Conflict("the run has already stopped")
+    redis = getattr(request.app.state, "redis", None)
+    if redis is None:
+        raise Unavailable("the trading engine cannot be reached")
+    await redis.set(RELEASE_KEY.format(run.id), str(user.user_id), ex=3600)
+    await audit(s, request, "run.release", user.user_id, "strategy_run", run.id)
+    return run_out(run, (await _open_counts(s, [run.id])).get(run.id, 0))
+
+
 @router.post("/v1/runs/stop-all", response_model=list[RunOut])
 async def stop_all(user: CurrentUser, s: UserSession, request: Request) -> list[RunOut]:
     runs = list((await s.execute(select(StrategyRun).where(StrategyRun.status.in_(ACTIVE)))).scalars())

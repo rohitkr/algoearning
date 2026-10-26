@@ -3,7 +3,7 @@
 import type { RiskSettings } from "@algoearning/api-types";
 import { Button, Card, CardTitle, Switch, cn, useConfirm } from "@algoearning/ui";
 import { useAuth } from "@clerk/nextjs";
-import { LogOut, OctagonX, Pause, Play, Square } from "lucide-react";
+import { Hand, LogOut, OctagonX, Pause, Play, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -148,6 +148,44 @@ export function PauseRunButton({ runId, name, paused }: { runId: string; name: s
         {paused ? "Resume" : "Pause"}
       </Button>
       {note && !note.ok && <span className="text-xs text-loss">{note.text}</span>}
+    </span>
+  );
+}
+
+/** Stop without squaring off: the open legs stay in Zerodha for the user to manage by hand (no order is sent). */
+export function ReleaseRunButton({
+  runId,
+  name,
+  stopping,
+}: {
+  runId: string;
+  name: string;
+  stopping: boolean;
+}) {
+  const { call, busy, note } = useCall();
+  const confirm = useConfirm();
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={busy}
+        onClick={async () => {
+          const ok = await confirm({
+            title: stopping ? `Stop squaring off ${name}?` : `Stop ${name} and keep its positions?`,
+            message:
+              "The strategy stops and sends no order. Its open legs stay in Zerodha as they are, for you to manage " +
+              "by hand in Kite (the app books them as closed at the current price). Use this when you have already " +
+              "exited some legs yourself, or hold the same strikes manually.",
+            confirmLabel: "Stop, keep positions",
+          });
+          if (ok)
+            await call("POST", `/v1/runs/${runId}/release`, undefined, "Stopping without squaring off.");
+        }}
+      >
+        <Hand className="size-3.5" aria-hidden /> {stopping ? "Stop squaring off" : "Stop, keep positions"}
+      </Button>
+      {note && <span className={cn("text-xs", note.ok ? "text-muted" : "text-loss")}>{note.text}</span>}
     </span>
   );
 }

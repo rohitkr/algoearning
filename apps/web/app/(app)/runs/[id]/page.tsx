@@ -8,7 +8,13 @@ import { AutoRefresh } from "@/components/runs/auto-refresh";
 import { EventsLog } from "@/components/runs/events-log";
 import { PositionsTable } from "@/components/runs/positions-table";
 import { LegsPreview } from "@/components/strategies/legs-preview";
-import { EnterNowButton, ExitNowButton, PauseRunButton, StopRunButton } from "@/components/runs/run-actions";
+import {
+  EnterNowButton,
+  ExitNowButton,
+  PauseRunButton,
+  ReleaseRunButton,
+  StopRunButton,
+} from "@/components/runs/run-actions";
 import { ModePill, PricesAsOf, RunStatusPill, StalePricesNotice, fmt } from "@/components/runs/run-bits";
 import { SignalCard, type SmcSignal, isSmcSignal } from "@/components/smc/signal-card";
 import { apiGet } from "@/lib/api";
@@ -80,6 +86,9 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           ))}
         {(run.status === "running" || run.status === "pending") && (
           <PauseRunButton runId={run.id} name={run.strategy_name} paused={run.paused ?? false} />
+        )}
+        {((run.status === "running" && run.open_positions > 0) || run.status === "stopping") && (
+          <ReleaseRunButton runId={run.id} name={run.strategy_name} stopping={run.status === "stopping"} />
         )}
         {active && run.status !== "stopping" && <StopRunButton runId={run.id} name={run.strategy_name} />}
       </Card>

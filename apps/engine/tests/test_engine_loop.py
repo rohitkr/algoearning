@@ -513,3 +513,50 @@ async def test_a_partial_exit_in_kite_shrinks_the_strategys_positions(env: Any) 
         trades = {t.rules["leg"]: t for t in (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars()}
     assert trades["L2"].status == "closed" and trades["L2"].exit_reason == "closed outside AlgoEarning"
     assert trades["L1"].status == "open"
+
+
+async def test_stop_without_squaring_off_books_the_positions_and_sends_nothing(env: Any) -> None:
+    db, hub, ids = env
+    rid = await add_run(db, ids)
+    clock = [at("09:20")]
+    eng = Engine(db, hub, now=lambda: clock[0])
+    await prices(hub, clock[0], 25010, 100.0)
+    await eng.tick()
+    await eng.tick()
+    await hub.r.set(f"ae:release:{rid}", "user")
+    await eng.tick()
+    async with db.system_session() as s:
+        run = (await s.execute(select(StrategyRun).where(StrategyRun.id == rid))).scalar_one()
+        trades = list((await s.execute(select(Trade).where(Trade.run_id == rid))).scalars())
+    assert run.status.value == "stopped" and "managed by hand" in (run.stop_reason or "")
+    assert [t.exit_reason for t in trades] == ["left open in Zerodha (managed by hand)"]
+
+
+async def test_a_refused_square_off_is_not_resent_every_second(env: Any) -> None:
+    """26 Oct 2026: Zerodha refused the stop's exits (market closed); they went again each second until its order
+    limit was hit. A refused exit waits for its retry."""
+    from datetime import timedelta
+
+    from ae_brokers.fake_kite import FakeKite
+
+    db, hub, ids = env
+    box = a_box()
+    acc_id = await live_setup(db, ids, box)
+    rid = await add_run(db, ids, mode="live", broker_account_id=acc_id)
+    kite = FakeKite(prices={"NIFTY2610625000CE": 100.0})
+    clock = [at("09:20")]
+    eng = live_engine(db, hub, clock, box, kite)
+    await prices(hub, clock[0], 25010, 100.0)
+    await eng.tick()
+    await settle()
+    await eng.tick()
+    kite.reject = {"NIFTY2610625000CE"}
+    async with db.system_session() as s:
+        run = (await s.execute(select(StrategyRun).where(StrategyRun.id == rid))).scalar_one()
+        run.status, run.stop_reason = RunStatus.STOPPING, "stopped by you"
+    before = len(kite.log)
+    for _ in range(6):
+        clock[0] += timedelta(seconds=1)
+        await eng.tick()
+        await settle()
+    assert len(kite.log) - before <= 2  # sent once (and at most one retry later), not six times

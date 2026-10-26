@@ -66,6 +66,8 @@ HOLIDAYS = frozenset(calendar_holidays())  # NSE's trading holidays (ae_marketda
 FORCE_KEY = "ae:enter_now:{}"  # "Enter now"
 EXIT_KEY = "ae:exit_now:{}"  # "Exit now"
 RELOAD_KEY = "ae:reload:{}"  # an edited strategy applied to its running deployment
+RELEASE_KEY = "ae:release:{}"  # "Stop without squaring off": the open legs stay in Zerodha for the user
+RELEASE_REASON = "left open in Zerodha (managed by hand)"
 EXIT_NOW_REASON = "exited by hand (Exit now)"
 FEED_GRACE = timedelta(minutes=2)  # the feed may reconnect on its own: tell only after this long without it
 NO_FEED = "No live prices: strategies cannot trade"
@@ -455,6 +457,25 @@ class Engine:
             rn.reject(i, "the strategy is paused")
         return [i for i in intents if i.kind != "entry"]
 
+    async def _release(self, s: AsyncSession, r: StrategyRun, rn: Runner, m: Market, now: datetime) -> bool:
+        """The user stopped the run without squaring off ("I manage these legs myself in Kite"): its open positions are
+        booked closed at the current price, no order is sent, and the run stops."""
+        if not await self.hub.r.getdel(RELEASE_KEY.format(r.id)):
+            return False
+        for p in list(rn.open_positions()):
+            px = m.price(p.contract) or p.entry_price
+            intent = Intent("exit", "SELL" if p.side == "BUY" else "BUY", p.contract, p.lots, p.qty, RELEASE_REASON,
+                            p.leg, position_id=p.id)  # fmt: skip
+            pos = rn.fill(intent, px, now, m)
+            if pos is not None:
+                inst = Inst(m.underlying, "", m.lot_size, m.strike_step, [])
+                await self._record(s, r, pos, intent, px, inst, now)
+        r.status, r.stopped_at = RunStatus.STOPPED, now
+        r.stop_reason = "stopped by you: open legs left in Zerodha, managed by hand"
+        self._event(s, r, "run_stopped", reason=r.stop_reason)
+        self.runners.pop(r.id, None)
+        return True
+
     async def _exit_now(self, s: AsyncSession, r: StrategyRun, rn: Runner) -> bool:
         """The user pressed "Exit now": square off what is open, once; unlike Stop the run keeps running."""
         if not await self.hub.r.getdel(EXIT_KEY.format(r.id)):
@@ -507,6 +528,9 @@ class Engine:
         if r.status == RunStatus.PENDING:
             r.status, r.started_at = RunStatus.RUNNING, now
             self._event(s, r, "run_started", mode=r.mode.value, multiplier=r.multiplier)
+        if await self._release(s, r, rn, m, now):
+            r.state = {**rn.state(), "_underlying": m.underlying}
+            return
         if r.status == RunStatus.STOPPING or stop_all:
             reason = r.stop_reason or stop_all or "stopped"
             if stop_all and r.status != RunStatus.STOPPING:
@@ -615,12 +639,18 @@ class Engine:
         for o in acct.drain(r.id):
             inflight = [i for i in inflight if not (i.position_id == o.intent.position_id and i.kind == o.intent.kind)]
             await self._apply(s, r, rn, m, inst, o, retry, acc, now)
+        if await self._release(s, r, rn, m, now):
+            r.state = {**rn.state(), "_underlying": m.underlying, "_inflight": [], "_retry": {}}
+            return
         if r.status == RunStatus.STOPPING or stop_all:
             reason = r.stop_reason or stop_all or "stopped"
             if stop_all and r.status != RunStatus.STOPPING:
                 r.status, r.stop_reason = RunStatus.STOPPING, stop_all
                 self._event(s, r, "risk_limit", level="WARNING", reason=stop_all)
-            intents = rn.exit_all(reason, m)
+            # an exit already on its way, or refused and waiting for its retry, is not sent again every second
+            # (26 Oct 2026: a refused square-off was resent each second until Zerodha's order limit was hit)
+            busy = {i.position_id for i in inflight} | set(retry)
+            intents = [i for i in rn.exit_all(reason, m) if i.position_id not in busy]
         elif await self._exit_now(s, r, rn):
             intents = rn.exit_all(EXIT_NOW_REASON, m)  # the run carries on: its next entry comes as usual
         else:
