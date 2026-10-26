@@ -87,10 +87,12 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         {(run.status === "running" || run.status === "pending") && (
           <PauseRunButton runId={run.id} name={run.strategy_name} paused={run.paused ?? false} />
         )}
-        {((run.status === "running" && run.open_positions > 0) || run.status === "stopping") && (
+        {run.status === "stopping" && (
           <ReleaseRunButton runId={run.id} name={run.strategy_name} stopping={run.status === "stopping"} />
         )}
-        {active && run.status !== "stopping" && <StopRunButton runId={run.id} name={run.strategy_name} />}
+        {active && run.status !== "stopping" && (
+          <StopRunButton runId={run.id} name={run.strategy_name} open={run.open_positions} />
+        )}
       </Card>
 
       <PositionsTable positions={positions} />

@@ -73,7 +73,7 @@ export default async function RunsPage() {
                   <p className="text-xs text-muted">P&amp;L</p>
                   <Pnl value={r.realized_pnl + r.unrealized_pnl} className="font-semibold" />
                 </div>
-                <StopRunButton runId={r.id} name={r.strategy_name} />
+                <StopRunButton runId={r.id} name={r.strategy_name} open={r.open_positions} />
               </div>
             </li>
           ))}

@@ -5,7 +5,7 @@ import { Button, Card, CardTitle, Switch, cn, useConfirm } from "@algoearning/ui
 import { useAuth } from "@clerk/nextjs";
 import { Hand, LogOut, OctagonX, Pause, Play, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { NumberField } from "@/components/builder/fields";
 import { ApiRequestError, apiRequest } from "@/lib/client-api";
@@ -31,9 +31,13 @@ function useCall() {
   return { call, busy, note };
 }
 
-export function StopRunButton({ runId, name }: { runId: string; name: string }) {
+/** Stop. With positions open it asks what to do with them: square them off (orders to the broker), or keep them in
+ * Zerodha for the user to manage (no order is sent). */
+export function StopRunButton({ runId, name, open = 0 }: { runId: string; name: string; open?: number }) {
   const { call, busy, note } = useCall();
   const confirm = useConfirm();
+  const ref = useRef<HTMLDialogElement>(null);
+  const close = () => ref.current?.close();
   return (
     <span className="inline-flex items-center gap-2">
       <Button
@@ -41,9 +45,14 @@ export function StopRunButton({ runId, name }: { runId: string; name: string }) 
         variant="danger"
         disabled={busy}
         onClick={async () => {
+          if (open > 0) {
+            ref.current?.showModal();
+            return;
+          }
           const ok = await confirm({
             title: `Stop ${name}?`,
-            message: "Its open positions are squared off now (on live runs, orders go to your broker).",
+            message:
+              "Nothing is open, so no order is sent. The strategy takes no new trade until deployed again.",
             confirmLabel: "Stop strategy",
             tone: "danger",
           });
@@ -53,6 +62,47 @@ export function StopRunButton({ runId, name }: { runId: string; name: string }) 
         <Square className="size-3.5" aria-hidden /> Stop
       </Button>
       {note && !note.ok && <span className="text-xs text-loss">{note.text}</span>}
+      <dialog
+        ref={ref}
+        className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface p-5 text-foreground backdrop:bg-black/50"
+        onClick={(e) => e.target === ref.current && close()}
+      >
+        <h2 className="text-lg font-semibold">Stop {name}?</h2>
+        <p className="mt-1.5 text-sm text-muted">
+          It has {open} open position{open === 1 ? "" : "s"}. What should happen to{" "}
+          {open === 1 ? "it" : "them"}?
+        </p>
+        <div className="mt-4 flex flex-col gap-2">
+          <Button
+            variant="danger"
+            onClick={async () => {
+              close();
+              await call("POST", `/v1/runs/${runId}/stop`);
+            }}
+          >
+            Square off and stop
+          </Button>
+          <p className="-mt-1 mb-1 text-xs text-muted">
+            The app closes everything it opened (live runs: orders go to your broker), then stops.
+          </p>
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              close();
+              await call("POST", `/v1/runs/${runId}/release`);
+            }}
+          >
+            Stop, keep positions in Zerodha
+          </Button>
+          <p className="-mt-1 mb-1 text-xs text-muted">
+            No order is sent. The legs stay in Zerodha for you to manage in Kite (use this when you already
+            exited some legs yourself, or hold the same strikes manually).
+          </p>
+          <Button variant="ghost" onClick={close}>
+            Cancel
+          </Button>
+        </div>
+      </dialog>
     </span>
   );
 }
@@ -137,8 +187,9 @@ export function PauseRunButton({ runId, name, paused }: { runId: string; name: s
           const ok = await confirm({
             title: `Pause ${name}?`,
             message:
-              "It takes no new trade until you resume it. Positions already open stay open and keep their " +
-              "stop-losses, targets, limits and exit time (use Stop to square them off).",
+              "Everything stops until you resume it: no entry and no exit — open positions are not watched (no " +
+              "stop-loss, target or exit time) while paused. Resume picks up again from the current prices (an exit " +
+              "time that passed meanwhile exits at once). Exit now still works if you need to get out.",
             confirmLabel: "Pause",
           });
           if (ok) await call("POST", `/v1/runs/${runId}/pause`);

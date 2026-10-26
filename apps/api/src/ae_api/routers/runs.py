@@ -313,8 +313,8 @@ async def stop_run(run_id: uuid.UUID, user: CurrentUser, s: UserSession, request
 
 @router.post("/v1/runs/{run_id}/pause", response_model=RunOut)
 async def pause_run(run_id: uuid.UUID, user: CurrentUser, s: UserSession, request: Request) -> RunOut:
-    """Pause: the strategy takes no new trade until resumed. Open positions keep their stop-losses, targets, limits and
-    exit time (Stop squares them off)."""
+    """Pause: the strategy is frozen until resumed; the engine sends no order of any kind for it (no entry, no
+    stop-loss, target or exit time). Resumed, it carries on from the current prices. Exit now still works."""
     return await _set_paused(run_id, True, user, s, request)
 
 

@@ -439,23 +439,19 @@ class Engine:
         self._event(s, r, "cannot_read_strategy", level="ERROR", error=why)
 
     def _step_unless_paused(self, r: StrategyRun, rn: Runner, m: Market) -> list[Intent]:
-        """The runner's step; a paused run takes no new trade: with nothing open it is not stepped at all (so no entry
-        is even prepared), with positions open they are still managed but no entry is sent (a re-entry, say)."""
+        """The runner's step. A paused run is frozen: it is not stepped at all, so it sends no order of any kind (no
+        entry, no stop-loss, no target, no exit time) until resumed; then it picks up where it is (an exit time
+        that passed while paused exits at once). Exit now and Enter now still work: the user asks for them."""
         forced = self.forced.get(r.id)
         if forced is not None and m.now - forced > timedelta(minutes=2):
             self.forced.pop(r.id, None)
             forced = None
-        if not r.paused or forced is not None:  # "Enter now" works on a paused run too: the user asked for it
-            intents: list[Intent] = rn.step(m)
-            if any(i.kind == "entry" for i in intents):
-                self.forced.pop(r.id, None)
-            return intents
-        if not rn.open_positions() and not rn.exiting:
+        if r.paused and forced is None:
             return []
-        intents = rn.step(m)
-        for i in [i for i in intents if i.kind == "entry"]:
-            rn.reject(i, "the strategy is paused")
-        return [i for i in intents if i.kind != "entry"]
+        intents: list[Intent] = rn.step(m)
+        if any(i.kind == "entry" for i in intents):
+            self.forced.pop(r.id, None)
+        return intents
 
     async def _release(self, s: AsyncSession, r: StrategyRun, rn: Runner, m: Market, now: datetime) -> bool:
         """The user stopped the run without squaring off ("I manage these legs myself in Kite"): its open positions are

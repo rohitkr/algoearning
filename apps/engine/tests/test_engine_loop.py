@@ -560,3 +560,33 @@ async def test_a_refused_square_off_is_not_resent_every_second(env: Any) -> None
         await eng.tick()
         await settle()
     assert len(kite.log) - before <= 2  # sent once (and at most one retry later), not six times
+
+
+async def test_a_paused_run_is_frozen_then_resumes_where_it_is(env: Any) -> None:
+    """Pause sends nothing at all, not even the exit at the exit time; resumed, the passed exit goes at once."""
+    db, hub, ids = env
+    rid = await add_run(db, ids)
+    clock = [at("09:20")]
+    eng = Engine(db, hub, now=lambda: clock[0])
+    await prices(hub, clock[0], 25010, 100.0)
+    await eng.tick()
+    await eng.tick()
+
+    async def set_paused(v: bool) -> None:
+        async with db.system_session() as s:
+            (await s.execute(select(StrategyRun).where(StrategyRun.id == rid))).scalar_one().paused = v
+
+    async def open_count() -> int:
+        async with db.system_session() as s:
+            q = select(Trade).where(Trade.run_id == rid, Trade.status == "open")
+            return len(list((await s.execute(q)).scalars()))
+
+    assert await open_count() == 1
+    await set_paused(True)
+    clock[0] = at("15:16")  # past the 15:15 exit
+    await prices(hub, clock[0], 25010, 90.0)
+    await eng.tick()
+    assert await open_count() == 1  # frozen
+    await set_paused(False)
+    await eng.tick()
+    assert await open_count() == 0
