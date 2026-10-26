@@ -3,7 +3,12 @@ import { Card, CardTitle, Pnl, StatusPill } from "@algoearning/ui";
 import Link from "next/link";
 
 import { AutoRefresh } from "@/components/runs/auto-refresh";
-import { RiskSettingsCard, StopAllButton, StopRunButton } from "@/components/runs/run-actions";
+import {
+  ReleaseRunButton,
+  RiskSettingsCard,
+  StopAllButton,
+  StopRunButton,
+} from "@/components/runs/run-actions";
 import { ModePill, RunStatusPill, fmt } from "@/components/runs/run-bits";
 import { apiGet } from "@/lib/api";
 import { requireUser } from "@/lib/session";
@@ -73,7 +78,11 @@ export default async function RunsPage() {
                   <p className="text-xs text-muted">P&amp;L</p>
                   <Pnl value={r.realized_pnl + r.unrealized_pnl} className="font-semibold" />
                 </div>
-                <StopRunButton runId={r.id} name={r.strategy_name} open={r.open_positions} />
+                {r.status === "stopping" ? (
+                  <ReleaseRunButton runId={r.id} name={r.strategy_name} stopping />
+                ) : (
+                  <StopRunButton runId={r.id} name={r.strategy_name} open={r.open_positions} />
+                )}
               </div>
             </li>
           ))}
