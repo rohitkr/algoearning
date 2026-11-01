@@ -174,6 +174,11 @@ class Runner:
 EXIT_RETRY = timedelta(seconds=30)  # a refused exit is sent again after this long
 ARM_FOR = timedelta(minutes=2)  # a fired signal stays valid this long while option prices stream in
 FORCE_FOR = timedelta(minutes=2)  # "Enter now" keeps trying this long (prices may still be arriving)
+# a tip traded as given that has no stop-loss yet enters at once with a default one, on the premium: the entry price
+# minus the larger of these points or 10% of the entry (plus, for a sell). The channel's own stop-loss replaces it once
+# posted. Other instruments still wait for the channel's stop-loss.
+TIP_DEFAULT_SL_POINTS = {"NIFTY": 20.0, "SENSEX": 40.0}
+TIP_DEFAULT_SL_PCT = 0.10
 
 
 def _buy_first(intents: list[Intent]) -> list[Intent]:
@@ -236,7 +241,9 @@ class RulesRunner(Runner):
         if self.s.get("phase", "waiting") == "waiting" and e.mode == "tip" and e.tip_trade == "as_given":
             seen = set(self.s.get("tips_seen", [])) - {(self.s.get("armed") or {}).get("tip")}
             for tip in m.tips:
-                if tip.source_id == str(e.source_id) and tip.id not in seen and (c := self._tip_contract(m, tip)):
+                if tip.source_id != str(e.source_id) or tip.id in seen or not self._ours(tip):
+                    continue  # another underlying's tip: its strike means nothing here (30 Oct: SENSEX 22900 CE)
+                if c := self._tip_contract(m, tip):
                     keys.add(c.key)
         elif self.s.get("phase", "waiting") == "waiting":
             for leg in self.cfg.legs_for(m.now.date()):
@@ -255,6 +262,7 @@ class RulesRunner(Runner):
         self._arrived(intent.position_id)
         if self.s.get("phase") != "in":
             self.s["phase"] = "in"  # a fill that came after the trade was thought over: manage it
+        self._tip_default_sl_filled(pos)
         leg = self._leg(pos.leg)
         if leg is None:
             return
@@ -364,7 +372,7 @@ class RulesRunner(Runner):
         for tip in m.tips:
             if tip.source_id != str(e.source_id) or tip.id in seen:
                 continue
-            if tip.index and tip.index != self.cfg.underlying:
+            if not self._ours(tip):
                 seen.append(tip.id)  # another underlying's tip (e.g. SENSEX for a NIFTY strategy): not ours
                 continue
             age = (m.now - tip.date).total_seconds()
@@ -378,12 +386,25 @@ class RulesRunner(Runner):
                 seen.append(tip.id)
                 self.note("tip_skipped", tip_id=tip.id, tip=tip.tip, reason=f"already {tip.status} on the channel")
                 continue
-            if not tip.complete:
+            if not tip.complete and not self._default_sl_allowed(tip):
                 return None  # its stop-loss usually follows within seconds
             seen.append(tip.id)
             del seen[:-200]  # keep the state small
             return tip
         return None
+
+    def _ours(self, tip: Tip) -> bool:
+        return not tip.index or tip.index == self.cfg.underlying
+
+    def _default_sl_allowed(self, tip: Tip) -> bool:
+        """A tip traded as given may enter before its stop-loss is posted, with a default one."""
+        e = self.cfg.entry
+        return (e.tip_trade == "as_given" and self.cfg.underlying in TIP_DEFAULT_SL_POINTS
+                and tip.action in ("BUY", "SELL") and tip.entry_high is not None)  # fmt: skip
+
+    def _default_sl(self, price: float, buy: bool) -> float:
+        d = max(TIP_DEFAULT_SL_POINTS[self.cfg.underlying], price * TIP_DEFAULT_SL_PCT)
+        return round(max(0.05, price - d) if buy else price + d, 2)
 
     def _advance_cursors(self, m: Market) -> None:
         cur = self.s.setdefault("cursor", {})
@@ -573,8 +594,10 @@ class RulesRunner(Runner):
 
         if tip is None:
             return skip("the tip is no longer listed")
-        if tip.action not in ("BUY", "SELL") or tip.stop_loss is None or tip.entry_high is None or len(tip.targets) < 3:
-            return skip("the tip has no entry, stop-loss and three targets")
+        if tip.action not in ("BUY", "SELL") or tip.entry_high is None:
+            return skip("the tip has no action and entry price")
+        if tip.stop_loss is None and not self._default_sl_allowed(tip):
+            return skip("the tip has no stop-loss")
         c = self._tip_contract(m, tip)
         if c is None:
             return skip("no current-week expiry for the tip's option")
@@ -593,7 +616,7 @@ class RulesRunner(Runner):
             return []
         buy = tip.action == "BUY"
         low = tip.entry_low if tip.entry_low is not None else tip.entry_high
-        if (px - tip.stop_loss) * (1 if buy else -1) <= 0:
+        if tip.stop_loss is not None and (px - tip.stop_loss) * (1 if buy else -1) <= 0:
             return skip(f"price {px:g} is already at or past the stop-loss {tip.stop_loss:g}")
         limit = tip.entry_high + e.tip_buffer if buy else low - e.tip_buffer
         if (px - limit) * (1 if buy else -1) > 0:
@@ -614,14 +637,44 @@ class RulesRunner(Runner):
         why_in = f"Telegram tip {tip_id} as given ({tip.tip})"
         side: Side = "BUY" if buy else "SELL"
         intents = [self._enter(m, c, side, n, f"T{i + 1}" if split else "T", why_in) for i, n in enumerate(parts)]
+        # no stop-loss yet: a default one from the price now, set again from the fill price once the orders fill; no
+        # targets yet: only the stop and the exit time apply until the channel posts them (both: _tip_updates)
+        default = tip.stop_loss is None
+        sl = self._default_sl(px, buy) if default else tip.stop_loss
+        targets = list(tip.targets[:3]) if len(tip.targets) >= 3 else []
         self.s.pop("armed", None)
         self.s.pop("exit_retry_at", None)
         self.s.update(phase="in", entries_day=today, entries=self._entries_today(m) + 1, final=final.isoformat(),
                       cycle_realized=self.realized, reentries={}, pending=[], sold={}, lock_floor=None,
                       direction=direction, tip_id=tip_id, awaiting=[i.position_id for i in intents],
-                      tipplan={"contract": c.key, "side": side, "targets": list(tip.targets[:3]),
-                               "sl": tip.stop_loss, "stage": 0, "split": split})  # fmt: skip
+                      tipplan={"contract": c.key, "side": side, "targets": targets, "sl": sl, "sl_default": default,
+                               "stage": 0, "split": split})  # fmt: skip
         return intents
+
+    def _tip_default_sl_filled(self, pos: Position) -> None:
+        """The last order of a tip entered without a stop-loss has filled: the default stop from the fill price."""
+        tp = self.s.get("tipplan")
+        if not tp or not tp.get("sl_default") or tp["stage"] != 0 or self.s.get("awaiting"):
+            return
+        held = [*self.open_positions(), pos]
+        entry = sum(p.entry_price * p.qty for p in held) / sum(p.qty for p in held)
+        tp["sl"] = self._default_sl(entry, tp["side"] == "BUY")
+        self.note("tip_default_sl", sl=tp["sl"], reason=f"entered with default SL {tp['sl']:g}")
+
+    def _tip_updates(self, m: Market) -> None:
+        """What the channel posted after we entered: its stop-loss replaces the default one, its targets start to
+        apply."""
+        tp, e = self.s["tipplan"], self.cfg.entry
+        tip = next((t for t in m.tips if t.id == self.s.get("tip_id") and t.source_id == str(e.source_id)), None)
+        if tip is None:
+            return
+        if tp.get("sl_default") and tp["stage"] == 0 and tip.stop_loss is not None:
+            tp.update(sl=tip.stop_loss, sl_default=False)
+            self.note("tip_sl_updated", sl=tip.stop_loss, reason=f"SL updated to {tip.stop_loss:g} from the tip")
+        if not tp["targets"] and len(tip.targets) >= 3:
+            tp["targets"] = list(tip.targets[:3])
+            self.note("tip_targets_updated", targets=tp["targets"],
+                      reason="targets " + ", ".join(f"{t:g}" for t in tp["targets"]) + " from the tip")  # fmt: skip
 
     def _tip_exits(self, m: Market) -> list[Intent]:
         """The tip's own exits: a quarter at each target, the stop moving up behind the price, the rest at TP3 + 20%."""
@@ -642,16 +695,19 @@ class RulesRunner(Runner):
 
         if (px - tp["sl"]) * sign <= 0:
             what = (
-                "the tip's stop-loss" if tp["stage"] == 0 else "stop at cost" if tp["stage"] == 1 else "trailing stop"
-            )
+                "the default stop-loss" if tp.get("sl_default")
+                else "the tip's stop-loss" if tp["stage"] == 0 else "stop at cost" if tp["stage"] == 1
+                else "trailing stop"
+            )  # fmt: skip
             close(held, f"{what} ({tp['sl']:g})", tp["sl"])
             return out
         targets = tp["targets"]
-        while tp["stage"] < 3 and (px - targets[tp["stage"]]) * sign >= 0:
+        while targets and tp["stage"] < 3 and (px - targets[tp["stage"]]) * sign >= 0:
             tp["stage"] += 1
             k = tp["stage"]
             entry = sum(p.entry_price * p.qty for p in held) / sum(p.qty for p in held)
             tp["sl"] = round(entry, 2) if k == 1 else targets[k - 2]
+            tp["sl_default"] = False
             self.note("tip_target", target=k, price=px, stop=tp["sl"])
             if tp["split"]:
                 close([p for p in held if p.leg == f"T{k}"], f"target {k} ({targets[k - 1]:g})", targets[k - 1])
@@ -787,6 +843,7 @@ class RulesRunner(Runner):
         if m.now >= datetime.fromisoformat(self.s["final"]):
             return self._close(m, f"exit time {cfg.holding.exit}")
         if self.s.get("tipplan"):
+            self._tip_updates(m)
             out = self._tip_exits(m)
             if out:
                 return out

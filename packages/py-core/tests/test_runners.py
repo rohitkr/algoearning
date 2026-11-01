@@ -839,6 +839,80 @@ def test_a_tip_as_given_without_a_price_is_skipped_with_the_reason_not_dropped_s
     assert any(n["event"] == "tip_skipped" and "is the price feed logged in" in n["reason"] for n in sim.r.notes)
 
 
+def bare_tip(minute: str = "10:30", index: str = "NIFTY", entry: float = 160.0) -> Any:
+    """The tip as first posted (30 Oct 2026, NIFTY 22900 CE): entry only, its stop-loss and targets not yet."""
+    return replace(the_tip(minute), index=index, entry_low=entry - 4, entry_high=entry, stop_loss=None, targets=(),
+                   complete=False)  # fmt: skip
+
+
+def test_a_tip_as_given_without_a_stop_loss_enters_at_once_with_a_default_one() -> None:
+    """30 Oct 2026: BUY NIFTY 22900 CE @144-148 at 10:47 never got a stop-loss on the channel; waiting for one let
+    it pass (it went on to target 3). It enters at once, stopped 20 points or 10% below the fill, whichever is wider."""
+    sim = TipSim(as_given(4), [bare_tip()])
+    pe = c(25000, "PE", DAY)
+    sim.prices = {pe: 150.0}
+    assert len(sim.at("10:30")) == 4
+    assert sim.r.s["tipplan"]["sl"] == 130.0 and sim.r.s["tipplan"]["targets"] == []
+    assert [n["reason"] for n in sim.r.notes if n["event"] == "tip_default_sl"] == ["entered with default SL 130"]
+    sim.prices[pe] = 220.0
+    assert sim.at("10:35") == []  # no targets yet: only the stop and the exit time
+    sim.prices[pe] = 129.0
+    assert {i.reason for i in sim.at("10:40")} == {"the default stop-loss (130)"}
+
+
+def test_the_default_stop_loss_is_10_percent_of_the_entry_when_that_is_wider() -> None:
+    nifty = TipSim(as_given(4), [bare_tip(entry=300.0)])
+    pe = c(25000, "PE", DAY)
+    nifty.prices = {pe: 300.0}
+    nifty.at("10:30")
+    assert nifty.r.s["tipplan"]["sl"] == 270.0  # 10% (30) beats 20 points
+    spe = Contract("SENSEX", DAY, 25000, "PE").key
+    for price, sl in ((300.0, 260.0), (500.0, 450.0)):  # SENSEX: 40 points, or 10% when wider
+        sensex = TipSim(
+            rr(underlying="SENSEX", entry={"mode": "tip", "at": "09:15", "source_id": SRC, "tip_trade": "as_given"},
+               holding={"mode": "intraday", "exit": "15:15"}, legs=[]),
+            [bare_tip(index="SENSEX", entry=price)],
+        )  # fmt: skip
+        sensex.prices = {spe: price}
+        sensex.at("10:30")
+        assert sensex.r.s["tipplan"]["sl"] == sl
+
+
+def test_the_channels_stop_loss_and_targets_replace_the_defaults_once_posted() -> None:
+    sim = TipSim(as_given(4), [bare_tip()])
+    pe = c(25000, "PE", DAY)
+    sim.prices = {pe: 158.0}
+    assert len(sim.at("10:30")) == 4
+    assert sim.r.s["tipplan"]["sl"] == 138.0
+    sim.tips = [the_tip()]  # the channel posts SL 141 and targets 175 / 190 / 210
+    sim.prices[pe] = 160.0
+    assert sim.at("10:32") == []
+    tp = sim.r.s["tipplan"]
+    assert tp["sl"] == 141.0 and tp["targets"] == [175.0, 190.0, 210.0] and not tp["sl_default"]
+    assert any(n["event"] == "tip_sl_updated" and n["reason"] == "SL updated to 141 from the tip" for n in sim.r.notes)
+    sim.prices[pe] = 176.0
+    (t1,) = sim.at("10:35")
+    assert t1.reason == "target 1 (175)" and sim.r.s["tipplan"]["sl"] == 158.0
+    sim.prices[pe] = 140.0
+    assert {i.reason for i in sim.at("10:40")} == {"stop at cost (158)"}
+
+
+def test_a_tip_without_a_stop_loss_still_keeps_the_age_rule() -> None:
+    sim = TipSim(as_given(4), [bare_tip("10:30")])
+    sim.prices = {c(25000, "PE", DAY): 150.0}
+    assert sim.at("10:34") == []  # 240 s old
+    assert any(n["event"] == "tip_skipped" and "more than 120s" in n["reason"] for n in sim.r.notes)
+
+
+def test_another_indexs_tip_is_neither_traded_nor_streamed() -> None:
+    """29 and 30 Oct 2026: the SENSEX run asked the feed for SENSEX 22900 CE, a NIFTY tip's strike: Kite has no such
+    contract and the whole feed was reported as down ("no live prices")."""
+    sim = TipSim(as_given(4), [bare_tip(index="SENSEX")])
+    sim.prices = {c(25000, "PE", DAY): 150.0}
+    assert not any(Contract.from_key(k).strike == 25000 for k in sim.r.wanted(sim.market("10:30")))
+    assert sim.at("10:30") == []
+
+
 def test_enter_now_starts_todays_trade_after_the_entry_window() -> None:
     """21 Oct 2026: the 15:00 entry was missed (no prices until 15:25): "Enter now" enters at once, once."""
     sim = Sim(rr(entry={"at": "15:00", "until": "15:20"}), day=THU)

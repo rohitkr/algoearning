@@ -257,7 +257,9 @@ class RulesEntry(_Model):
     # tip_trade "as_given": trade the tip's own option (its strike, CE/PE, BUY/SELL; current-week expiry) with
     # tip_lots, only while its price is within the tip's entry range + tip_buffer, and exit on the tip's targets:
     # a quarter at each of TP1-TP3 (lots a multiple of 4; otherwise everything at TP3), the stop moving to cost at
-    # TP1, to TP1 at TP2, to TP2 at TP3, and the last quarter out at TP3 + 20%. The legs are not used.
+    # TP1, to TP1 at TP2, to TP2 at TP3, and the last quarter out at TP3 + 20%. The legs are not used. A NIFTY or
+    # SENSEX tip without a stop-loss yet enters at once with a default one (runners.TIP_DEFAULT_SL_POINTS), replaced by
+    # the channel's when posted; without targets yet only the stop and the exit time apply until they are posted.
     tip_trade: Literal["legs", "as_given"] = "legs"
     tip_lots: int = Field(default=4, ge=1, le=100)
     tip_buffer: float = Field(default=5.0, ge=0, le=100)
