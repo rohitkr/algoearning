@@ -70,6 +70,7 @@ export type PlanAdmin = Schemas["PlanAdminOut"];
 export type MarketSnapshot = Schemas["MarketSnapshot"];
 export type MarketQuote = Schemas["Quote"];
 export type MarketDataAdmin = Schemas["MarketDataAdmin"];
+export type Connections = Schemas["Connections"];
 export type DataSyncCoverage = Schemas["DataSyncCoverage"];
 export type SyncDay = Schemas["SyncDay"];
 export type SyncPlan = Schemas["SyncPlan"];

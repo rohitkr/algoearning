@@ -731,6 +731,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Connections
+         * @description What the page warns about on a trading day, from WARN_FROM to the close: the platform price feed not
+         *     connected, waiting for its daily login or sending no prices while the market is open; and the user's broker
+         *     accounts in use whose login is not active.
+         */
+        get: operations["connections_v1_connections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/market/snapshot": {
         parameters: {
             query?: never;
@@ -1181,10 +1203,31 @@ export interface paths {
         put?: never;
         /**
          * Pause Run
-         * @description Pause: the strategy takes no new trade until resumed. Open positions keep their stop-losses, targets, limits and
-         *     exit time (Stop squares them off).
+         * @description Pause: the strategy is frozen until resumed; the engine sends no order of any kind for it (no entry, no
+         *     stop-loss, target or exit time). Resumed, it carries on from the current prices. Exit now still works.
          */
         post: operations["pause_run_v1_runs__run_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runs/{run_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release Run
+         * @description Stop without squaring off: the run stops and its open legs stay in Zerodha for the user to manage by hand (the
+         *     app books them closed at the current price; no order is sent). Also ends a square-off that is still trying.
+         */
+        post: operations["release_run_v1_runs__run_id__release_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2169,6 +2212,28 @@ export interface components {
             /** Terminal Enabled */
             terminal_enabled?: boolean | null;
         };
+        /**
+         * BrokerConnection
+         * @description A broker account the user trades with whose login is not active (Zerodha's ends every morning).
+         */
+        BrokerConnection: {
+            /** Broker Name */
+            broker_name: string;
+            /** Client Id */
+            client_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "expired" | "disconnected" | "error";
+        };
         /** BrokerInfoOut */
         BrokerInfoOut: {
             /** Available */
@@ -2369,6 +2434,12 @@ export interface components {
             /** Type */
             type: string;
         };
+        /** Connections */
+        Connections: {
+            /** Brokers */
+            brokers: components["schemas"]["BrokerConnection"][];
+            market_data: components["schemas"]["FeedConnection"];
+        };
         /** DataSyncCoverage */
         DataSyncCoverage: {
             /** Days */
@@ -2506,6 +2577,19 @@ export interface components {
             kind: "flag" | "limit";
             /** Label */
             label: string;
+        };
+        /**
+         * FeedConnection
+         * @description The platform price feed as the banner shows it. idle: outside today's trading hours, nothing to warn about.
+         */
+        FeedConnection: {
+            /** Detail */
+            detail?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "ok" | "idle" | "not_connected" | "login_needed" | "no_prices";
         };
         /** FeedInstrument */
         FeedInstrument: {
@@ -8454,6 +8538,80 @@ export interface operations {
             };
         };
     };
+    connections_v1_connections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connections"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     snapshot_v1_market_snapshot_get: {
         parameters: {
             query?: {
@@ -10452,6 +10610,82 @@ export interface operations {
         };
     };
     pause_run_v1_runs__run_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    release_run_v1_runs__run_id__release_post: {
         parameters: {
             query?: never;
             header?: never;

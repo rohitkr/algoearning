@@ -14,7 +14,7 @@ from ae_api.main import create_app
 from ae_api.settings import Settings
 from ae_brokers.zerodha import ZerodhaAdapter
 from ae_core.secrets import new_master_key
-from ae_marketdata.hub import Hub
+from ae_marketdata.hub import HEALTH, Hub
 from ae_marketdata.types import IST, Tick
 from fastapi.testclient import TestClient
 from redis.asyncio import Redis
@@ -194,3 +194,51 @@ def test_admin_pastes_an_access_token_from_another_program(api: TestClient) -> N
     assert kite["account"] == "AB1234" and datetime.fromisoformat(kite["session_expires_at"]) > datetime.now(UTC)
     log = api.get("/v1/admin/audit?action=admin.market_data.kite_session", headers=ADMIN).json()["items"]
     assert len(log) == 1 and "acc-old-app" not in str(log) and "access_token" in str(log)
+
+
+def test_connections_warn_on_a_trading_day_about_the_feed_and_brokers_not_logged_in(
+    api: TestClient, clean_db: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ae_api.routers import market
+
+    tue = datetime(2026, 10, 6, 10, 0, tzinfo=IST)  # a trading day, market open
+    monkeypatch.setattr(market, "_clock", lambda: tue)
+    assert api.get("/v1/connections").status_code == 401
+    assert api.get("/v1/connections", headers=A).json() == {
+        "market_data": {"state": "not_connected", "detail": None},
+        "brokers": [],
+    }  # no feed health yet: the feed is not running
+
+    async def health(hub: Hub, **fields: object) -> None:
+        await hub.r.delete(HEALTH)
+        await hub.set_health(**fields)
+
+    def state() -> dict[str, object]:
+        return api.get("/v1/connections", headers=A).json()["market_data"]  # type: ignore[no-any-return]
+
+    run(lambda hub: health(hub, connected=False, session="login needed", error=None))
+    assert state()["state"] == "login_needed"
+    run(lambda hub: health(hub, connected=False, session="active", error="Kite: connection reset"))
+    assert state() == {"state": "not_connected", "detail": "Kite: connection reset"}
+    run(lambda hub: health(hub, connected=True, session="active", error=None, missing=["SENSEX:2026-11-05:22900:CE"]))
+    assert state()["state"] == "no_prices"  # connected, but no index price for 2 minutes
+    run(lambda hub: hub.publish_tick(Tick("NIFTY", 25010.5, tue - timedelta(seconds=5))))
+    assert state()["state"] == "ok"  # an unlisted contract is not the feed down
+
+    # a broker account used for trading with no login today
+    new = {"broker": "zerodha", "client_id": "ab1234", "label": "Main", "api_key": "kiteapikey1234",
+           "api_secret": "s3cret-value"}  # fmt: skip
+    assert api.post("/v1/broker-accounts", json=new, headers=A).status_code == 201
+    (b,) = api.get("/v1/connections", headers=A).json()["brokers"] or [None]
+    assert b is None  # switched off for trading: nothing to warn about
+    e = create_engine(clean_db)
+    with e.begin() as conn:
+        conn.execute(text("UPDATE broker_accounts SET engine_enabled = true"))
+    e.dispose()
+    (b,) = api.get("/v1/connections", headers=A).json()["brokers"]
+    assert (b["client_id"], b["status"], b["broker_name"]) == ("AB1234", "disconnected", "Zerodha")
+
+    sun = datetime(2026, 10, 4, 10, 0, tzinfo=IST)
+    monkeypatch.setattr(market, "_clock", lambda: sun)
+    assert api.get("/v1/connections", headers=A).json() == {"market_data": {"state": "idle", "detail": None},
+                                                             "brokers": []}  # fmt: skip

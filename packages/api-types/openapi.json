@@ -1297,6 +1297,53 @@
         "title": "BrokerAccountPatch",
         "type": "object"
       },
+      "BrokerConnection": {
+        "description": "A broker account the user trades with whose login is not active (Zerodha's ends every morning).",
+        "properties": {
+          "broker_name": {
+            "title": "Broker Name",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "status": {
+            "enum": [
+              "expired",
+              "disconnected",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "broker_name",
+          "client_id",
+          "label",
+          "status"
+        ],
+        "title": "BrokerConnection",
+        "type": "object"
+      },
       "BrokerInfoOut": {
         "properties": {
           "available": {
@@ -1810,6 +1857,26 @@
         "title": "ConfigIssue",
         "type": "object"
       },
+      "Connections": {
+        "properties": {
+          "brokers": {
+            "items": {
+              "$ref": "#/components/schemas/BrokerConnection"
+            },
+            "title": "Brokers",
+            "type": "array"
+          },
+          "market_data": {
+            "$ref": "#/components/schemas/FeedConnection"
+          }
+        },
+        "required": [
+          "market_data",
+          "brokers"
+        ],
+        "title": "Connections",
+        "type": "object"
+      },
       "DataSyncCoverage": {
         "properties": {
           "days": {
@@ -2201,6 +2268,38 @@
           "label"
         ],
         "title": "FeatureInfo",
+        "type": "object"
+      },
+      "FeedConnection": {
+        "description": "The platform price feed as the banner shows it. idle: outside today's trading hours, nothing to warn about.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "state": {
+            "enum": [
+              "ok",
+              "idle",
+              "not_connected",
+              "login_needed",
+              "no_prices"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "FeedConnection",
         "type": "object"
       },
       "FeedInstrument": {
@@ -13335,6 +13434,88 @@
         ]
       }
     },
+    "/v1/connections": {
+      "get": {
+        "description": "What the page warns about on a trading day, from WARN_FROM to the close: the platform price feed not\nconnected, waiting for its daily login or sending no prices while the market is open; and the user's broker\naccounts in use whose login is not active.",
+        "operationId": "connections_v1_connections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connections"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Connections",
+        "tags": [
+          "market"
+        ]
+      }
+    },
     "/v1/market/snapshot": {
       "get": {
         "operationId": "snapshot_v1_market_snapshot_get",
@@ -16045,7 +16226,7 @@
     },
     "/v1/runs/{run_id}/pause": {
       "post": {
-        "description": "Pause: the strategy takes no new trade until resumed. Open positions keep their stop-losses, targets, limits and\nexit time (Stop squares them off).",
+        "description": "Pause: the strategy is frozen until resumed; the engine sends no order of any kind for it (no entry, no\nstop-loss, target or exit time). Resumed, it carries on from the current prices. Exit now still works.",
         "operationId": "pause_run_v1_runs__run_id__pause_post",
         "parameters": [
           {
@@ -16132,6 +16313,100 @@
           }
         },
         "summary": "Pause Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/v1/runs/{run_id}/release": {
+      "post": {
+        "description": "Stop without squaring off: the run stops and its open legs stay in Zerodha for the user to manage by hand (the\napp books them closed at the current price; no order is sent). Also ends a square-off that is still trying.",
+        "operationId": "release_run_v1_runs__run_id__release_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Sign in required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unavailable"
+          }
+        },
+        "summary": "Release Run",
         "tags": [
           "runs"
         ]

@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { ApiStatus } from "@/components/api-status";
+import { ConnectionWarnings } from "@/components/connection-warnings";
 import { Logo } from "@/components/logo";
 import { MarketTicker } from "@/components/market-ticker";
 import { MobileNav } from "@/components/mobile-nav";
@@ -67,6 +68,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <UserButton />
         </StickyHeader>
         <MobileNav isAdmin={isAdmin} />
+        <ConnectionWarnings isAdmin={isAdmin} />
         {liveRuns > 0 && (
           <Link
             href="/runs"

@@ -10,7 +10,10 @@ from urllib.parse import parse_qs, urlsplit
 from ae_brokers.base import BrokerError, BrokerSession, Credentials
 from ae_brokers.zerodha import next_token_expiry
 from ae_core.secrets import SecretBox
-from ae_db.models import Instrument
+from ae_db.enums import RunStatus
+from ae_db.models import BrokerAccount, Instrument, StrategyRun
+from ae_db.models import BrokerSession as SessionRow
+from ae_marketdata.backfill import calendar_holidays
 from ae_marketdata.hub import Hub
 from ae_marketdata.session import (
     BREEZE_SESSION,
@@ -27,11 +30,14 @@ from fastapi import APIRouter, Query, Request
 from sqlalchemy import select
 
 from ..audit import audit
-from ..deps import CurrentUser, DbDep
+from ..deps import CurrentUser, DbDep, UserSession
 from ..errors import AppError, Unavailable
 from ..schemas import (
     ERROR_RESPONSES,
     BreezeSessionIn,
+    BrokerConnection,
+    Connections,
+    FeedConnection,
     FeedInstrument,
     FeedLogin,
     KiteSessionIn,
@@ -41,9 +47,13 @@ from ..schemas import (
 )
 from ..settings import SettingsDep
 from .admin import Admin
+from .brokers import _status
 
 router = APIRouter(tags=["market"], responses=ERROR_RESPONSES)
 STALE = timedelta(minutes=2)
+INDEXES = ("NIFTY", "SENSEX")  # prices that always stream while the feed is up
+ACTIVE_RUNS = (RunStatus.PENDING, RunStatus.RUNNING, RunStatus.STOPPING)
+WARN_FROM = "08:00"  # connection warnings start this long before the open on a trading day
 
 
 def _hub(request: Request) -> Hub:
@@ -119,6 +129,68 @@ async def snapshot(
     )
 
 
+def _clock() -> datetime:
+    return datetime.now(IST)
+
+
+def _unlisted(health: dict[str, Any]) -> str | None:
+    missing = list(health.get("missing") or [])
+    if not missing:
+        return None
+    return "not in Kite's instrument list: " + ", ".join(missing[:3]) + ("..." if len(missing) > 3 else "")
+
+
+@router.get("/v1/connections", response_model=Connections)
+async def connections(user: CurrentUser, request: Request, db: DbDep, s: UserSession) -> Connections:
+    """What the page warns about on a trading day, from WARN_FROM to the close: the platform price feed not
+    connected, waiting for its daily login or sending no prices while the market is open; and the user's broker
+    accounts in use whose login is not active."""
+    local = _clock()
+    async with db.system_session() as ss:
+        hours = (await ss.execute(select(Instrument.session_open, Instrument.session_close)
+                                  .where(Instrument.is_active.is_(True)))).all()  # fmt: skip
+    t = f"{local:%H:%M}"
+    first = min((a for a, _ in hours), default="09:15")
+    last = max((b for _, b in hours), default="15:30")
+    trading_day = local.weekday() < 5 and local.date() not in calendar_holidays()
+    if not trading_day or not WARN_FROM <= t <= last:
+        return Connections(market_data=FeedConnection(state="idle"), brokers=[])
+
+    redis = getattr(request.app.state, "redis", None)
+    feed = FeedConnection(state="not_connected", detail="the price feed is not running")
+    if redis is not None:
+        hub = Hub(redis)
+        health = await hub.health()
+        if health.get("simulated"):
+            feed = FeedConnection(state="ok")
+        elif health.get("session") == "login needed":
+            feed = FeedConnection(state="login_needed")
+        elif not health.get("connected") or health.get("error"):
+            feed = FeedConnection(state="not_connected", detail=health.get("error"))
+        elif t >= first:
+            ticks = await hub.last(INDEXES)
+            fresh = any(local - k.ts < STALE for k in ticks.values())
+            feed = FeedConnection(state="ok") if fresh else FeedConnection(state="no_prices")
+        else:
+            feed = FeedConnection(state="ok")
+
+    rows = (await s.execute(select(BrokerAccount).where(BrokerAccount.user_id == user.user_id)
+                            .order_by(BrokerAccount.created_at))).scalars().all()  # fmt: skip
+    sessions = {x.broker_account_id: x for x in (await s.execute(select(SessionRow))).scalars()}
+    live = set((await s.execute(select(StrategyRun.broker_account_id).where(
+        StrategyRun.user_id == user.user_id, StrategyRun.status.in_(ACTIVE_RUNS)))).scalars())  # fmt: skip
+    adapters = request.app.state.brokers
+    brokers = []
+    for a in rows:
+        st = _status(a, sessions.get(a.id), local)
+        if st == "connected" or not (a.engine_enabled or a.terminal_enabled or a.id in live):
+            continue  # an account not used for trading needs no login
+        name = adapters[a.broker.value].info.name if a.broker.value in adapters else a.broker.value.title()
+        brokers.append(BrokerConnection(id=a.id, broker_name=name, client_id=a.client_id, label=a.label,
+                                        status=st))  # type: ignore[arg-type]  # fmt: skip
+    return Connections(market_data=feed, brokers=brokers)
+
+
 @router.get("/v1/admin/market-data", response_model=MarketDataAdmin)
 async def market_data_admin(_: Admin, request: Request, db: DbDep, settings: SettingsDep) -> MarketDataAdmin:
     hub = _hub(request)
@@ -158,7 +230,7 @@ async def market_data_admin(_: Admin, request: Request, db: DbDep, settings: Set
         connected=bool(health.get("connected")),
         session=health.get("session"),
         logins=logins,
-        error=health.get("error"),
+        error=health.get("error") or _unlisted(health),
         wanted=int(health.get("wanted") or 0),
         subscribed=int(health.get("subscribed") or 0),
         api_calls_today=await hub.api_calls_today(),

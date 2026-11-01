@@ -167,6 +167,8 @@ class Engine:
         self.forced: dict[uuid.UUID, datetime] = {}  # runs where "Enter now" was pressed (a paused one included)
         self.feed_down_since: datetime | None = None
         self.feed_alerted: date | None = None
+        self.unlisted: set[str] = set()  # contracts the feed was asked for that its broker does not list
+        self.unlisted_noted: set[tuple[uuid.UUID, str, date]] = set()  # (run, contract, day): told once a day
         self.prices: dict[str, float] = {}  # latest feed prices, for live limit pricing between steps
         self.tick_ts: dict[str, datetime] = {}  # when each of those prices was last quoted
         self.recover: set[uuid.UUID] = set()  # live runs whose in-flight orders must be looked up after a restart
@@ -207,6 +209,8 @@ class Engine:
                 log.info("run reloaded with the edited strategy", run_id=str(r.id))
         if any(r.mode == TradingMode.LIVE for r in runs):
             await self._ensure_book(now.date())
+        health = await self.hub.health()
+        self.unlisted = set(health.get("missing") or [])
         by_user: dict[uuid.UUID, list[StrategyRun]] = defaultdict(list)
         for r in runs:
             by_user[r.user_id].append(r)
@@ -220,17 +224,20 @@ class Engine:
                     self.runners.pop(r.id, None)
         if wanted:
             await self.hub.want(wanted)
-        await self._watch_feed(runs, insts, now)
+        await self._watch_feed(runs, insts, now, health)
         return len(runs)
 
-    async def _watch_feed(self, runs: list[StrategyRun], insts: dict[str, Inst], now: datetime) -> None:
+    async def _watch_feed(
+        self, runs: list[StrategyRun], insts: dict[str, Inst], now: datetime, health: dict[str, Any]
+    ) -> None:
         """No price feed while the market is open and strategies run (no market-data login today, the feed down):
-        nothing can enter or be judged on live prices. Tell each of their users once a day, on the run log too."""
+        nothing can enter or be judged on live prices. Tell each of their users once a day, on the run log too. A
+        contract the feed's broker does not list is not the feed being down: only the run that wants it hears of it
+        (_note_unlisted)."""
         open_runs = [r for r in runs if (i := insts.get(self._underlying(r))) is not None and self.in_session(i, now)]
         if not open_runs:
             self.feed_down_since = None
             return
-        health = await self.hub.health()
         if health.get("connected") and not health.get("error"):
             self.feed_down_since = None
             return
@@ -332,7 +339,9 @@ class Engine:
             for r in runs:
                 m = markets.get(self._underlying(r))
                 if m is not None:
-                    wanted |= runners[r.id].wanted(m)
+                    keys = runners[r.id].wanted(m)
+                    wanted |= keys
+                    self._note_unlisted(s, r, keys, now)
                 # orders still being worked: their limit is re-priced from these prices (and the feed keeps them
                 # subscribed), so a contract being bought or sold must stay wanted until its order is done
                 wanted |= {d["contract"] for d in r.state.get("_inflight", [])}
@@ -969,6 +978,22 @@ class Engine:
         if intent.kind == "exit":
             detail["pnl"] = p.pnl()
         self._event(s, r, "entry" if intent.kind == "entry" else "exit", trade_id=pid, **detail)
+
+    def _note_unlisted(self, s: AsyncSession, r: StrategyRun, keys: set[str], now: datetime) -> None:
+        """This run wants a contract the price feed cannot stream (its broker does not list it): no price will come
+        for it. Said once a day per contract on the run's log, and only there."""
+        day = now.astimezone(IST).date()
+        self.unlisted_noted = {n for n in self.unlisted_noted if n[2] == day}
+        for k in sorted(keys & self.unlisted):
+            if (r.id, k, day) in self.unlisted_noted:
+                continue
+            self.unlisted_noted.add((r.id, k, day))
+            try:
+                label = Contract.from_key(k).label
+            except ValueError:
+                label = k
+            self._event(s, r, "contract_not_listed", level="WARNING", contract=k,
+                        reason=f"{label} is not listed on Kite: no price will come for it")  # fmt: skip
 
     def _event(
         self,

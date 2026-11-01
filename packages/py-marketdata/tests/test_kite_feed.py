@@ -187,7 +187,7 @@ async def test_kite_waits_for_a_session_then_streams(source: Any) -> None:
     ws = kite.sockets[0]
     assert ws.sent == [{"a": "subscribe", "v": [NIFTY_T, OPT_T]}, {"a": "mode", "v": ["full", [NIFTY_T, OPT_T]]}]
     assert src.status() | {"last_message": None} == {
-        "connected": True, "session": "active", "subscribed": 2, "last_message": None, "error": None,
+        "connected": True, "session": "active", "subscribed": 2, "last_message": None, "error": None, "missing": [],
     }  # fmt: skip
 
     ws.inbox.put_nowait(b"\x00")  # heartbeat
@@ -209,7 +209,8 @@ async def test_kite_waits_for_a_session_then_streams(source: Any) -> None:
     ]
 
     await src.sync({InstrumentKey("NIFTY"), InstrumentKey("NIFTY", date(2026, 9, 1), 24000, "CE")})
-    assert "not in Kite's instrument list: NIFTY:2026-09-01:24000:CE" in src.status()["error"]  # expired
+    assert src.status()["missing"] == ["NIFTY:2026-09-01:24000:CE"]  # expired
+    assert src.status()["error"] is None  # the feed itself is fine
 
     ws.inbox.put_nowait(json.dumps({"type": "error", "data": "too many instruments"}))
     await settle()

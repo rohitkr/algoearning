@@ -391,6 +391,29 @@ async def test_no_price_feed_while_strategies_run_is_told_once_a_day(env: Any) -
     assert len(notes) == 1 and "no Kite session today" in notes[0].body and len(events) == 1
 
 
+async def test_a_contract_kite_does_not_list_warns_its_run_only_and_is_not_the_feed_down(env: Any) -> None:
+    """30 Oct 2026: one unlisted contract (SENSEX 22900 CE) was reported as no live prices on every run."""
+    from datetime import timedelta
+
+    from ae_db.models import Notification
+
+    db, hub, ids = env
+    rid = await add_run(db, ids)
+    await hub.set_health(connected=True, session="active", error=None, missing=[CE])
+    clock = [at("09:20")]
+    eng = Engine(db, hub, now=lambda: clock[0])
+    for _ in range(3):
+        await prices(hub, clock[0], 25010, None)
+        await eng.tick()
+        clock[0] += timedelta(minutes=3)
+    async with db.system_session() as s:
+        notes = list((await s.execute(select(Notification).where(Notification.event == "prices_stale"))).scalars())
+        evs = list((await s.execute(select(TradeEvent).where(TradeEvent.run_id == rid))).scalars())
+    assert notes == [] and not any(e.event == "no_live_prices" for e in evs)
+    (unlisted,) = [e for e in evs if e.event == "contract_not_listed"]
+    assert unlisted.level == "WARNING" and "is not listed on Kite" in unlisted.detail["reason"]
+
+
 async def test_enter_now_is_taken_from_redis_once(env: Any) -> None:
     db, hub, ids = env
     rid = await add_run(db, ids)

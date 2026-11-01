@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { ConnectionWarnings } from "@/components/connection-warnings";
 import { Logo } from "@/components/logo";
 import { StickyHeader } from "@/components/sticky-header";
 import { MonitorNav } from "@/components/monitor/monitor-nav";
@@ -40,6 +41,7 @@ export default async function MonitorLayout({ children }: { children: ReactNode 
           <MonitorNav />
         </div>
       </StickyHeader>
+      <ConnectionWarnings isAdmin />
       <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-8">{children}</main>
     </div>
   );

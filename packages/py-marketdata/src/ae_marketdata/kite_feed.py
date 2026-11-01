@@ -370,16 +370,15 @@ class KiteSource:
 
     def status(self) -> dict[str, Any]:
         active = self.token is not None and self.token != self.rejected
-        error = self.error
-        if error is None and self.missing:
-            shown = ", ".join(self.missing[:3]) + ("..." if len(self.missing) > 3 else "")
-            error = f"not in Kite's instrument list: {shown}"
         return {
             "connected": self.ws is not None,
             "session": "active" if active else "login needed",
             "subscribed": len(self.sent),
             "last_message": self.last_message.isoformat() if self.last_message else None,
-            "error": error,
+            "error": self.error,
+            # contracts asked for that Kite does not list: no price for them, but the feed itself is fine (30 Oct
+            # 2026: one such contract was reported as the whole feed down for every run)
+            "missing": self.missing[:20],
         }
 
 

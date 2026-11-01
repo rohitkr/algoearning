@@ -628,6 +628,28 @@ class MarketSnapshot(BaseModel):
     market_open: bool  # the exchange is trading right now (weekday, within the instruments' trading hours)
 
 
+class FeedConnection(BaseModel):
+    """The platform price feed as the banner shows it. idle: outside today's trading hours, nothing to warn about."""
+
+    state: Literal["ok", "idle", "not_connected", "login_needed", "no_prices"]
+    detail: str | None = None
+
+
+class BrokerConnection(BaseModel):
+    """A broker account the user trades with whose login is not active (Zerodha's ends every morning)."""
+
+    id: uuid.UUID
+    broker_name: str
+    client_id: str
+    label: str | None
+    status: Literal["expired", "disconnected", "error"]
+
+
+class Connections(BaseModel):
+    market_data: FeedConnection
+    brokers: list[BrokerConnection]  # only the ones not connected, on a trading day
+
+
 class FeedInstrument(BaseModel):
     code: str
     ltp: float | None
