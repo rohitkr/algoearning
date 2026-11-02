@@ -37,6 +37,7 @@ BACKFILL_FROM = datetime(2026, 7, 9, tzinfo=timezone(timedelta(hours=5, minutes=
 LIVE_WINDOW = timedelta(days=3)  # signals rebuilt on each new message (tips are intraday)
 SYNC_S = 5
 RETRY_S = (5, 15, 30, 60, 120, 300)
+HEAL_S = 5  # the recent signals are rebuilt from the stored messages this often while a source is read
 STORE_RETRY_S = (1, 3)  # a live message that could not be stored is tried again after these pauses
 CHANNEL = "signals"
 
@@ -143,12 +144,14 @@ class SignalsService:
                                 reader_detail="no Telegram app configured for this source")  # fmt: skip
                 return
             reader = self.reader_factory(*creds)
+            heal: asyncio.Task[None] | None = None
             try:
                 await self._set(plan.source_id, reader_state="connecting", reader_detail=None)
                 await reader.start(plan.chat_id)
                 await self.store(plan, await reader.recent(CATCH_UP, since=BACKFILL_FROM), since=None, force=True)
                 await self._set(plan.source_id, reader_state="listening", reader_detail=None)
                 attempt = 0
+                heal = asyncio.create_task(self._heal(plan), name=f"signals-heal-{plan.source_id}")
                 await reader.listen(lambda m: self._live(plan, m))
                 raise ConnectionError("the Telegram connection ended")
             except asyncio.CancelledError:
@@ -173,7 +176,21 @@ class SignalsService:
                 )
                 await asyncio.sleep(pause)  # fmt: skip
             finally:
+                if heal is not None:
+                    heal.cancel()
+                    await asyncio.gather(heal, return_exceptions=True)
                 await reader.close()
+
+    async def _heal(self, plan: Plan) -> None:
+        """Rebuild the recent signals from the stored messages every few seconds while listening: a signal stored
+        wrong (2 Nov 2026: a tip saved without its stop-loss until the channel's next message, 6 minutes later) is
+        right again within HEAL_S instead of waiting for the next message."""
+        while True:
+            await asyncio.sleep(HEAL_S)
+            try:
+                await self.store(plan, [], since=datetime.now(UTC) - LIVE_WINDOW, force=True)
+            except Exception:
+                log.exception("signals rebuild failed", source=str(plan.source_id))
 
     async def _live(self, plan: Plan, message: TgMessage) -> None:
         """A message as it arrives. Telegram's client drops a failing handler's error without a word (30 Oct 2026: a

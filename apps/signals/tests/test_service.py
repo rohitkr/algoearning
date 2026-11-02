@@ -144,6 +144,31 @@ async def test_a_tip_and_its_details_arriving_together_make_one_complete_signal(
     assert (sig.complete, sig.stop_loss, sig.targets) == (True, 135, [169, 184, 204])
 
 
+async def test_a_signal_stored_wrong_is_rebuilt_within_seconds(
+    db: Database, setup: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ae_db.signal_store import save_messages
+    from ae_signals import service as svc
+
+    monkeypatch.setattr(svc, "HEAL_S", 0.05)
+    service, sid, _ = setup
+    FakeReader.history = [m(1, 0, HEADER)]
+    await service.sync()
+    await eventually(lambda: _state(db, sid, "listening"))
+    (sig,) = await rows(db, SignalRow, sid)
+    assert not sig.complete
+    async with db.system_session() as s:  # the stop-loss message saved, but the signals not rebuilt
+        src = await s.get(SignalSource, sid)
+        assert src is not None
+        await save_messages(s, src, [svc.Message(2, T0 + timedelta(seconds=2), DETAILS, 1)], {})
+
+    async def healed() -> bool:
+        (sig,) = await rows(db, SignalRow, sid)
+        return bool(sig.complete and sig.stop_loss == 135)
+
+    await eventually(healed)
+
+
 async def test_a_restart_rebuilds_signals_from_the_stored_messages(db: Database, setup: Any) -> None:
     """A better parser must re-read messages stored earlier: nothing changed on Telegram, signals still come back."""
     from sqlalchemy import delete
