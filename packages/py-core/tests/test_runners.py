@@ -846,8 +846,9 @@ def bare_tip(minute: str = "10:30", index: str = "NIFTY", entry: float = 160.0) 
 
 
 def test_a_tip_as_given_without_a_stop_loss_enters_at_once_with_a_default_one() -> None:
-    """30 Oct 2026: BUY NIFTY 22900 CE @144-148 at 10:47 never got a stop-loss on the channel; waiting for one let
-    it pass (it went on to target 3). It enters at once, stopped 20 points or 10% below the fill, whichever is wider."""
+    """A tip whose stop-loss has not reached us (30 Oct 2026: BUY NIFTY 22900 CE @144-148; the channel posted its
+    stop-loss 2 s later but that message was not stored, and the tip that went on to target 3 was skipped). It enters
+    at once, stopped 20 points or 10% below the fill, whichever is wider."""
     sim = TipSim(as_given(4), [bare_tip()])
     pe = c(25000, "PE", DAY)
     sim.prices = {pe: 150.0}
