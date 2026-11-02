@@ -129,6 +129,21 @@ async def test_catch_up_then_live_messages(db: Database, setup: Any) -> None:
     assert (await source(db, sid)).last_message_at == T0 + timedelta(seconds=300)
 
 
+async def test_a_tip_and_its_details_arriving_together_make_one_complete_signal(db: Database, setup: Any) -> None:
+    """2 Nov 2026: the header and its stop-loss message came in the same second; Telegram hands each to its own task,
+    both saved at once and neither rebuild saw the other's message: the tip stayed incomplete for 6 minutes, until
+    the next message, and was too old to trade by then. (30 Oct: the stop-loss message was lost altogether.)"""
+    service, sid, _ = setup
+    FakeReader.history = []
+    await service.sync()
+    await eventually(lambda: _state(db, sid, "listening"))
+    reader = FakeReader.instances[0]
+    assert reader.deliver is not None
+    await asyncio.gather(reader.deliver(m(1, 0, HEADER)), reader.deliver(m(2, 2, DETAILS, 1)))
+    (sig,) = await rows(db, SignalRow, sid)
+    assert (sig.complete, sig.stop_loss, sig.targets) == (True, 135, [169, 184, 204])
+
+
 async def test_a_restart_rebuilds_signals_from_the_stored_messages(db: Database, setup: Any) -> None:
     """A better parser must re-read messages stored earlier: nothing changed on Telegram, signals still come back."""
     from sqlalchemy import delete

@@ -37,6 +37,7 @@ BACKFILL_FROM = datetime(2026, 7, 9, tzinfo=timezone(timedelta(hours=5, minutes=
 LIVE_WINDOW = timedelta(days=3)  # signals rebuilt on each new message (tips are intraday)
 SYNC_S = 5
 RETRY_S = (5, 15, 30, 60, 120, 300)
+STORE_RETRY_S = (1, 3)  # a live message that could not be stored is tried again after these pauses
 CHANNEL = "signals"
 
 
@@ -80,6 +81,9 @@ class SignalsService:
         self.db, self.box, self.platform_app, self.publisher = db, box, platform_app, publisher
         self.reader_factory = reader_factory
         self.tasks: dict[uuid.UUID, tuple[Plan, asyncio.Task[None]]] = {}
+        # one store at a time per source: Telegram hands every message to its own task, and two saved at once (a tip
+        # and its stop-loss, in the same second) each rebuilt the signals without the other's message (2 Nov 2026)
+        self.locks: dict[uuid.UUID, asyncio.Lock] = {}
 
     # -- which sources to read ------------------------------------------------------------------------------------
     async def plans(self) -> dict[uuid.UUID, Plan]:
@@ -145,7 +149,7 @@ class SignalsService:
                 await self.store(plan, await reader.recent(CATCH_UP, since=BACKFILL_FROM), since=None, force=True)
                 await self._set(plan.source_id, reader_state="listening", reader_detail=None)
                 attempt = 0
-                await reader.listen(lambda m: self.store(plan, [m], since=datetime.now(UTC) - LIVE_WINDOW))
+                await reader.listen(lambda m: self._live(plan, m))
                 raise ConnectionError("the Telegram connection ended")
             except asyncio.CancelledError:
                 await self._set(plan.source_id, reader_state="off", reader_detail=None)
@@ -171,11 +175,28 @@ class SignalsService:
             finally:
                 await reader.close()
 
+    async def _live(self, plan: Plan, message: TgMessage) -> None:
+        """A message as it arrives. Telegram's client drops a failing handler's error without a word (30 Oct 2026: a
+        tip's stop-loss message was never stored, until the reader next started): try again, then log it."""
+        for pause in (*STORE_RETRY_S, None):
+            try:
+                await self.store(plan, [message], since=datetime.now(UTC) - LIVE_WINDOW)
+                return
+            except Exception:
+                if pause is None:
+                    log.exception("could not store a message", source=str(plan.source_id), msg_id=message.id)
+                    return
+                await asyncio.sleep(pause)
+
     async def store(self, plan: Plan, messages: list[TgMessage], since: datetime | None, force: bool = False) -> int:
         """Store messages (new or edited) and, if anything changed, rebuild the source's signals. `force` rebuilds
         even when nothing changed: at reader start, so a better parser re-reads messages stored earlier."""
         if not messages and not force:
             return 0
+        async with self.locks.setdefault(plan.source_id, asyncio.Lock()):
+            return await self._store(plan, messages, since, force)
+
+    async def _store(self, plan: Plan, messages: list[TgMessage], since: datetime | None, force: bool) -> int:
         msgs = [Message(m.id, m.date, m.text, m.reply_to, m.has_media) for m in messages]
         async with self.db.system_session() as s:
             src = await s.get(SignalSource, plan.source_id)
