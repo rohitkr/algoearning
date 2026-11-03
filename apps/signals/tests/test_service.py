@@ -169,6 +169,28 @@ async def test_a_signal_stored_wrong_is_rebuilt_within_seconds(
     await eventually(healed)
 
 
+async def test_a_tip_telegram_never_pushed_is_found_by_polling_the_chat(
+    db: Database, setup: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """3 Nov 2026: a tip and its stop-loss (09:43:00 and :02) never came through Telegram's pushed updates; they were
+    stored only at 15:52 after a restart. The chat is read every few seconds as well."""
+    from ae_signals import service as svc
+
+    monkeypatch.setattr(svc, "POLL_S", 0.05)
+    service, sid, pub = setup
+    FakeReader.history = []
+    await service.sync()
+    await eventually(lambda: _state(db, sid, "listening"))
+    FakeReader.history = [m(1, 0, HEADER), m(2, 2, DETAILS, 1)]  # in the chat, never delivered to listen()
+
+    async def found() -> bool:
+        sigs = await rows(db, SignalRow, sid)
+        return bool(sigs and sigs[0].complete and sigs[0].stop_loss == 135)
+
+    await eventually(found)
+    assert any(p[1]["signals"] == [1] for p in pub.sent)  # the engine is told, like for a pushed message
+
+
 async def test_a_restart_rebuilds_signals_from_the_stored_messages(db: Database, setup: Any) -> None:
     """A better parser must re-read messages stored earlier: nothing changed on Telegram, signals still come back."""
     from sqlalchemy import delete

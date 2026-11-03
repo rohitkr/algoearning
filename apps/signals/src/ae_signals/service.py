@@ -37,6 +37,8 @@ BACKFILL_FROM = datetime(2026, 7, 9, tzinfo=timezone(timedelta(hours=5, minutes=
 LIVE_WINDOW = timedelta(days=3)  # signals rebuilt on each new message (tips are intraday)
 SYNC_S = 5
 RETRY_S = (5, 15, 30, 60, 120, 300)
+POLL_S = 5  # the chat's newest messages are read this often while a source is read
+POLL_LIMIT = 40  # how many of the newest messages each time: more than a tip's messages in any 5 s
 HEAL_S = 5  # the recent signals are rebuilt from the stored messages this often while a source is read
 STORE_RETRY_S = (1, 3)  # a live message that could not be stored is tried again after these pauses
 CHANNEL = "signals"
@@ -144,14 +146,17 @@ class SignalsService:
                                 reader_detail="no Telegram app configured for this source")  # fmt: skip
                 return
             reader = self.reader_factory(*creds)
-            heal: asyncio.Task[None] | None = None
+            watchers: list[asyncio.Task[None]] = []
             try:
                 await self._set(plan.source_id, reader_state="connecting", reader_detail=None)
                 await reader.start(plan.chat_id)
                 await self.store(plan, await reader.recent(CATCH_UP, since=BACKFILL_FROM), since=None, force=True)
                 await self._set(plan.source_id, reader_state="listening", reader_detail=None)
                 attempt = 0
-                heal = asyncio.create_task(self._heal(plan), name=f"signals-heal-{plan.source_id}")
+                watchers = [
+                    asyncio.create_task(self._heal(plan), name=f"signals-heal-{plan.source_id}"),
+                    asyncio.create_task(self._poll(plan, reader), name=f"signals-poll-{plan.source_id}"),
+                ]
                 await reader.listen(lambda m: self._live(plan, m))
                 raise ConnectionError("the Telegram connection ended")
             except asyncio.CancelledError:
@@ -176,10 +181,24 @@ class SignalsService:
                 )
                 await asyncio.sleep(pause)  # fmt: skip
             finally:
-                if heal is not None:
-                    heal.cancel()
-                    await asyncio.gather(heal, return_exceptions=True)
+                for w in watchers:
+                    w.cancel()
+                await asyncio.gather(*watchers, return_exceptions=True)
                 await reader.close()
+
+    async def _poll(self, plan: Plan, reader: Reader) -> None:
+        """Read the chat's newest messages every POLL_S seconds and store what is new or edited. Telegram's pushed
+        updates reach this reader in batches about once a minute and sometimes not at all (3 Nov 2026: a tip and its
+        stop-loss, posted 09:43:00 and 09:43:02, were stored only at 15:52 after a restart, and the trade was
+        missed): the push stays, this makes the tip arrive within seconds whatever the push does."""
+        while True:
+            await asyncio.sleep(POLL_S)
+            try:
+                await self.store(plan, await reader.recent(POLL_LIMIT), since=datetime.now(UTC) - LIVE_WINDOW)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.warning("polling the chat failed", source=str(plan.source_id), error=type(exc).__name__)
 
     async def _heal(self, plan: Plan) -> None:
         """Rebuild the recent signals from the stored messages every few seconds while listening: a signal stored
