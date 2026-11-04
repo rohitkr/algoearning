@@ -134,3 +134,57 @@ async def test_an_exit_never_sells_more_than_zerodha_holds() -> None:
     out = await acct.process(Batch(__import__("uuid").uuid4(), two, "MIS", False, 1800))
     assert [o.ok for o in out] == [True, True] and k.net["NIFTY26O0625000CE"] == 0  # one lot sold, never two
     assert "already closed" in out[1].message
+
+
+def quarters(
+    side: str = "BUY", kind: str = "entry", key: str | None = "11111111-1111-4111-8111-111111111111"
+) -> list[Intent]:
+    """The four quarters of a tip traded as given: four positions that go to the broker as one order."""
+    out = [Intent(kind, side, SHORT, 1, 65, "tip", f"T{n}", order_key=key) for n in (1, 2, 3, 4)]  # type: ignore[arg-type]
+    return out
+
+
+async def test_the_quarters_of_a_tip_enter_as_one_order() -> None:
+    """4 Nov 2026: a tip of 4 lots was bought as four orders of 1 lot (four brokerage charges)."""
+    from ae_engine.live import allocate, order_units
+
+    k = FakeKite(prices={"NIFTY26O0625000CE": 100.0})
+    acct = account(k, {SHORT.key: 100.0})
+    out = await acct.process(Batch(__import__("uuid").uuid4(), quarters(), "MIS", False, 1800))
+    assert [x[0] for x in k.log] == ["place"]  # ONE order for 4 lots
+    (order,) = k.orders.values()
+    assert order["quantity"] == 260 and order["tag"] == tag_for("11111111-1111-4111-8111-111111111111")
+    assert [o.ok for o in out] == [True] * 4 and {o.filled for o in out} == {65}
+    assert [bool(o.order_ids) for o in out] == [True, False, False, False]  # the order id is unique per account
+    assert k.net == {"NIFTY26O0625000CE": 260}
+    assert allocate(150, [65, 65, 65, 65]) == [65, 65, 20, 0]
+    assert [len(u) for u in order_units([*quarters(), entry(WING, "BUY")])] == [4, 1]  # others stay one each
+
+
+async def test_a_refused_tip_order_fails_every_quarter_and_nothing_is_left_open() -> None:
+    k = FakeKite(prices={"NIFTY26O0625000CE": 100.0}, reject={"NIFTY26O0625000CE"})
+    out = await account(k, {SHORT.key: 100.0}).process(
+        Batch(__import__("uuid").uuid4(), quarters(), "MIS", False, 1800)
+    )
+    assert [o.ok for o in out] == [False] * 4 and "RMS" in out[0].message
+    assert k.net.get("NIFTY26O0625000CE", 0) == 0
+
+
+async def test_quarters_closed_together_are_one_sell_order_and_never_sell_more_than_held() -> None:
+    k = FakeKite(prices={"NIFTY26O0625000CE": 100.0})
+    k.net = {"NIFTY26O0625000CE": 195}  # three of the four lots are left in Zerodha
+    acct = account(k, {SHORT.key: 100.0})
+    out = await acct.process(Batch(__import__("uuid").uuid4(), quarters("SELL", "exit"), "MIS", False, 1800))
+    assert [x[0] for x in k.log if x[0] == "place"] == ["place"] and k.net["NIFTY26O0625000CE"] == 0
+    assert [o.ok for o in out] == [True] * 4
+    assert [o.filled for o in out] == [65, 65, 65, 0] and "already closed" in out[3].message
+
+
+async def test_a_restart_finds_a_merged_order_and_shares_its_fills() -> None:
+    k = FakeKite(prices={"NIFTY26O0625000CE": 100.0})
+    acct = account(k, {SHORT.key: 100.0})
+    unit = quarters()
+    await acct.process(Batch(__import__("uuid").uuid4(), unit, "MIS", False, 1800))
+    assert acct.client is not None
+    assert await recover_by_tag(acct.client, unit[0]) == (260, 100.0)  # by the order's key, from any of its intents
+    assert await recover_by_tag(acct.client, unit[3]) == (260, 100.0)

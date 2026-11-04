@@ -138,6 +138,9 @@ class Intent:
     # an exit at a price of its own contract (a tip's stop-loss or target): a backtest fills there, or at the minute's
     # open when the price gapped past it, as a standing stop / limit order would
     at_price: float | None = None
+    # intents of one kind with the same key go to the broker as ONE order (one brokerage charge), the fills shared out
+    # between them in order: the quarters of a tip traded as given enter together, and are closed together on a stop
+    order_key: str | None = None
 
 
 @dataclass

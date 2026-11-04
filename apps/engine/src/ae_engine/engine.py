@@ -55,7 +55,7 @@ from ae_marketdata.hub import Hub
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .live import Batch, LiveAccount, LiveConfig, Outcome, recover_by_tag
+from .live import Batch, LiveAccount, LiveConfig, Outcome, allocate, order_units, recover_by_tag
 from .paper import PaperExchange
 
 log = structlog.get_logger("ae_engine")
@@ -130,12 +130,13 @@ def _d(v: float | None) -> Decimal | None:
 
 def _intent_dict(i: Intent) -> dict[str, Any]:
     return {"kind": i.kind, "side": i.side, "contract": i.contract.key, "lots": i.lots, "qty": i.qty,
-            "reason": i.reason, "leg": i.leg, "position_id": i.position_id, "group": i.group}  # fmt: skip
+            "reason": i.reason, "leg": i.leg, "position_id": i.position_id, "group": i.group,
+            "order_key": i.order_key}  # fmt: skip
 
 
 def _intent_from(d: dict[str, Any]) -> Intent:
     return Intent(d["kind"], d["side"], Contract.from_key(d["contract"]), d["lots"], d["qty"], d["reason"], d["leg"],
-                  position_id=d["position_id"], group=d.get("group"))  # fmt: skip
+                  position_id=d["position_id"], group=d.get("group"), order_key=d.get("order_key"))  # fmt: skip
 
 
 class Engine:
@@ -671,8 +672,15 @@ class Engine:
                     intents.append(i)
                     del retry[pid]
         batch = []
+        order_lots: dict[str, int] = defaultdict(int)  # lots of each entry that goes to the broker as one order
+        for i in intents:
+            if i.kind == "entry" and i.order_key:
+                order_lots[i.order_key] += i.lots
         for i in intents:
             refused = check_entry(i, ctx())
+            cap = ctx().max_lots_per_order if i.kind == "entry" and i.order_key else None
+            if not refused and cap is not None and order_lots[i.order_key or ""] > cap:
+                refused = f"{order_lots[i.order_key or '']} lots is above your plan's {cap} lots per order"
             if not refused and i.kind == "entry" and acc is not None and not acc.engine_enabled:
                 refused = "the Trading Engine switch is off for this broker account"
             if refused:
@@ -750,18 +758,19 @@ class Engine:
             return []
         if acct.client is None:
             return inflight  # wait for a session to look them up
-        for i in inflight:
-            filled, avg = await recover_by_tag(acct.client, i)
-            if filled and filled == i.qty:
-                await self._apply(
-                    s, r, rn, m, inst, Outcome(i, True, avg, "filled before the restart", filled), {}, None, now
-                )
-            elif filled:
-                self._event(s, r, "partial_fill_before_restart", level="ERROR", contract=i.contract.label,
-                            filled=filled, qty=i.qty, action="check the position in Zerodha")  # fmt: skip
-                await self._apply(s, r, rn, m, inst, Outcome(i, True, avg, "partly filled", filled), {}, None, now)
-            else:
-                rn.reject(i, "not placed before the engine restarted")
+        for unit in order_units(inflight):  # intents of one order: its fills are shared between them in order
+            total, avg = await recover_by_tag(acct.client, unit[0])
+            for i, filled in zip(unit, allocate(total, [x.qty for x in unit]), strict=True):
+                if filled and filled == i.qty:
+                    await self._apply(
+                        s, r, rn, m, inst, Outcome(i, True, avg, "filled before the restart", filled), {}, None, now
+                    )
+                elif filled:
+                    self._event(s, r, "partial_fill_before_restart", level="ERROR", contract=i.contract.label,
+                                filled=filled, qty=i.qty, action="check the position in Zerodha")  # fmt: skip
+                    await self._apply(s, r, rn, m, inst, Outcome(i, True, avg, "partly filled", filled), {}, None, now)
+                else:
+                    rn.reject(i, "not placed before the engine restarted")
         self.recover.discard(r.id)
         return []
 

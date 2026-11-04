@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 import pytest
@@ -327,6 +327,64 @@ async def test_a_telegram_tip_starts_a_paper_trade(env: Any) -> None:
         (t,) = (await s.execute(select(Trade).where(Trade.run_id == rid))).scalars()
         assert (t.side.value, t.option_type, float(t.strike)) == ("SELL", "PE", 25000)
     assert "tip_received" in await events(db, rid)
+
+
+async def test_a_live_tip_buys_its_quarters_as_one_order_and_a_stop_sells_them_as_one(env: Any) -> None:
+    """4 Nov 2026: a tip of 4 lots went to Zerodha as four buy orders (four brokerage charges). The four quarters are
+    still four positions and four trades, but one order goes out, and the stop closes them with one order."""
+    import asyncio
+    import uuid as _uuid
+
+    from ae_brokers.fake_kite import FakeKite
+    from ae_db.models import Order, SignalRow, SignalSource
+
+    db, hub, ids = env
+    box = a_box()
+    acc_id = await live_setup(db, ids, box)
+    async with db.system_session() as s:
+        src = SignalSource(id=_uuid.uuid4(), user_id=ids["user"], key_version=1, status="connected", chat_id=-1)
+        s.add(src)
+        await s.flush()
+        s.add(SignalRow(user_id=ids["user"], source_id=src.id, header_msg_id=7, date=at("10:00"), index="NIFTY",
+                        strike=25000, option_type="CE", action="BUY", direction="BULLISH", entry_low=150,
+                        entry_high=154, stop_loss=135, targets=[169, 184, 204], targets_done=[], intraday=True,
+                        status="OPEN", complete=True, message_ids=[7]))  # fmt: skip
+        cfg = {"kind": "rules", "underlying": "NIFTY", "legs": [],
+               "entry": {"mode": "tip", "at": "09:20", "source_id": str(src.id), "tip_trade": "as_given",
+                         "tip_lots": 4},
+               "holding": {"mode": "intraday", "exit": "15:15"}}  # fmt: skip
+        run = StrategyRun(user_id=ids["user"], strategy_id=ids["strategy"], mode="live", broker_account_id=acc_id,
+                          config_snapshot=cfg, strategy_name="Tips", kind="rules")  # fmt: skip
+        s.add(run)
+        await s.flush()
+        rid = run.id
+    kite = FakeKite(prices={"NIFTY2610625000CE": 152.0})
+    clock = [at("10:00").replace(second=30)]
+    eng = live_engine(db, hub, clock, box, kite)
+
+    async def settle(px: float) -> None:
+        for _ in range(8):
+            clock[0] += timedelta(seconds=1)
+            await prices(hub, clock[0], 25010, px)
+            await eng.tick()
+            await asyncio.sleep(0.01)
+
+    kite.prices["NIFTY2610625000CE"] = 152.0
+    await settle(152.0)
+    assert [x[1] for x in kite.log if x[0] == "place"] == ["BUY"]  # ONE order
+    assert next(iter(kite.orders.values()))["quantity"] == 260
+    async with db.system_session() as s:
+        trades = list((await s.execute(select(Trade).where(Trade.run_id == rid))).scalars())
+    assert len(trades) == 4 and {t.status for t in trades} == {"open"} and {t.quantity for t in trades} == {65}
+
+    kite.prices["NIFTY2610625000CE"] = 130.0  # below the tip's stop-loss (135)
+    await settle(130.0)
+    assert [x[1] for x in kite.log if x[0] == "place"] == ["BUY", "SELL"]  # the stop: one sell order for the four
+    async with db.system_session() as s:
+        trades = list((await s.execute(select(Trade).where(Trade.run_id == rid))).scalars())
+        orders = list((await s.execute(select(Order).where(Order.user_id == ids["user"]))).scalars())
+    assert {t.status for t in trades} == {"closed"} and kite.net["NIFTY2610625000CE"] == 0
+    assert len(orders) == 8 and sum(1 for o in orders if o.broker_order_id) == 2  # each broker order id once
 
 
 async def test_a_strategy_the_engine_cannot_read_does_not_block_other_runs(env: Any) -> None:

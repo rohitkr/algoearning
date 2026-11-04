@@ -7,6 +7,7 @@ history. Their state is plain JSON (`state()`), stored on the run after every st
 from __future__ import annotations
 
 import copy
+import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -93,6 +94,20 @@ class Runner:
         """Entry times (HH:MM) that fall after `last`, a day's last stored minute, for a trade that was due today and
         never started: a backtest has no prices to enter on then."""
         return []
+
+    @staticmethod
+    def one_order(intents: list[Intent]) -> list[Intent]:
+        """Intents of one kind on the same contract and side that are sent together go to the broker as one order
+        (one brokerage charge): they share an order key. Each keeps its own position."""
+        groups: dict[tuple[str, str, str], list[Intent]] = {}
+        for i in intents:
+            groups.setdefault((i.kind, i.contract.key, i.side), []).append(i)
+        for group in groups.values():
+            if len(group) > 1:
+                key = str(uuid.uuid4())
+                for i in group:
+                    i.order_key = key
+        return intents
 
     def same_day_positions(self) -> list[Position]:
         """Open positions that must be out by the end of the day (intraday holding)."""
@@ -636,7 +651,9 @@ class RulesRunner(Runner):
         parts = [lots // 4] * 4 if split else [lots]
         why_in = f"Telegram tip {tip_id} as given ({tip.tip})"
         side: Side = "BUY" if buy else "SELL"
-        intents = [self._enter(m, c, side, n, f"T{i + 1}" if split else "T", why_in) for i, n in enumerate(parts)]
+        intents = self.one_order(
+            [self._enter(m, c, side, n, f"T{i + 1}" if split else "T", why_in) for i, n in enumerate(parts)]
+        )  # the quarters are four positions, one buy order
         # no stop-loss yet: a default one from the price now, set again from the fill price once the orders fill; no
         # targets yet: only the stop and the exit time apply until the channel posts them (both: _tip_updates)
         default = tip.stop_loss is None
@@ -677,6 +694,13 @@ class RulesRunner(Runner):
                       reason="targets " + ", ".join(f"{t:g}" for t in tp["targets"]) + " from the tip")  # fmt: skip
 
     def _tip_exits(self, m: Market) -> list[Intent]:
+        return self.one_order(self._tip_exits_each(m))  # quarters closed together (the stop) are one sell order
+
+    def exit_all(self, reason: str, m: Market | None = None) -> list[Intent]:
+        out = super().exit_all(reason, m)
+        return self.one_order(out) if self.s.get("tipplan") else out
+
+    def _tip_exits_each(self, m: Market) -> list[Intent]:
         """The tip's own exits: a quarter at each target, the stop moving up behind the price, the rest at TP3 + 20%."""
         tp = self.s["tipplan"]
         px = m.price(Contract.from_key(tp["contract"]))

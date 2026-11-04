@@ -786,6 +786,29 @@ def test_a_tip_as_given_books_a_quarter_at_each_target_and_trails_the_stop() -> 
     assert last.leg == "T4" and last.reason == "trailing stop (190)"
 
 
+def test_the_quarters_of_a_tip_share_one_entry_order_and_a_stop_is_one_exit_order() -> None:
+    """4 Nov 2026: the 4 quarters went to Zerodha as 4 buy orders (4 brokerage charges). They are still four
+    positions (one per target) but travel as one order; a target closes a single quarter, a stop all that are left."""
+    sim = TipSim(as_given(4), [the_tip()])
+    pe = c(25000, "PE", DAY)
+    sim.prices = {pe: 158.0}
+    out = sim.at("10:31")
+    assert len(out) == 4 and len({i.position_id for i in out}) == 4
+    assert len({i.order_key for i in out}) == 1 and out[0].order_key is not None
+    sim.prices[pe] = 176.0
+    (t1,) = sim.at("10:35")
+    assert t1.order_key is None  # one quarter closed alone: its own order
+    sim.prices[pe] = 140.0
+    stop = sim.at("10:40")
+    assert len(stop) == 3 and len({i.order_key for i in stop}) == 1 and stop[0].order_key is not None
+
+
+def test_other_strategies_are_not_merged() -> None:
+    sim = Sim(rr(legs=[{"id": "L1", "action": "SELL", "option_type": "CE", "lots": 2}], entry={"at": "15:00"}), day=THU)
+    sim.prices = {c(25000, "CE", WEEK2): 100.0}
+    assert all(i.order_key is None for i in sim.at("15:00"))
+
+
 def test_a_tip_as_given_with_lots_not_a_multiple_of_4_exits_whole_at_target_3() -> None:
     sim = TipSim(as_given(3), [the_tip()])
     pe = c(25000, "PE", DAY)

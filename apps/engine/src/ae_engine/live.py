@@ -81,6 +81,50 @@ def avg_price(fills: list[Fill]) -> float:
     return round(sum(f.quantity * f.average_price for f in fills) / q, 2) if q else 0.0
 
 
+def split_fills(fills: list[Fill], quantities: list[int]) -> list[list[Fill]]:
+    """Share the fills of one order between the intents it was placed for, in order: the first takes what it needs,
+    the next takes the rest."""
+    rest = list(fills)
+    out: list[list[Fill]] = []
+    for need in quantities:
+        mine: list[Fill] = []
+        while need > 0 and rest:
+            f = rest[0]
+            take = min(need, f.quantity)
+            mine.append(Fill(f.order_id, take, f.average_price))
+            need -= take
+            rest[0] = Fill(f.order_id, f.quantity - take, f.average_price)
+            if rest[0].quantity == 0:
+                rest.pop(0)
+        out.append(mine)
+    return out
+
+
+def allocate(filled: int, quantities: list[int]) -> list[int]:
+    """How much of `filled` each intent of one order got (the first takes what it needs, then the next)."""
+    out = []
+    for q in quantities:
+        take = min(q, filled)
+        out.append(take)
+        filled -= take
+    return out
+
+
+def order_units(intents: list[Intent]) -> list[list[Intent]]:
+    """The intents as the orders to place: those sharing an order key and kind are one order, the rest one each."""
+    units: list[list[Intent]] = []
+    keyed: dict[tuple[str, str], list[Intent]] = {}
+    for i in intents:
+        if i.order_key is None:
+            units.append([i])
+        elif (i.kind, i.order_key) in keyed:
+            keyed[(i.kind, i.order_key)].append(i)
+        else:
+            keyed[(i.kind, i.order_key)] = unit = [i]
+            units.append(unit)
+    return units
+
+
 PriceFn = Callable[[str], float | None]
 
 
@@ -211,48 +255,60 @@ class LiveAccount:
         opened: list[tuple[Intent, list[Fill]]] = []
         failed: str | None = None
         held = await self._held() if any(i.kind == "exit" for i in b.intents) else None
-        for i in b.intents:
-            if i.kind == "entry" and (refused or failed):
-                out.append(Outcome(i, False, None, refused or f"not placed: {failed}"))
+        for unit in order_units(b.intents):
+            lead = unit[0]
+            if lead.kind == "entry" and (refused or failed):
+                out += [Outcome(i, False, None, refused or f"not placed: {failed}") for i in unit]
                 continue
-            qty = i.qty
+            qty = sum(i.qty for i in unit)
             try:
-                c = self.book.get(i.contract.key)
-                if i.kind == "exit" and held is not None:
+                c = self.book.get(lead.contract.key)
+                if lead.kind == "exit" and held is not None:
                     # never close more than Zerodha holds: what was squared off by hand in Kite is not sold again
                     # (23 Oct 2026: a leg closed in Kite was sold once more by the strategy, leaving a short)
                     net = held.get(c.tradingsymbol, 0)
-                    have = max(0, net if i.side == "SELL" else -net)
-                    qty = min(i.qty, have // c.lot_size * c.lot_size)
-                    held[c.tradingsymbol] = net - qty if i.side == "SELL" else net + qty
-                    if qty == 0:
-                        px = self.price(i.contract.key)
-                        out.append(Outcome(i, True, px if px is not None else 0.0,
-                                           "already closed in Zerodha: no order sent", 0))  # fmt: skip
-                        continue
-                fills = await self.om.execute(
-                    i.contract.key, c, i.side, qty, b.product, tag_for(i.position_id), b.freeze
-                )
+                    have = max(0, net if lead.side == "SELL" else -net)
+                    qty = min(qty, have // c.lot_size * c.lot_size)
+                    held[c.tradingsymbol] = net - qty if lead.side == "SELL" else net + qty
+                fills = (
+                    await self.om.execute(lead.contract.key, c, lead.side, qty, b.product,
+                                          tag_for(lead.order_key or lead.position_id), b.freeze)
+                    if qty else []
+                )  # fmt: skip
             except (OrderFailed, BrokerError, ValueError) as exc:
                 part = exc.fills if isinstance(exc, OrderFailed) else []
                 msg = exc.message if isinstance(exc, BrokerError) else str(exc)
                 if isinstance(exc, BrokerError) and exc.code == "session_expired":
                     self.session_error = msg = "the Zerodha session expired: log in again"
-                if i.kind == "entry":
-                    failed = msg
-                    if part:
-                        opened.append((i, part))
-                    out.append(Outcome(i, False, None, msg, order_ids=[f.order_id for f in part]))
-                else:
-                    done = sum(f.quantity for f in part)
-                    out.append(Outcome(i, False, avg_price(part) if part else None, msg, filled=done,
-                                       order_ids=[f.order_id for f in part]))  # fmt: skip
+                for n, (i, mine) in enumerate(zip(unit, split_fills(part, [x.qty for x in unit]), strict=True)):
+                    done = sum(f.quantity for f in mine)
+                    ids = [f.order_id for f in part] if n == 0 else []  # the order's id on the first intent only
+                    if i.kind == "entry":
+                        failed = msg
+                        if mine:
+                            opened.append((i, mine))
+                        out.append(Outcome(i, False, None, msg, order_ids=ids))
+                    elif done == i.qty:  # an exit this order did close before it failed
+                        out.append(Outcome(i, True, avg_price(mine), "filled", done, order_ids=ids))
+                    else:
+                        out.append(Outcome(i, False, avg_price(mine) if mine else None, msg, filled=done,
+                                           order_ids=ids))  # fmt: skip
                 continue
-            if i.kind == "entry":
-                opened.append((i, fills))
-            note = "filled" if qty == i.qty else f"filled: only {qty} of {i.qty} were left in Zerodha"
-            out.append(Outcome(i, True, avg_price(fills), note, sum(f.quantity for f in fills),
-                               order_ids=[f.order_id for f in fills]))  # fmt: skip
+            shared = split_fills(fills, [x.qty for x in unit])
+            booked = False  # one broker order id, on one of the intents' orders only (it is unique per account)
+            for i, mine in zip(unit, shared, strict=True):
+                done = sum(f.quantity for f in mine)
+                if done == 0:
+                    px = self.price(i.contract.key)
+                    out.append(Outcome(i, True, px if px is not None else 0.0,
+                                       "already closed in Zerodha: no order sent", 0))  # fmt: skip
+                    continue
+                if i.kind == "entry":
+                    opened.append((i, mine))
+                note = "filled" if done == i.qty else f"filled: only {done} of {i.qty} were left in Zerodha"
+                out.append(Outcome(i, True, avg_price(mine), note, done,
+                                   order_ids=[] if booked else [f.order_id for f in fills]))  # fmt: skip
+                booked = True
         if failed and opened:
             out = await self._unwind(opened, out, b, failed)
         return out
@@ -322,7 +378,7 @@ class LiveAccount:
 
 async def recover_by_tag(client: KiteClient, intent: Intent) -> tuple[int, float]:
     """After a restart: how much of an in-flight intent Zerodha filled (from the day's order book, by tag)."""
-    tag = tag_for(intent.position_id)
+    tag = tag_for(intent.order_key or intent.position_id)
     fills = [
         Fill(str(o["order_id"]), int(o.get("filled_quantity") or 0), float(o.get("average_price") or 0))
         for o in await client.orders()
