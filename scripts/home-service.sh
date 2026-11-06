@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One production service, run by launchd (installed by scripts/home-host.sh; ADR 0019). launchd restarts it when it
-# exits, so every branch ends in `exec` and never daemonizes. For development use `make dev` instead.
+# exits, so no branch daemonizes (all but `awake` end in `exec`). For development use `make dev` instead.
 #
 #   scripts/home-service.sh postgres|redis|api|web|feed|worker|signals|engine|tunnel|awake
 set -euo pipefail
@@ -52,7 +52,26 @@ case "${1:-}" in
   tunnel)
     exec cloudflared tunnel --no-autoupdate --config "$HOME/.cloudflared/algoearning.yml" run ;;
   awake)
-    exec caffeinate -i -s ;; # no idle or system sleep while this runs (the lid may still be closed on power)
+    # no idle or system sleep while caffeinate runs (the lid may still be closed on power). Also the wake-up watcher:
+    # after a sleep cloudflared, the price feed and the Telegram reader wait minutes before they retry (6 Nov 2026:
+    # the site was down 4 minutes after the lid was opened). A jump of the clock between two checks is a sleep:
+    # restart them at once, as `scripts/home-host.sh wake` does. (AWAKE_*: overridable for the test only.)
+    ${AWAKE_CMD:-caffeinate -i -s} &
+    holder=$!
+    trap 'kill "$holder" 2>/dev/null || true' EXIT
+    last=$(date +%s)
+    while kill -0 "$holder" 2>/dev/null; do
+      sleep "${AWAKE_CHECK_S:-5}"
+      now=$(date +%s)
+      if ((now - last > ${AWAKE_GAP_S:-20})); then
+        echo "$(date '+%F %T') woke up after $((now - last)) s: reconnecting the tunnel, price feed and Telegram reader"
+        sleep 3 # the network takes a moment to come back
+        ${AWAKE_WAKE:-scripts/home-host.sh restart tunnel feed signals} || true
+        now=$(date +%s)
+      fi
+      last=$now
+    done
+    exit 1 ;; # caffeinate ended: launchd starts this again
   *)
     echo "usage: $0 postgres|redis|api|web|feed|worker|signals|engine|tunnel|awake" >&2
     exit 2 ;;

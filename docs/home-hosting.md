@@ -65,6 +65,10 @@ This Mac is a MacBook with FileVault on, so:
   display is off**. Also turn on **Wake for network access**.
 - After a reboot or power cut, nothing starts until someone types the password at the login screen (FileVault).
   The services then start by themselves.
+- After the Mac sleeps (lid closed, battery) and wakes, the `awake` service notices the jump of the clock and
+  restarts the tunnel, the price feed and the Telegram reader at once, so the site is back within seconds instead of
+  minutes (6 Nov 2026: 4 minutes). The engine is not restarted. While the Mac sleeps nothing runs: no stop-loss is
+  watched, so never leave a trade open on a sleeping Mac.
 
 ## 6. Switch from `make dev` to production
 
