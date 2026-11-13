@@ -187,6 +187,7 @@ class Runner:
 
 
 EXIT_RETRY = timedelta(seconds=30)  # a refused exit is sent again after this long
+TIP_PRICE_MAX_AGE = timedelta(seconds=60)  # a tip is entered only on a price quoted this recently
 ARM_FOR = timedelta(minutes=2)  # a fired signal stays valid this long while option prices stream in
 FORCE_FOR = timedelta(minutes=2)  # "Enter now" keeps trying this long (prices may still be arriving)
 # a tip traded as given that has no stop-loss yet enters at once with a default one, on the premium: the entry price
@@ -620,6 +621,10 @@ class RulesRunner(Runner):
         if isinstance(final, str) or final <= m.now:
             return skip("the exit time has passed")
         px = m.price(c)
+        quoted = m.price_at.get(c.key)
+        if px is not None and quoted is not None and m.now - quoted > TIP_PRICE_MAX_AGE:
+            px = None  # a contract the feed was not streaming holds its last price (13 Nov 2026: yesterday's 164 on a
+            # PE trading at 196, the tip skipped as "below its stop-loss"): wait for a tick of now
         if px is None:
             if (m.now - tip.date).total_seconds() > e.max_tip_age_s:
                 return skip(f"no price for {c.label} within {e.max_tip_age_s}s: is the price feed logged in?")

@@ -112,6 +112,9 @@ class Market:
     # worst, so no two of them ever existed together and the trade's combined figures (MTM stop / target, premium
     # stop, profit lock) mean nothing
     intrabar: bool = False
+    # contract key -> when its price was last quoted (live only; empty: not known). The feed keeps a contract's last
+    # price after it stops streaming it, so a price can be a day old
+    price_at: Mapping[str, datetime] = field(default_factory=dict)
 
     def price(self, c: Contract | str) -> float | None:
         return self.prices.get(c if isinstance(c, str) else c.key)

@@ -353,6 +353,7 @@ class Engine:
             self.tick_ts.update({k: t.ts for k, t in ticks.items()})
             for m in markets.values():
                 m.prices, m.quotes = prices, quotes
+                m.price_at = {k: t.ts for k, t in ticks.items()}
 
             def day_pnl() -> float:
                 total = 0.0

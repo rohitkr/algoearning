@@ -730,10 +730,12 @@ class TipSim(Sim):
     def __init__(self, runner: Runner, tips: list[Any], day: date = DAY) -> None:
         super().__init__(runner, day)
         self.tips = tips
+        self.price_at: dict[str, datetime] = {}  # when each price was quoted (empty: not known, as in a backtest)
 
     def market(self, hm: str) -> Market:
         m = super().market(hm)
         m.tips = list(self.tips)
+        m.price_at = dict(self.price_at)
         return m
 
 
@@ -853,6 +855,21 @@ def test_a_tip_as_given_is_not_cut_short_by_the_strategys_loss_limit() -> None:
     assert sim.at("10:35") == []
     sim.prices[pe] = 140.0
     assert {i.reason for i in sim.at("10:40")} == {"the tip's stop-loss (141)"}
+
+
+def test_a_tip_is_not_judged_on_a_price_the_feed_quoted_long_ago() -> None:
+    """13 Nov 2026: BUY NIFTY 25250 PE @194-198 (SL 179) at 11:15. The feed had not streamed that strike today, so it
+    held yesterday's last price, 164: the tip was skipped as already below its stop-loss, while the PE traded at 196."""
+    sim = TipSim(as_given(4), [the_tip()])  # entry 156-160, stop 141
+    pe = c(25000, "PE", DAY)
+    sim.prices = {pe: 130.0}  # yesterday's last price: far below the stop
+    sim.price_at = {pe: datetime.combine(DAY - timedelta(days=1), time(15, 29), tzinfo=IST)}
+    assert sim.at("10:30") == []  # nothing entered, and the tip is not thrown away
+    assert any(n["event"] == "waiting_to_enter" and "no price yet" in n["reason"] for n in sim.r.notes)
+    assert not any(n["event"] == "tip_skipped" for n in sim.r.notes)
+    sim.prices[pe] = 158.0  # the first tick of today arrives
+    sim.price_at = {pe: datetime.combine(DAY, time(10, 30, 5), tzinfo=IST)}
+    assert len(sim.at("10:30")) == 4
 
 
 def test_a_tip_as_given_without_a_price_is_skipped_with_the_reason_not_dropped_silently() -> None:
